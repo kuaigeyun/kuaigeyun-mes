@@ -118,6 +118,10 @@ const PaymentsPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const pullFromPayableAction = getKuaicaiwuDocumentAction('payment.pull_from_payable');
+  const pullFromPaymentApplicationAction = getKuaicaiwuDocumentAction(
+    'payment.pull_from_payment_application',
+  );
+  const [pullSourceKind, setPullSourceKind] = useState<'payable' | 'payment_application'>('payable');
   const paymentPerms = useResourcePermissions(PAYMENT_RESOURCE);
   const paymentRefundPerms = useResourcePermissions(PAYMENT_REFUND_RESOURCE);
   const { openFinanceVoucherDetail } = useFinanceVoucherDetail();
@@ -249,13 +253,22 @@ const PaymentsPage: React.FC = () => {
     pullForm.resetFields();
   };
 
-  const openPullPreview = async (payableId: number) => {
+  const openPullPreview = async (
+    sourceId: number,
+    kind: 'payable' | 'payment_application' = 'payable',
+  ) => {
+    setPullSourceKind(kind);
     setPullPreviewOpen(true);
     setPullPreviewLoading(true);
     setPullPreviewData(null);
-    setPullPreviewSourceId(payableId);
+    setPullPreviewSourceId(sourceId);
+    const sourceAction =
+      kind === 'payment_application' ? pullFromPaymentApplicationAction : pullFromPayableAction;
     try {
-      const data = await paymentService.previewPullFromPayable(payableId);
+      const data =
+        kind === 'payment_application'
+          ? await paymentService.previewPullFromPaymentApplication(sourceId)
+          : await paymentService.previewPullFromPayable(sourceId);
       setPullPreviewData(data);
       const maxPush = Number(data.items?.[0]?.max_push_quantity ?? 0);
       pullForm.setFieldsValue({
@@ -267,7 +280,7 @@ const PaymentsPage: React.FC = () => {
         payment_method: BANK_TRANSFER_PAYMENT_METHOD,
         settlement_type: 'normal',
         notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
-          source: pullFromPayableAction.sourceLabel,
+          source: sourceAction.sourceLabel,
           code: data.source_code,
         }),
       });
@@ -324,10 +337,50 @@ const PaymentsPage: React.FC = () => {
         return;
       }
       pullFromPayableCloseRef.current?.();
-      await openPullPreview(selected.id);
+      await openPullPreview(selected.id, 'payable');
     },
   });
   pullFromPayableCloseRef.current = pullFromPayableQuery.closeModal;
+
+  const pullFromPaymentApplicationQuery = useUniPullQuery<PaymentPullCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => record.capabilities?.pull_payment?.allowed === false,
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const res = await paymentService.listPaymentApplicationPullCandidates({
+          skip: 0,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
+          keyword: keyword.trim() || undefined,
+        });
+        const rows = res.data || [];
+        const isSelectable = (record: PaymentPullCandidate) =>
+          record.capabilities?.pull_payment?.allowed !== false;
+        const filtered = filterByPullScope(rows, scope, isSelectable);
+        return paginatePullRows(filtered, page, pageSize);
+      } catch (e: any) {
+        messageApi.error(
+          e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
+        );
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      if (!selected?.id) {
+        messageApi.warning(
+          t(`${P}.selectSource`, { label: pullFromPaymentApplicationAction.sourceLabel }),
+        );
+        return;
+      }
+      pullFromPaymentApplicationCloseRef.current?.();
+      await openPullPreview(selected.id, 'payment_application');
+    },
+  });
+  const pullFromPaymentApplicationCloseRef = useRef<(() => void) | null>(null);
+  pullFromPaymentApplicationCloseRef.current = pullFromPaymentApplicationQuery.closeModal;
 
   useEffect(() => {
     const pullPayableId = (location.state as { pullPayableId?: number } | null)?.pullPayableId;
@@ -357,10 +410,14 @@ const PaymentsPage: React.FC = () => {
     }
     setPullSubmitting(true);
     try {
+      const pullAction =
+        pullSourceKind === 'payment_application'
+          ? pullFromPaymentApplicationAction
+          : pullFromPayableAction;
       const created = await paymentService.create({
         supplier_id: Number(pullPreviewData.supplier_id || 0),
         supplier_name: pullPreviewData.supplier_name || '',
-        source_type: 'payable',
+        source_type: pullSourceKind,
         source_id: pullPreviewSourceId,
         total_amount: totalAmount,
         payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
@@ -376,22 +433,24 @@ const PaymentsPage: React.FC = () => {
         notes:
           String(values.notes ?? '').trim() ||
           t('app.kuaicaiwu.common.createdFromSourceNote', {
-            source: pullFromPayableAction.sourceLabel,
+            source: pullAction.sourceLabel,
             code: pullPreviewData.source_code,
           }),
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      try {
-        await linkAcceptanceNoteAfterVoucherCreate(
-          'payable',
-          values.note_id,
-          created.id,
-          'payment',
-        );
-      } catch (linkError) {
-        messageApi.warning(getApiErrorMessage(linkError, t('app.kuaicaiwu.notes.linkFailed')));
+      if (pullSourceKind === 'payable') {
+        try {
+          await linkAcceptanceNoteAfterVoucherCreate(
+            'payable',
+            values.note_id,
+            created.id,
+            'payment',
+          );
+        } catch (linkError) {
+          messageApi.warning(getApiErrorMessage(linkError, t('app.kuaicaiwu.notes.linkFailed')));
+        }
       }
-      messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullFromPayableAction.targetLabel }));
+      messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullAction.targetLabel }));
       resetPullPreview();
       actionRef.current?.reload();
       return true;
@@ -977,6 +1036,11 @@ const PaymentsPage: React.FC = () => {
                 actionKey: 'payment.pull_from_payable',
                 onClick: pullFromPayableQuery.openModal,
               },
+              {
+                key: 'pull-from-payment-application',
+                actionKey: 'payment.pull_from_payment_application',
+                onClick: pullFromPaymentApplicationQuery.openModal,
+              },
             ])}
           />,
         ]}
@@ -1033,13 +1097,54 @@ const PaymentsPage: React.FC = () => {
         okText={t('common.next')}
       />
 
+      <UniPullQueryModal<PaymentPullCandidate>
+        open={pullFromPaymentApplicationQuery.open}
+        title={pullFromPaymentApplicationAction.label}
+        onCancel={pullFromPaymentApplicationQuery.closeModal}
+        onOk={() => {
+          void pullFromPaymentApplicationQuery.handleConfirm();
+        }}
+        rowKey="id"
+        columns={pullTableColumns}
+        dataSource={pullFromPaymentApplicationQuery.dataSource}
+        loading={pullFromPaymentApplicationQuery.loading}
+        confirmLoading={pullFromPaymentApplicationQuery.confirmLoading}
+        selectionType={pullFromPaymentApplicationQuery.selectionType}
+        selectedRowKeys={pullFromPaymentApplicationQuery.selectedRowKeys}
+        selectedRows={pullFromPaymentApplicationQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromPaymentApplicationQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromPaymentApplicationQuery.isRowDisabled}
+        searchDraft={pullFromPaymentApplicationQuery.searchDraft}
+        onSearchDraftChange={pullFromPaymentApplicationQuery.setSearchDraft}
+        onSearchApply={pullFromPaymentApplicationQuery.handleSearchApply}
+        onSearchClear={pullFromPaymentApplicationQuery.handleSearchClear}
+        appliedKeyword={pullFromPaymentApplicationQuery.appliedKeyword}
+        searchPlaceholder={t(`${P}.pullSearchPlaceholder`)}
+        page={pullFromPaymentApplicationQuery.page}
+        pageSize={pullFromPaymentApplicationQuery.pageSize}
+        total={pullFromPaymentApplicationQuery.total}
+        onPageChange={pullFromPaymentApplicationQuery.handlePageChange}
+        scopeOptions={pullFromPaymentApplicationQuery.scopeOptions}
+        scope={pullFromPaymentApplicationQuery.scope}
+        onScopeChange={pullFromPaymentApplicationQuery.handleScopeChange}
+        okText={t('common.next')}
+      />
+
       <Modal
-        title={pullFromPayableAction.label}
+        title={
+          pullSourceKind === 'payment_application'
+            ? pullFromPaymentApplicationAction.label
+            : pullFromPayableAction.label
+        }
         open={pullPreviewOpen}
         destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetPullPreview}
-        okText={pullFromPayableAction.targetLabel}
+        okText={
+          pullSourceKind === 'payment_application'
+            ? pullFromPaymentApplicationAction.targetLabel
+            : pullFromPayableAction.targetLabel
+        }
         cancelText={t('common.cancel')}
         confirmLoading={pullSubmitting}
         onOk={() => void pullForm.submit()}

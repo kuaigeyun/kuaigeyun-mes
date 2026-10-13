@@ -26,6 +26,9 @@ import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { rowActionViewDocChain } from '../../../../../components/uni-action';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { pullPaymentApplicationFromReconciliation } from '../../../services/payment-application';
+import { useNavigate } from 'react-router-dom';
 
 type GapRow = DocumentReconciliationGapItem;
 type GapSummary = {
@@ -88,6 +91,10 @@ const DocumentReconciliationPage: React.FC = () => {
   const [chainSteps, setChainSteps] = useState<ChainStep[]>([]);
   const [chainMeta, setChainMeta] = useState<{ completion_rate?: number; linked_count?: number; total_steps?: number }>({});
   const [gapSummary, setGapSummary] = useState<GapSummary>({});
+  const [gapSelectedKeys, setGapSelectedKeys] = useState<React.Key[]>([]);
+  const gapRowsRef = useRef<GapRow[]>([]);
+  const paymentApplicationPerms = useResourcePermissions('kuaizhizao:payment-application');
+  const navigate = useNavigate();
   const [partnerOptions, setPartnerOptions] = useState<{ label: string; value: number }[]>([]);
   const [chainDocOptions, setChainDocOptions] = useState<{ label: string; value: number }[]>([]);
   const [chainDocSearching, setChainDocSearching] = useState(false);
@@ -484,6 +491,40 @@ const DocumentReconciliationPage: React.FC = () => {
     ];
   }, [chainFlowType, t]);
 
+  const handleCreatePaymentApplicationFromGaps = async () => {
+    const context = gapQueryContextRef.current;
+    if (!context || context.partner_type !== 'Supplier') {
+      messageApi.warning(t(`${D}.paymentApplicationSupplierOnly`));
+      return;
+    }
+    const rows = gapRowsRef.current.filter((r) =>
+      gapSelectedKeys.includes(`${r.doc_type}-${r.doc_id}`),
+    );
+    const payableRows = rows.filter(
+      (r) => r.doc_type === 'payable' && r.doc_id && Number(r.max_push_quantity ?? 0) > 0,
+    );
+    if (!payableRows.length) {
+      messageApi.warning(t(`${D}.paymentApplicationSelectPayable`));
+      return;
+    }
+    try {
+      const app = await pullPaymentApplicationFromReconciliation({
+        supplierId: context.partner_id,
+        items: payableRows.map((r) => ({
+          doc_type: 'payable',
+          doc_id: Number(r.doc_id),
+          amount: Number(r.max_push_quantity ?? 0),
+        })),
+      });
+      messageApi.success(t(`${D}.paymentApplicationCreated`, { code: app.applicationCode }));
+      setGapSelectedKeys([]);
+      navigate('/apps/kuaizhizao/purchase-management/payment-applications');
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      messageApi.error(err.message || t(`${D}.paymentApplicationCreateFailed`));
+    }
+  };
+
   const gapPanel = (
     <>
       <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t(`${D}.queryHint`)} />
@@ -500,6 +541,25 @@ const DocumentReconciliationPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.documentReconciliation)}
         actionRef={actionRef}
         enableRowSelection
+        selectedRowKeys={gapSelectedKeys}
+        onRowSelectionChange={setGapSelectedKeys}
+        onTableDataChange={(rows) => {
+          gapRowsRef.current = rows;
+        }}
+        toolBarRender={() =>
+          paymentApplicationPerms.canCreate
+            ? [
+                <Button
+                  key="create-payment-application"
+                  type="primary"
+                  disabled={gapSelectedKeys.length === 0}
+                  onClick={() => void handleCreatePaymentApplicationFromGaps()}
+                >
+                  {t(`${D}.createPaymentApplication`)}
+                </Button>,
+              ]
+            : []
+        }
         headerActions={gapHeaderActions}
         request={gapRequest}
         tanstackQuery={{ enabled: false }}

@@ -2,7 +2,12 @@
  * 客户/供应商详情 → 表单字段（新建/编辑回填）
  */
 
-import type { Customer, PartnerContact, Supplier } from '../types/supply-chain';
+import type {
+  Customer,
+  PartnerContact,
+  PartnerSettlementAccount,
+  Supplier,
+} from '../types/supply-chain';
 
 function optNum(v: number | string | null | undefined): number | undefined {
   if (v == null || v === '') return undefined;
@@ -78,6 +83,48 @@ export function normalizePartnerContactsForSubmit(
 /** @deprecated 使用 normalizePartnerContactsForSubmit */
 export const normalizeCustomerContactsForSubmit = normalizePartnerContactsForSubmit;
 
+function partnerSettlementAccountsFromDetail(d: {
+  settlementAccounts?: PartnerSettlementAccount[];
+}): PartnerSettlementAccount[] {
+  if (!Array.isArray(d.settlementAccounts)) return [];
+  return d.settlementAccounts.map((row) => ({
+    accountName: row.accountName,
+    bankName: row.bankName,
+    bankAccount: row.bankAccount,
+    isDefault: Boolean(row.isDefault),
+  }));
+}
+
+export function normalizePartnerSettlementAccountsForSubmit(
+  rows: PartnerSettlementAccount[] | undefined,
+): PartnerSettlementAccount[] {
+  if (!Array.isArray(rows)) return [];
+  const normalized = rows
+    .map((row) => {
+      const accountName = row.accountName?.trim() || undefined;
+      const bankName = row.bankName?.trim() || undefined;
+      const bankAccount = row.bankAccount?.trim() || undefined;
+      if (!accountName && !bankName && !bankAccount) return null;
+      return {
+        accountName,
+        bankName,
+        bankAccount,
+        isDefault: Boolean(row.isDefault),
+      };
+    })
+    .filter((row): row is PartnerSettlementAccount => row != null);
+  if (normalized.length > 0 && !normalized.some((row) => row.isDefault)) {
+    normalized[0] = { ...normalized[0], isDefault: true };
+  }
+  let defaultSeen = false;
+  return normalized.map((row) => {
+    if (!row.isDefault) return row;
+    if (defaultSeen) return { ...row, isDefault: false };
+    defaultSeen = true;
+    return row;
+  });
+}
+
 function partnerFormSliceWithoutFinance(d: Customer | Supplier) {
   const {
     financeContactName: _financeContactName,
@@ -94,6 +141,7 @@ export function customerDetailToFormValues(d: Customer): Record<string, unknown>
     name: d.name,
     shortName: d.shortName,
     contacts: partnerContactsFromDetail(d),
+    settlementAccounts: partnerSettlementAccountsFromDetail(d),
     address: d.address,
     category: d.category,
     industryCode: d.industryCode,
@@ -122,6 +170,7 @@ export function supplierDetailToFormValues(d: Supplier): Record<string, unknown>
     name: d.name,
     shortName: d.shortName,
     contacts: partnerContactsFromDetail(d),
+    settlementAccounts: partnerSettlementAccountsFromDetail(d),
     address: d.address,
     category: d.category,
     buyerId: d.buyerId,

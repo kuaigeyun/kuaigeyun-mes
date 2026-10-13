@@ -509,6 +509,79 @@ class FaiOrderService(AppBaseService[FaiOrder]):
             await row.save()
             return self._to_response(row, chars)
 
+    async def import_from_balloon_sheet(
+        self,
+        tenant_id: int,
+        order_id: int,
+        sheet_id: int,
+        *,
+        replace_existing: bool = True,
+        user: Optional[User] = None,
+    ) -> FaiOrderResponse:
+        from apps.kuaizhizao.models.drawing_balloon_sheet import DrawingBalloonSheet
+        from apps.kuaizhizao.models.drawing_balloon_sheet_line import DrawingBalloonSheetLine
+
+        row = await self._get_order(tenant_id, order_id)
+        if row.status not in EDITABLE_STATUSES:
+            raise BusinessLogicError("当前状态不可导入特性")
+        sheet = await DrawingBalloonSheet.filter(
+            id=sheet_id, tenant_id=tenant_id, deleted_at__isnull=True
+        ).first()
+        if not sheet:
+            raise NotFoundError("图纸气泡标注单不存在")
+        if sheet.status != "confirmed":
+            raise BusinessLogicError("仅可导入已确认的图纸气泡标注")
+        lines = await DrawingBalloonSheetLine.filter(
+            tenant_id=tenant_id, sheet_id=sheet_id, deleted_at__isnull=True
+        ).order_by("sequence", "id")
+        if not lines:
+            raise BusinessLogicError("标注单无已确认特性行")
+        creates: List[FaiCharacteristicCreate] = []
+        if not replace_existing:
+            existing = await self._load_chars(tenant_id, order_id)
+            for e in existing:
+                creates.append(
+                    FaiCharacteristicCreate(
+                        sequence=e.sequence,
+                        balloon_no=e.balloon_no,
+                        characteristic_name=e.characteristic_name,
+                        nominal_value=float(e.nominal_value) if e.nominal_value is not None else None,
+                        upper_tolerance=float(e.upper_tolerance) if e.upper_tolerance is not None else None,
+                        lower_tolerance=float(e.lower_tolerance) if e.lower_tolerance is not None else None,
+                        unit=e.unit,
+                        measured_value=float(e.measured_value) if e.measured_value is not None else None,
+                        sample_values=e.sample_values if isinstance(e.sample_values, list) else None,
+                        judgment=e.judgment or "pending",
+                        gauge_id=e.gauge_id,
+                        gauge_code=e.gauge_code,
+                        gauge_name=e.gauge_name,
+                        source_step_key=e.source_step_key,
+                        remarks=e.remarks,
+                    )
+                )
+        base = len(creates)
+        for idx, line in enumerate(lines, start=1):
+            creates.append(
+                FaiCharacteristicCreate(
+                    sequence=base + idx,
+                    balloon_no=line.balloon_no or str(base + idx),
+                    characteristic_name=line.characteristic_name,
+                    nominal_value=float(line.nominal_value) if line.nominal_value is not None else None,
+                    upper_tolerance=float(line.upper_tolerance) if line.upper_tolerance is not None else None,
+                    lower_tolerance=float(line.lower_tolerance) if line.lower_tolerance is not None else None,
+                    unit=line.unit,
+                    remarks=line.remarks,
+                )
+            )
+        async with in_transaction():
+            chars = await self._replace_characteristics(tenant_id, order_id, creates)
+            row.conclusion = self._refresh_conclusion(chars)
+            if row.status == "draft":
+                row.status = "in_progress"
+            apply_update_audit(row, user)
+            await row.save()
+            return self._to_response(row, chars)
+
     async def maybe_create_for_work_order(
         self,
         tenant_id: int,

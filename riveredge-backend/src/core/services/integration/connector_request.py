@@ -12,6 +12,7 @@ _DUPLICATE_IERP_BEFORE_KAPI = re.compile(r"(?i)(?:/ierp)+(?=/kapi(?:/|$))")
 _BASEDATA_SYS_QUERY_OBJECTS = {
     "bd_material",
     "bd_measureunits",
+    "bd_multimeasureunit",
     "bd_materialgroup",
     "bd_supplier",
     "bd_customer",

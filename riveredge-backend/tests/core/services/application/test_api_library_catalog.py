@@ -37,13 +37,84 @@ def test_kingdee_cosmic_presets_use_concrete_sys_query_paths():
     suffixes = {item["code_suffix"] for item in presets}
     assert "query_material" in suffixes
     assert "query_purchase_order" in suffixes
+    assert "query_measureunits" in suffixes
+    assert "query_goods_class" in suffixes
     assert "op_query" not in suffixes
     material = next(p for p in presets if p["code_suffix"] == "query_material")
     assert material["path"] == "kapi/v2/basedata/bd_material/batchQuery"
+    material_select = str((material.get("request_body") or {}).get("select") or "")
+    assert "baseunit.number" in material_select
+    assert "number" in material_select
+    measureunits = next(p for p in presets if p["code_suffix"] == "query_measureunits")
+    assert measureunits["path"] == "kapi/v2/basedata/bd_material/batchQuery"
+    assert "基础单位" in (measureunits.get("name") or "")
+    assert "baseunit.number" in str(measureunits.get("request_body", {}).get("select") or "")
+    material_group = next(p for p in presets if p["code_suffix"] == "query_material_group")
+    assert material_group["path"] == "kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass"
+    assert "data" not in (material_group.get("request_body") or {})
+    goods_class = next(p for p in presets if p["code_suffix"] == "query_goods_class")
+    assert goods_class["path"] == "kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass"
+    assert goods_class.get("request_body", {}).get("pageSize") == 100
+    assert "data" not in (goods_class.get("request_body") or {})
     customer = next(p for p in presets if p["code_suffix"] == "query_customer")
     assert customer["path"] == "kapi/v2/basedata/bd_customer/batchQuery"
     assert customer.get("request_body", {}).get("pageSize") == 100
     assert "__API_NUMBER__" not in material["path"]
+
+
+def test_measureunits_preset_needs_upgrade_detects_legacy_path():
+    from core.services.integration.kingdee_cosmic_api_presets import (
+        measureunits_preset_needs_upgrade,
+    )
+
+    assert measureunits_preset_needs_upgrade("kapi/v2/basedata/bd_measureunits/batchQuery")
+    assert measureunits_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_multimeasureunit/batchQuery"
+    )
+    assert measureunits_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_material/batchQuery",
+        {"data": {}, "pageNo": 1, "pageSize": 100},
+    )
+    assert not measureunits_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_material/batchQuery",
+        {
+            "data": {},
+            "pageNo": 1,
+            "pageSize": 100,
+            "select": "number,name,baseunit.number,baseunit.name",
+        },
+    )
+
+
+def test_material_group_preset_needs_upgrade_detects_legacy_path():
+    from core.services.integration.kingdee_cosmic_api_presets import (
+        material_group_preset_needs_upgrade,
+    )
+
+    assert material_group_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_materialgroup/batchQuery"
+    )
+    assert not material_group_preset_needs_upgrade(
+        "kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass"
+    )
+
+
+def test_material_preset_needs_upgrade_when_select_missing():
+    from core.services.integration.kingdee_cosmic_api_presets import (
+        material_preset_needs_upgrade,
+    )
+
+    path = "kapi/v2/basedata/bd_material/batchQuery"
+    assert material_preset_needs_upgrade(path, {"data": {}, "pageNo": 1, "pageSize": 100})
+    assert not material_preset_needs_upgrade(
+        path,
+        {
+            "data": {},
+            "pageNo": 1,
+            "pageSize": 100,
+            "select": "number,name,baseunit.number,baseunit.name,group.number,group.name",
+        },
+    )
 
 
 def test_kingdee_cosmic_mfg_presets_include_inventory_params_body():

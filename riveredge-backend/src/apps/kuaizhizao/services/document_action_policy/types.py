@@ -199,6 +199,7 @@ class PurchaseOrderCapabilities(BaseModel):
     push_receipt: ActionCapability
     push_invoice: ActionCapability
     push_prepayment: ActionCapability
+    push_payment_application: ActionCapability
     push_purchase_return: ActionCapability
     push_incoming_inspection: ActionCapability
     create_change_order: ActionCapability
@@ -604,6 +605,17 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "purchase_order.push_prepayment.not_audited": "只有已审核或已确认的采购单才能下推预付付款单",
     "purchase_order.push_prepayment.no_amount": "采购单未填写预付款金额，无法下推预付付款单",
     "purchase_order.push_prepayment.already_exists": "该采购订单已关联预付付款单",
+    "purchase_order.push_prepayment.require_application": "组织已启用「预付款须走付款申请」，请下推付款申请单",
+    "purchase_order.push_payment_application.not_audited": "只有已审核或已确认的采购单才能下推付款申请",
+    "purchase_order.push_payment_application.no_amount": "采购单未填写预付款金额或无可请款预付额度",
+    "payment_application.pull_from_purchase_order.no_amount": "该采购订单预付请款额度已用尽",
+    "payment.pull_from_payment_application.not_allowed": "付款申请单不可取单生成付款（须已批准且有余额）",
+    "payment_application.update.not_allowed": "当前状态不可编辑付款申请",
+    "payment_application.delete.not_allowed": "仅草稿可删除付款申请",
+    "payment_application.submit.not_allowed": "当前状态不可提交",
+    "payment_application.approve.not_allowed": "当前状态不可审核",
+    "payment_application.withdraw.not_allowed": "当前状态不可撤回提交",
+    "payment_application.push_payment.not_allowed": "须已批准且有余额才可下推付款单",
     "sales_order.push_prepayment.not_audited": "只有已审核或已确认的销售订单才能下推预收收款单",
     "sales_order.push_prepayment.no_amount": "销售订单未填写预收款金额，无法下推预收收款单",
     "sales_order.push_prepayment.already_exists": "该销售订单已关联预收收款单",
@@ -790,6 +802,9 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "incoming_inspection.pull_from_purchase_receipt.not_allowed": "当前状态的采购入库单不可加载来料检验",
     "incoming_inspection.pull_from_purchase_receipt.no_lines": "采购入库单无需要来料检验的明细",
     "incoming_inspection.pull_from_purchase_receipt.already_pulled": "相关物料均已存在来料检验单，删除后可再次加载",
+    "outsource_inspection.pull_from_receipt.not_allowed": "当前状态的委外收货单不可加载委外检验",
+    "outsource_inspection.pull_from_receipt.no_inspection_required": "物料未配置委外检验，无需加载",
+    "outsource_inspection.pull_from_receipt.already_pulled": "该委外收货单已存在委外检验单，删除后可再次加载",
     "incoming_inspection.pull_from_purchase_order.not_allowed": "当前状态的采购订单不可加载来料检验",
     "incoming_inspection.pull_from_purchase_order.no_lines": "采购订单无需要来料检验的明细",
     "incoming_inspection.pull_from_purchase_order.already_pulled": "可检数量已全部下推，调整后可再次加载",

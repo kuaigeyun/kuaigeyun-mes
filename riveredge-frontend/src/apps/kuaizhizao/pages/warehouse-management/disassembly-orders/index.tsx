@@ -28,6 +28,7 @@ const DisassemblyOrdersPage: React.FC = () => {
       itemDoneStatus: 'produced',
       attachmentCategory: 'disassembly_order_attachments',
       getLifecycle: getDisassemblyOrderLifecycle,
+      permissionResource: 'kuaizhizao:warehouse-management-disassembly-orders',
       stockConsumeKind: 'product' as const,
     }),
     [t],

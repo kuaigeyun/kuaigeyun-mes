@@ -383,8 +383,14 @@ class APIService:
     ) -> Dict[str, Any]:
         """加载金蝶云苍穹 OpenAPI 常用 / 制造链路接口预设。"""
         from core.services.integration.kingdee_cosmic_api_presets import (
+            MATERIAL_GROUP_PRESET_CODE_SUFFIX,
+            MATERIAL_PRESET_CODE_SUFFIX,
+            MEASUREUNITS_PRESET_CODE_SUFFIX,
             WAREHOUSE_PRESET_CODE_SUFFIX,
             list_kingdee_cosmic_api_presets,
+            material_group_preset_needs_upgrade,
+            material_preset_needs_upgrade,
+            measureunits_preset_needs_upgrade,
             resolve_preset_api_code,
             warehouse_batch_query_preset_needs_upgrade,
         )
@@ -438,6 +444,89 @@ class APIService:
                     existing.request_body = body
                     existing.description = preset["description"]
                     await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    upgraded.append(code)
+                elif code_suffix == MEASUREUNITS_PRESET_CODE_SUFFIX and measureunits_preset_needs_upgrade(
+                    existing.path,
+                    existing.request_body,
+                    existing.request_params,
+                ):
+                    existing.path = preset["path"]
+                    existing.name = preset["name"]
+                    existing.description = preset["description"]
+                    existing.method = preset.get("method") or existing.method
+                    existing.request_params = preset.get("request_params") or {
+                        "select": "number,name,baseunit.number,baseunit.name",
+                    }
+                    existing.request_body = preset.get("request_body") or {
+                        "data": {},
+                        "pageNo": 1,
+                        "pageSize": 500,
+                        "select": "number,name,baseunit.number,baseunit.name",
+                    }
+                    await existing.save(
+                        update_fields=[
+                            "path",
+                            "name",
+                            "description",
+                            "method",
+                            "request_params",
+                            "request_body",
+                            "updated_at",
+                        ]
+                    )
+                    upgraded.append(code)
+                elif (
+                    code_suffix in (MATERIAL_GROUP_PRESET_CODE_SUFFIX, "query_goods_class")
+                    and material_group_preset_needs_upgrade(existing.path)
+                ):
+                    existing.path = preset["path"]
+                    existing.name = preset["name"]
+                    existing.description = preset["description"]
+                    existing.method = preset.get("method") or "POST"
+                    existing.request_params = preset.get("request_params")
+                    existing.request_body = preset.get("request_body") or {
+                        "pageNo": 1,
+                        "pageSize": 100,
+                    }
+                    await existing.save(
+                        update_fields=[
+                            "path",
+                            "name",
+                            "description",
+                            "method",
+                            "request_params",
+                            "request_body",
+                            "updated_at",
+                        ]
+                    )
+                    upgraded.append(code)
+                elif code_suffix == MATERIAL_PRESET_CODE_SUFFIX and material_preset_needs_upgrade(
+                    existing.path,
+                    existing.request_body,
+                    existing.request_params,
+                ):
+                    existing.path = preset["path"]
+                    existing.name = preset["name"]
+                    existing.description = preset["description"]
+                    existing.method = preset.get("method") or existing.method
+                    existing.request_params = preset.get("request_params")
+                    existing.request_body = preset.get("request_body") or {
+                        "data": {},
+                        "pageNo": 1,
+                        "pageSize": 100,
+                        "select": "number,name,modelnum,baseunit.number,baseunit.name,group.number,group.name",
+                    }
+                    await existing.save(
+                        update_fields=[
+                            "path",
+                            "name",
+                            "description",
+                            "method",
+                            "request_params",
+                            "request_body",
+                            "updated_at",
+                        ]
+                    )
                     upgraded.append(code)
                 if category_id is not None and existing.category_id is None:
                     existing.category_id = category_id
@@ -1225,52 +1314,82 @@ class APIService:
         start_time = time.time()
         try:
             client = get_http_client()
-            if method_upper == "GET":
-                response = await client.get(
-                    url,
-                    headers=request_headers,
-                    params=request_params,
-                    timeout=timeout,
-                )
-            elif method_upper == "POST":
-                response = await client.post(
-                    url,
-                    headers=request_headers,
-                    params=request_params,
-                    json=request_body,
-                    timeout=timeout,
-                )
-            elif method_upper == "PUT":
-                response = await client.put(
-                    url,
-                    headers=request_headers,
-                    params=request_params,
-                    json=request_body,
-                    timeout=timeout,
-                )
-            elif method_upper == "DELETE":
-                response = await client.delete(
-                    url,
-                    headers=request_headers,
-                    params=request_params,
-                    timeout=timeout,
-                )
-            elif method_upper == "PATCH":
-                response = await client.patch(
-                    url,
-                    headers=request_headers,
-                    params=request_params,
-                    json=request_body,
-                    timeout=timeout,
-                )
-            else:
+
+            async def _dispatch_once():
+                if method_upper == "GET":
+                    return await client.get(
+                        url,
+                        headers=request_headers,
+                        params=request_params,
+                        timeout=timeout,
+                    )
+                if method_upper == "POST":
+                    return await client.post(
+                        url,
+                        headers=request_headers,
+                        params=request_params,
+                        json=request_body,
+                        timeout=timeout,
+                    )
+                if method_upper == "PUT":
+                    return await client.put(
+                        url,
+                        headers=request_headers,
+                        params=request_params,
+                        json=request_body,
+                        timeout=timeout,
+                    )
+                if method_upper == "DELETE":
+                    return await client.delete(
+                        url,
+                        headers=request_headers,
+                        params=request_params,
+                        timeout=timeout,
+                    )
+                if method_upper == "PATCH":
+                    return await client.patch(
+                        url,
+                        headers=request_headers,
+                        params=request_params,
+                        json=request_body,
+                        timeout=timeout,
+                    )
                 raise ValueError(f"不支持的请求方法: {api.method}")
 
-            elapsed_time = time.time() - start_time
+            response = await _dispatch_once()
             try:
                 response_body = response.json()
             except Exception:
                 response_body = response.text
+
+            # 缓存 token 被金蝶提前作废时：强制换票后重试一次
+            if cosmic_cfg is not None and not is_cosmic_oauth:
+                from core.services.integration.kingdee_cosmic_service import (
+                    apply_kingdee_cosmic_session_headers,
+                    is_kingdee_cosmic_access_token_rejected,
+                    login_kingdee_cosmic_session,
+                )
+
+                if is_kingdee_cosmic_access_token_rejected(
+                    response_body,
+                    http_status=response.status_code,
+                ):
+                    session = await login_kingdee_cosmic_session(
+                        cosmic_cfg,
+                        force_refresh=True,
+                    )
+                    request_headers = apply_kingdee_cosmic_session_headers(
+                        request_headers,
+                        config=cosmic_cfg,
+                        access_token=str(session["access_token"]),
+                    )
+                    response = await _dispatch_once()
+                    try:
+                        response_body = response.json()
+                    except Exception:
+                        response_body = response.text
+
+            elapsed_time = time.time() - start_time
 
             if (
                 isinstance(response_body, dict)
@@ -1283,6 +1402,27 @@ class APIService:
                         "该地址未在开放平台发布。请打开这条基础资料 API 的详情，使用页面上的请求地址，不要沿用物料的 batchQuery。"
                     ),
                 }
+
+            # 苍穹 batchQuery 常忽略 select；按请求 select 裁剪行字段，避免测试/同步预览全量列
+            if isinstance(response_body, (dict, list)):
+                from core.services.integration.kingdee_cosmic_paths import (
+                    project_response_by_select,
+                )
+
+                select_hint = ""
+                if isinstance(request_params, dict):
+                    select_hint = str(request_params.get("select") or "").strip()
+                if not select_hint and isinstance(request_body, dict):
+                    select_hint = str(request_body.get("select") or "").strip()
+                    data_obj = request_body.get("data")
+                    if (
+                        not select_hint
+                        and isinstance(data_obj, dict)
+                        and data_obj.get("select") not in (None, "")
+                    ):
+                        select_hint = str(data_obj.get("select")).strip()
+                if select_hint:
+                    response_body = project_response_by_select(response_body, select_hint)
 
             return {
                 "status_code": response.status_code,
@@ -1333,6 +1473,7 @@ class APIService:
         request_params = dict(request_params or {})
         request_body = dict(request_body or {})
         method_upper = str(method or "POST").upper()
+        cosmic_cfg = None
 
         try:
             url, connector_headers = resolve_connector_request(
@@ -1368,11 +1509,11 @@ class APIService:
                 )
 
                 try:
-                    cfg = integration.get_config()
-                    session = await login_kingdee_cosmic_session(cfg)
+                    cosmic_cfg = integration.get_config()
+                    session = await login_kingdee_cosmic_session(cosmic_cfg)
                     request_headers = apply_kingdee_cosmic_session_headers(
                         request_headers,
-                        config=cfg,
+                        config=cosmic_cfg,
                         access_token=str(session["access_token"]),
                     )
                     from core.services.integration.kingdee_cosmic_paths import (
@@ -1380,7 +1521,7 @@ class APIService:
                     )
 
                     method_upper, url, request_params, request_body = prepare_kingdee_cosmic_outbound(
-                        cfg,
+                        cosmic_cfg,
                         url,
                         method_upper,
                         request_params,
@@ -1404,53 +1545,81 @@ class APIService:
         start_time = time.time()
         try:
             client = get_http_client()
-            if method_upper == "GET":
-                response = await client.get(
-                    url,
-                    headers=request_headers,
-                    params=request_params,
-                    timeout=timeout,
-                )
-            elif method_upper == "POST":
-                response = await client.post(
-                    url,
-                    headers=request_headers,
-                    params=request_params,
-                    json=request_body,
-                    timeout=timeout,
-                )
-            elif method_upper == "PUT":
-                response = await client.put(
-                    url,
-                    headers=request_headers,
-                    params=request_params,
-                    json=request_body,
-                    timeout=timeout,
-                )
-            elif method_upper == "DELETE":
-                response = await client.delete(
-                    url,
-                    headers=request_headers,
-                    params=request_params,
-                    timeout=timeout,
-                )
-            elif method_upper == "PATCH":
-                response = await client.patch(
-                    url,
-                    headers=request_headers,
-                    params=request_params,
-                    json=request_body,
-                    timeout=timeout,
-                )
-            else:
+
+            async def _dispatch_once():
+                if method_upper == "GET":
+                    return await client.get(
+                        url,
+                        headers=request_headers,
+                        params=request_params,
+                        timeout=timeout,
+                    )
+                if method_upper == "POST":
+                    return await client.post(
+                        url,
+                        headers=request_headers,
+                        params=request_params,
+                        json=request_body,
+                        timeout=timeout,
+                    )
+                if method_upper == "PUT":
+                    return await client.put(
+                        url,
+                        headers=request_headers,
+                        params=request_params,
+                        json=request_body,
+                        timeout=timeout,
+                    )
+                if method_upper == "DELETE":
+                    return await client.delete(
+                        url,
+                        headers=request_headers,
+                        params=request_params,
+                        timeout=timeout,
+                    )
+                if method_upper == "PATCH":
+                    return await client.patch(
+                        url,
+                        headers=request_headers,
+                        params=request_params,
+                        json=request_body,
+                        timeout=timeout,
+                    )
                 raise ValueError(f"不支持的请求方法: {method}")
 
-            elapsed_time = time.time() - start_time
+            response = await _dispatch_once()
             try:
                 response_body = response.json()
             except Exception:
                 response_body = response.text
 
+            if cosmic_cfg is not None:
+                from core.services.integration.kingdee_cosmic_service import (
+                    apply_kingdee_cosmic_session_headers,
+                    is_kingdee_cosmic_access_token_rejected,
+                    login_kingdee_cosmic_session,
+                )
+
+                if is_kingdee_cosmic_access_token_rejected(
+                    response_body,
+                    http_status=response.status_code,
+                ):
+                    session = await login_kingdee_cosmic_session(
+                        cosmic_cfg,
+                        force_refresh=True,
+                    )
+                    request_headers = apply_kingdee_cosmic_session_headers(
+                        request_headers,
+                        config=cosmic_cfg,
+                        access_token=str(session["access_token"]),
+                    )
+                    response = await _dispatch_once()
+                    try:
+                        response_body = response.json()
+                    except Exception:
+                        response_body = response.text
+
+            elapsed_time = time.time() - start_time
             return {
                 "status_code": response.status_code,
                 "headers": dict(response.headers),

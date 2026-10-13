@@ -83,6 +83,167 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.description',
   },
   {
+    id: 'master-data-units-sync-i18n-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.master-data-units-sync-i18n-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.master-data-units-sync-i18n-r01.description',
+  },
+  {
+    id: 'common-remarks-i18n-sweep-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.common-remarks-i18n-sweep-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.common-remarks-i18n-sweep-r01.description',
+  },
+  {
+    id: 'drawing-balloon-list-unitable-shell-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-balloon-list-unitable-shell-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-balloon-list-unitable-shell-r01.description',
+  },
+  {
+    id: 'drawing-balloon-list-label-replace-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-balloon-list-label-replace-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-balloon-list-label-replace-r01.description',
+  },
+  {
+    id: 'role-data-grant-persisted-function-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.role-data-grant-persisted-function-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.role-data-grant-persisted-function-r01.description',
+  },
+  {
+    id: 'demand-computation-single-line-wo-group-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.demand-computation-single-line-wo-group-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.demand-computation-single-line-wo-group-r01.description',
+  },
+  {
+    id: 'quotation-price-type-switch-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quotation-price-type-switch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quotation-price-type-switch-r01.description',
+  },
+  {
+    id: 'drawing-balloon-sheet-pro-r01',
+    date: '2026-10-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-balloon-sheet-pro-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-balloon-sheet-pro-r01.description',
+  },
+  {
+    id: 'iot-auto-clear-after-work-order-end-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.iot-auto-clear-after-work-order-end-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.iot-auto-clear-after-work-order-end-r01.description',
+  },
+  {
+    id: 'iot-connection-direction-advanced-search-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.iot-connection-direction-advanced-search-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.iot-connection-direction-advanced-search-r01.description',
+  },
+  {
+    id: 'notify-warehouse-nested-tx-deadlock-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.notify-warehouse-nested-tx-deadlock-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.notify-warehouse-nested-tx-deadlock-r01.description',
+  },
+  {
+    id: 'quality-osqc-display-label-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-osqc-display-label-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-osqc-display-label-r01.description',
+  },
+  {
+    id: 'sales-return-customer-name-string-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-return-customer-name-string-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-return-customer-name-string-r01.description',
+  },
+  {
+    id: 'unit-material-sync-decouple-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unit-material-sync-decouple-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unit-material-sync-decouple-r01.description',
+  },
+  {
+    id: 'quality-patrol-form-list-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-patrol-form-list-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-patrol-form-list-r01.description',
+  },
+  {
+    id: 'quality-outsource-list-align-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-outsource-list-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-outsource-list-align-r01.description',
+  },
+  {
+    id: 'quality-plan-types-osqc-patrol-r01',
+    date: '2026-10-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-plan-types-osqc-patrol-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-plan-types-osqc-patrol-r01.description',
+  },
+  {
+    id: 'iot-device-connection-option-direction-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.iot-device-connection-option-direction-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.iot-device-connection-option-direction-r01.description',
+  },
+  {
+    id: 'finance-other-voucher-line-audit-columns-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-other-voucher-line-audit-columns-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-other-voucher-line-audit-columns-r01.description',
+  },
+  {
+    id: 'finance-other-income-code-rule-seed-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-other-income-code-rule-seed-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-other-income-code-rule-seed-r01.description',
+  },
+  {
     id: 'influxdb-live-connection-test-r01',
     date: '2026-10-13',
     type: 'improvement',
@@ -209,6 +370,268 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.kuaiiot-device-status-realtime-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.kuaiiot-device-status-realtime-r01.description',
+  },
+  {
+    id: 'finance-other-voucher-save-line-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-other-voucher-save-line-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-other-voucher-save-line-r01.description',
+  },
+  {
+    id: 'finance-misc-category-uni-dropdown-quick-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-misc-category-uni-dropdown-quick-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-misc-category-uni-dropdown-quick-r01.description',
+  },
+  {
+    id: 'finance-misc-category-list-shell-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-misc-category-list-shell-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-misc-category-list-shell-r01.description',
+  },
+  {
+    id: 'finance-misc-category-toolbar-segment-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-misc-category-toolbar-segment-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-misc-category-toolbar-segment-r01.description',
+  },
+  {
+    id: 'finance-menu-receipt-payment-groups-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-menu-receipt-payment-groups-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-menu-receipt-payment-groups-r01.description',
+  },
+  {
+    id: 'finance-other-misc-category-seed-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-other-misc-category-seed-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-other-misc-category-seed-r01.description',
+  },
+  {
+    id: 'finance-other-misc-counterparty-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-other-misc-counterparty-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-other-misc-counterparty-r01.description',
+  },
+  {
+    id: 'finance-other-misc-list-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-other-misc-list-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-other-misc-list-r01.description',
+  },
+  {
+    id: 'finance-other-misc-orm-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-other-misc-orm-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-other-misc-orm-r01.description',
+  },
+  {
+    id: 'payment-application-uni-audit-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-uni-audit-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.payment-application-uni-audit-r01.description',
+  },
+  {
+    id: 'payment-application-row-audit-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-row-audit-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.payment-application-row-audit-r01.description',
+  },
+  {
+    id: 'payment-application-list-layout-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-list-layout-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.payment-application-list-layout-r01.description',
+  },
+  {
+    id: 'payment-application-line-schema-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-line-schema-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.payment-application-line-schema-r01.description',
+  },
+  {
+    id: 'payment-application-code-rule-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-code-rule-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.payment-application-code-rule-r01.description',
+  },
+  {
+    id: 'payment-application-form-modal-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-form-modal-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.payment-application-form-modal-r01.description',
+  },
+  {
+    id: 'finance-other-misc-vouchers-r01',
+    date: '2026-10-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-other-misc-vouchers-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-other-misc-vouchers-r01.description',
+  },
+  {
+    id: 'payment-application-procurement-r01',
+    date: '2026-10-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-procurement-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.payment-application-procurement-r01.description',
+  },
+  {
+    id: 'partner-multi-settlement-accounts-r01',
+    date: '2026-10-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-multi-settlement-accounts-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.partner-multi-settlement-accounts-r01.description',
+  },
+  {
+    id: 'purchase-requisition-line-warehouse-stock-r01',
+    date: '2026-10-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-line-warehouse-stock-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-line-warehouse-stock-r01.description',
+  },
+  {
+    id: 'equipment-master-import-export-r01',
+    date: '2026-10-12',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-master-import-export-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equipment-master-import-export-r01.description',
+  },
+  {
+    id: 'tenant-switch-role-create-context-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tenant-switch-role-create-context-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tenant-switch-role-create-context-r01.description',
+  },
+  {
+    id: 'other-inbound-confirm-receipt-time-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.other-inbound-confirm-receipt-time-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-inbound-confirm-receipt-time-r01.description',
+  },
+  {
+    id: 'warehouse-route-manifest-permissions-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-route-manifest-permissions-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-route-manifest-permissions-r01.description',
+  },
+  {
+    id: 'inventory-transfer-execute-permission-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-transfer-execute-permission-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inventory-transfer-execute-permission-r01.description',
+  },
+  {
+    id: 'pr-suggested-supplier-searchable-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.pr-suggested-supplier-searchable-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.pr-suggested-supplier-searchable-r01.description',
+  },
+  {
+    id: 'cosmic-material-preview-no-unit-collapse-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-material-preview-no-unit-collapse-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-material-preview-no-unit-collapse-r01.description',
+  },
+  {
+    id: 'cosmic-material-select-nested-project-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-material-select-nested-project-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-material-select-nested-project-r01.description',
+  },
+  {
+    id: 'cosmic-material-test-not-unit-collapse-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-material-test-not-unit-collapse-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-material-test-not-unit-collapse-r01.description',
+  },
+  {
+    id: 'cosmic-token-expired-auto-refresh-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-token-expired-auto-refresh-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-token-expired-auto-refresh-r01.description',
+  },
+  {
+    id: 'cosmic-material-sync-auto-map-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-material-sync-auto-map-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-material-sync-auto-map-r01.description',
+  },
+  {
+    id: 'cosmic-goods-class-group-sync-r01',
+    date: '2026-10-12',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-goods-class-group-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-goods-class-group-sync-r01.description',
+  },
+  {
+    id: 'cosmic-unit-sync-multimeasureunit-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-unit-sync-multimeasureunit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-unit-sync-multimeasureunit-r01.description',
+  },
+  {
+    id: 'oss-order-list-without-kuaicaiwu-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.oss-order-list-without-kuaicaiwu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.oss-order-list-without-kuaicaiwu-r01.description',
+  },
+  {
+    id: 'user-preference-atomic-jsonb-merge-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.user-preference-atomic-jsonb-merge-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.user-preference-atomic-jsonb-merge-r01.description',
+  },
+  {
+    id: 'core-system-display-grant-backfill-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.core-system-display-grant-backfill-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.core-system-display-grant-backfill-r01.description',
   },
   {
     id: 'sales-order-default-salesman-badge-r01',

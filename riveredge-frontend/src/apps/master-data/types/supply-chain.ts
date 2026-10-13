@@ -33,6 +33,14 @@ export interface PartnerContact {
   email?: string;
 }
 
+/** 客户收款 / 供应商付款等多账户明细 */
+export interface PartnerSettlementAccount {
+  accountName?: string;
+  bankName?: string;
+  bankAccount?: string;
+  isDefault?: boolean;
+}
+
 /** @deprecated 使用 PartnerContact */
 export type CustomerContact = PartnerContact;
 
@@ -49,6 +57,7 @@ export interface Customer extends PartnerInvoiceAndExtendedFields {
   phone?: string;
   email?: string;
   contacts?: CustomerContact[];
+  settlementAccounts?: PartnerSettlementAccount[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -83,6 +92,7 @@ export interface CustomerCreate extends PartnerInvoiceAndExtendedFields {
   name: string;
   shortName?: string;
   contacts?: PartnerContact[];
+  settlementAccounts?: PartnerSettlementAccount[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -107,6 +117,7 @@ export interface CustomerUpdate extends PartnerInvoiceAndExtendedFields {
   name?: string;
   shortName?: string;
   contacts?: PartnerContact[];
+  settlementAccounts?: PartnerSettlementAccount[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -163,6 +174,7 @@ export interface Supplier extends PartnerInvoiceAndExtendedFields {
   phone?: string;
   email?: string;
   contacts?: PartnerContact[];
+  settlementAccounts?: PartnerSettlementAccount[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -191,6 +203,7 @@ export interface SupplierCreate extends PartnerInvoiceAndExtendedFields {
   name: string;
   shortName?: string;
   contacts?: PartnerContact[];
+  settlementAccounts?: PartnerSettlementAccount[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -210,6 +223,7 @@ export interface SupplierUpdate extends PartnerInvoiceAndExtendedFields {
   name?: string;
   shortName?: string;
   contacts?: PartnerContact[];
+  settlementAccounts?: PartnerSettlementAccount[];
   address?: string;
   category?: string;
   industryCode?: string;

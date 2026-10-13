@@ -6241,7 +6241,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         location_required, auto_outbound_enabled = await _get_warehouse_policy_flags(tenant_id)
         created_delivery_id: Optional[int] = None
 
-        async with in_transaction():
+        # 发货通知「通知仓库」等外层可能已开事务：复用外层，避免 Nested 死锁
+        async with reuse_or_begin_transaction():
             user_info = await self.get_user_info(created_by)
             
             # 2. 检查是否需要审核
@@ -9300,12 +9301,13 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         """创建采购入库单"""
         created_receipt_id: Optional[int] = None
         response: Optional[PurchaseReceiptResponse] = None
+        user_info = await self.get_user_info(created_by)
+        today = today_site_str()
+        # 取号在建单事务前：无外层事务时短事务释放序号锁，避免并发「通知仓库」互相堵死
+        code = await self.generate_code(tenant_id, "PURCHASE_RECEIPT_CODE", prefix=f"PR{today}")
+
         # 让步接收等外层事务内创建：复用外层，避免 NestedTransaction 提前独立提交
         async with reuse_or_begin_transaction():
-            user_info = await self.get_user_info(created_by)
-            today = today_site_str()
-            code = await self.generate_code(tenant_id, "PURCHASE_RECEIPT_CODE", prefix=f"PR{today}")
-
             # 创建入库单头
             receipt_dict = receipt_data.model_dump(exclude_unset=True, exclude={'items', 'created_by', 'receipt_code'})
             receipt_dict.update({
@@ -9420,39 +9422,38 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 total_amount=total_amount
             )
 
-            # 建立采购订单→采购入库 的 DocumentRelation
-            purchase_order_id = getattr(receipt, "purchase_order_id", None) or getattr(receipt_data, "purchase_order_id", None)
-            if purchase_order_id:
-                try:
-                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-                    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
-
-                    po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=purchase_order_id)
-                    if po:
-                        rel_svc = DocumentRelationNewService()
-                        await rel_svc.create_relation(
-                            tenant_id=tenant_id,
-                            relation_data=DocumentRelationCreate(
-                                source_type="purchase_order",
-                                source_id=purchase_order_id,
-                                source_code=po.order_code,
-                                source_name=getattr(po, "order_name", None) or po.order_code,
-                                target_type="purchase_receipt",
-                                target_id=receipt.id,
-                                target_code=receipt.receipt_code,
-                                target_name=None,
-                                relation_type="source",
-                                relation_mode="push",
-                                relation_desc="采购订单创建采购入库单",
-                            ),
-                            created_by=created_by,
-                        )
-                except Exception as e:
-                    logger.warning("建立采购订单→采购入库 单据关联失败: %s", e)
-            
             created_receipt_id = receipt.id
             response = PurchaseReceiptResponse.model_validate(receipt)
+
+        # 单据关联放在建单事务外：避免历史 Nested 回滚误毁入库单，且不拖长序号锁
+        purchase_order_id = getattr(receipt_data, "purchase_order_id", None)
+        if created_receipt_id is not None and purchase_order_id:
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+                from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+                po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=purchase_order_id)
+                if po and response is not None:
+                    await DocumentRelationNewService().create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="purchase_order",
+                            source_id=purchase_order_id,
+                            source_code=po.order_code,
+                            source_name=getattr(po, "order_name", None) or po.order_code,
+                            target_type="purchase_receipt",
+                            target_id=created_receipt_id,
+                            target_code=response.receipt_code,
+                            target_name=None,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="采购订单创建采购入库单",
+                        ),
+                        created_by=created_by,
+                    )
+            except Exception as e:
+                logger.warning("建立采购订单→采购入库 单据关联失败: %s", e)
 
         if created_receipt_id is not None:
             from apps.kuaizhizao.services.quality_automation_service import QualityAutomationService
@@ -15677,8 +15678,8 @@ class OtherInboundService(AppBaseService[OtherInbound]):
 
             confirmer_name = await self.get_user_name(confirmed_by)
             from apps.kuaizhizao.utils.inbound_confirm_helper import (
-                resolve_inbound_confirm_business_time,
                 resolve_inbound_confirm_receiver,
+                resolve_inbound_posting_business_time,
             )
 
             receiver_id, receiver_name = await resolve_inbound_confirm_receiver(
@@ -15686,7 +15687,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 confirmation_data=confirmation_data,
                 get_user_name=self.get_user_name,
             )
-            receipt_time = resolve_inbound_confirm_business_time(
+            receipt_time = resolve_inbound_posting_business_time(
                 confirmation_data,
                 existing_time=getattr(inbound, "receipt_time", None),
             )

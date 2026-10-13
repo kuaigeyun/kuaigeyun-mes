@@ -133,6 +133,14 @@ def test_resolve_inbound_confirm_business_time_keeps_existing():
     assert got.day == 1
 
 
+def test_resolve_inbound_posting_business_time_uses_confirm_moment_when_unspecified():
+    from apps.kuaizhizao.utils.inbound_confirm_helper import resolve_inbound_posting_business_time
+
+    got = resolve_inbound_posting_business_time(None, existing_time=None)
+    assert got is not None
+    assert got.tzinfo is not None
+
+
 def test_resolve_inbound_confirm_business_time_empty_stays_none():
     from apps.kuaizhizao.utils.inbound_confirm_helper import resolve_inbound_confirm_business_time
 

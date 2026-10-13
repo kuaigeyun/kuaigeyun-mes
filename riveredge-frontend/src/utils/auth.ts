@@ -264,6 +264,24 @@ export function getTokenSubjectUserId(token?: string | null): number | null {
   return Number.isFinite(userId) && userId > 0 ? userId : null;
 }
 
+/** JWT 中的会话组织 ID（普通用户切换租户后以此为准；平台超管票通常无此字段） */
+export function getTokenTenantId(token?: string | null): number | null {
+  const payload = decodeJWT(token || getToken() || '');
+  if (!payload || payload.tenant_id == null) {
+    return null;
+  }
+  const tenantId = Number(payload.tenant_id);
+  return Number.isFinite(tenantId) && tenantId > 0 ? tenantId : null;
+}
+
+/** 将 localStorage 的 tenant_id 与给定组织对齐（切换租户 / 刷新 /me 后防漂移） */
+export function syncStoredTenantId(tenantId: number | string | null | undefined): void {
+  if (tenantId == null || tenantId === '') {
+    return;
+  }
+  setTenantId(tenantId);
+}
+
 export function isInfraSuperAdminFromToken(): boolean {
   const token = getToken();
   if (!token) return false;

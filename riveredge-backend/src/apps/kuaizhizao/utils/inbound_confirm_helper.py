@@ -154,3 +154,25 @@ def resolve_inbound_confirm_business_time(
             return None
         return coerce_business_datetime_to_utc(parsed)
     return coerce_business_datetime_to_utc(raw)
+
+
+def resolve_inbound_posting_business_time(
+    confirmation_data: Optional[object],
+    *,
+    existing_time: Optional[Union[datetime, str]] = None,
+) -> datetime:
+    """
+    确认过账用的入库业务时刻。
+
+    优先请求体/单据已有 receipt_time；皆空时使用当前站点业务时刻（即「确认入库」时刻），
+    供批号/序列号台账写入 production_date，与「来自入库单确认时间」一致。
+    """
+    resolved = resolve_inbound_confirm_business_time(
+        confirmation_data,
+        existing_time=existing_time,
+    )
+    if resolved is not None:
+        return resolved
+    from core.utils.timezone_utils import resolve_business_datetime
+
+    return coerce_business_datetime_to_utc(resolve_business_datetime())

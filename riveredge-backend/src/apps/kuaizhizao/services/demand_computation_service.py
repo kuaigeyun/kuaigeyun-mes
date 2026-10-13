@@ -3698,6 +3698,82 @@ class DemandComputationService(AppBaseService):
             return "grouped"
         return "individual"
 
+    async def count_pushable_demand_lines_for_work_order_group(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        items: List[DemandComputationItem],
+        *,
+        generate_mode: str,
+        selected_item_ids: Optional[List[int]] = None,
+    ) -> int:
+        """可下推生产/委外的需求行（demand_item / BOM 树根）数量。"""
+        if not computation.demand_item_bom_trees:
+            return 0
+
+        from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+
+        group_svc = WorkOrderGroupService()
+        already_pushed_keys = await group_svc.collect_pushed_keys(tenant_id, computation.id)
+        selected_comp_ids = self._resolve_production_selected_computation_item_ids(
+            items, selected_item_ids
+        )
+        item_by_material: Dict[int, DemandComputationItem] = {
+            int(i.material_id): i for i in items if i.material_id is not None
+        }
+
+        pushable_demand_lines = 0
+        for tree in computation.demand_item_bom_trees or []:
+            demand_item_id = tree.get("demand_item_id")
+            if demand_item_id is None:
+                continue
+            root_mid = tree.get("material_id")
+            comp_item = (
+                item_by_material.get(int(root_mid)) if root_mid is not None else None
+            )
+            if selected_comp_ids is not None:
+                if comp_item is None or int(comp_item.id) not in selected_comp_ids:
+                    continue
+            pending = WorkOrderGroupService._collect_pending_production_nodes(
+                tree,
+                int(demand_item_id),
+                generate_mode=generate_mode,
+                already_pushed_keys=already_pushed_keys,
+            )
+            if pending:
+                pushable_demand_lines += 1
+        return pushable_demand_lines
+
+    async def resolve_effective_work_order_granularity(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        items: List[DemandComputationItem],
+        requested: Optional[str],
+        *,
+        generate_mode: str,
+        selected_item_ids: Optional[List[int]] = None,
+    ) -> str:
+        """
+        组工单仅当：用户选 grouped 且可下推需求行（demand_item 维度）> 1。
+        仅 1 条需求明细时一律独立工单，避免单行走工单组。
+        """
+        normalized = self.normalize_work_order_granularity(
+            requested or self.resolve_default_work_order_granularity(computation)
+        )
+        if normalized != "grouped":
+            return normalized
+        pushable_demand_lines = await self.count_pushable_demand_lines_for_work_order_group(
+            tenant_id,
+            computation,
+            items,
+            generate_mode=generate_mode,
+            selected_item_ids=selected_item_ids,
+        )
+        if pushable_demand_lines <= 1:
+            return "individual"
+        return "grouped"
+
     def _resolve_production_selected_computation_item_ids(
         self,
         items: List[DemandComputationItem],
@@ -3854,8 +3930,13 @@ class DemandComputationService(AppBaseService):
         if not items:
             raise BusinessLogicError("计算结果明细为空，无法生成工单和采购单")
 
-        wo_granularity = self.normalize_work_order_granularity(
-            work_order_granularity or self.resolve_default_work_order_granularity(computation)
+        wo_granularity = await self.resolve_effective_work_order_granularity(
+            tenant_id,
+            computation,
+            items,
+            work_order_granularity,
+            generate_mode=generate_mode,
+            selected_item_ids=selected_item_ids,
         )
         selected_computation_item_ids = (
             None
@@ -5968,9 +6049,24 @@ class DemandComputationService(AppBaseService):
         production = (push_config or {}).get("production")
         purchase = (push_config or {}).get("purchase")
         outsource_only = (push_config or {}).get("outsource_only") is True
-        wo_granularity = self.normalize_work_order_granularity(
-            (push_config or {}).get("work_order_granularity")
-            or self.resolve_default_work_order_granularity(computation)
+        preview_mode = "outsource_only" if (push_config or {}).get("outsource_only") else (
+            generate_mode or "work_order_only"
+        )
+        preview_selected_item_ids = (push_config or {}).get("production_item_ids")
+        wo_granularity = await self.resolve_effective_work_order_granularity(
+            tenant_id,
+            computation,
+            items,
+            (push_config or {}).get("work_order_granularity"),
+            generate_mode=preview_mode,
+            selected_item_ids=preview_selected_item_ids,
+        )
+        pushable_demand_line_count = await self.count_pushable_demand_lines_for_work_order_group(
+            tenant_id,
+            computation,
+            items,
+            generate_mode=preview_mode,
+            selected_item_ids=preview_selected_item_ids,
         )
 
         work_order_count = 0
@@ -6194,6 +6290,9 @@ class DemandComputationService(AppBaseService):
             "work_order_count": work_order_count,
             "work_order_group_count": work_order_group_count,
             "work_order_granularity": wo_granularity,
+            "pushable_demand_line_count": pushable_demand_line_count,
+            "group_work_order_eligible": pushable_demand_line_count > 1
+            and bool(computation.demand_item_bom_trees),
             "outsource_work_order_count": outsource_work_order_count,
             "purchase_requisition_count": purchase_requisition_count,
             "purchase_order_count": purchase_order_count,

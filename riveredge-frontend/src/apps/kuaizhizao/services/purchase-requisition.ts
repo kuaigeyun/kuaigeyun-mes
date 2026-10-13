@@ -96,6 +96,23 @@ export async function getPurchaseRequisition(id: number): Promise<PurchaseRequis
   return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${id}`);
 }
 
+export type MaterialWarehouseStockLine = {
+  warehouse_name: string;
+  quantity: number;
+};
+
+export async function getPurchaseRequisitionMaterialWarehouseStock(
+  materialIds: number[],
+): Promise<{ by_material: Record<string, MaterialWarehouseStockLine[]> }> {
+  if (!materialIds.length) {
+    return { by_material: {} };
+  }
+  return apiRequest('/apps/kuaizhizao/purchase-requisitions/material-warehouse-stock', {
+    method: 'GET',
+    params: { material_ids: materialIds },
+  });
+}
+
 export async function createPurchaseRequisition(data: Partial<PurchaseRequisition>): Promise<PurchaseRequisition> {
   return apiRequest('/apps/kuaizhizao/purchase-requisitions', { method: 'POST', data });
 }

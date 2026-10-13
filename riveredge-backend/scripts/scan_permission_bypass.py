@@ -940,6 +940,28 @@ def scan_material_host_secondary_gates() -> list[Finding]:
     return findings
 
 
+def scan_route_manifest_alignment() -> list[Finding]:
+    """委托 scan_route_manifest_alignment：路由解析动作 ↔ manifest permissions[]。"""
+    scripts_dir = Path(__file__).resolve().parent
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    from scan_route_manifest_alignment import run_scan as run_route_manifest_scan
+
+    out: list[Finding] = []
+    for item in run_route_manifest_scan():
+        out.append(
+            Finding(
+                rule_id=item.rule_id,
+                severity=item.severity,
+                path=item.path,
+                line=item.line,
+                message=item.message,
+                snippet=item.snippet,
+            )
+        )
+    return out
+
+
 def run_scan() -> list[Finding]:
     return (
         scan_backend_apps()
@@ -951,6 +973,7 @@ def run_scan() -> list[Finding]:
         + scan_frontend_reference_selectors()
         + scan_service_row_filter_bypass()
         + scan_manifest_permission_declarations()
+        + scan_route_manifest_alignment()
     )
 
 

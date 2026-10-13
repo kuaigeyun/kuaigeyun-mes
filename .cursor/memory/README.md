@@ -20,6 +20,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 
 | 任务在说… | 先读 |
 |-----------|------|
+| **新建 PC 页、新列表、新单据、脚手架、缺新建按钮、showCreateButton、没按规范** | **`principles/new-pc-page-hard-gate.md`** → **`.cursor/skills/new-document-page/SKILL.md`** → AOCI `keyword=new-document-page`；**禁止等用户口头提醒** |
 | 工位服务器设置、开发态工单不是设置地址、X-Station-Api-Origin | `features/station-settings-api-origin.md` |
 | 工位人脸录入、已录入账号采样、设备设置录脸、触屏专用角色 | `features/station-face-settings-manage.md` |
 | 工位指派给我、班组派工、assigned_worker_id 看不到班组工单 | `features/station-assigned-wo-includes-team.md` |
@@ -40,6 +41,8 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 即时库存同步、batch_no 非空、无批号 | `features/inventory-sync-empty-batch-no.md` |
 | 同步/推送 Hub、外推、DocumentPush、preferIds、`:sync` / `:push` | `features/sync-push-hub-master-data.md` |
 | SyncFromSource、多源映射、只补缺字段、match_key 合并 | `features/sync-from-source-multi-source-merge.md` |
+| 通知仓库 504、服务器暂时不可用、NestedTransaction 死锁 | `features/notify-warehouse-nested-tx-deadlock.md` |
+| 单位/物料同步串扰、单位写成物料编码、query_measureunits | `features/unit-material-sync-decouple.md` |
 | 来源类型转换没生效、FErpClsID、source_type 仍 Buy | `features/sync-material-source-type-conversion.md` |
 | BOM 自制件下拉空、mainMaterialScope make 找不到 | `features/bom-main-material-make-scope.md` |
 | 物料分组空拉、BD_MATERIALGROUP、FormId 名对体错 | `features/sync-material-group-empty-pull.md` |
@@ -61,20 +64,27 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 编码规则、页面配置、testGenerateCode、编号预览慢 | `features/code-rule-page-config-load.md` |
 | 设备台账、车间/产线/工位快速新增、UniDropdown.quickCreate | `features/equipment-factory-binding-quick-add.md` |
 | 质检方案快速新建、方案类型空白、defaultPlanType | `features/inspection-plan-quick-type-default.md` |
+| 委外检验、质量巡检、OSQC、plan_type outsource/patrol | `features/quality-outsource-patrol.md` |
+| 图纸气泡标注、drawing_balloon、FAI 导入特性、PRO OCR | `features/drawing-balloon-sheet-pro.md` |
 | 构建 dist、deploy、H5、launch.dev、fast-deploy、开机自启 install-service | `features/fast-deploy-scripts.md` |
 | APP 转 PRO、compose、财务管理托管、数据中心占位 | `features/app-pro-migration-compose.md` |
 | 构建推送、要不要编前端、只改后端怎么推、web/H5/工位选哪条 | `principles/code-push-routing.md` + 规则 `build-push-aoci.mdc` |
 | 构建推送前 AOCI、提交前先索引、要不要跑 AOCI、每次 push 是否 maintain | `principles/aoci-git-commit.md` |
 | riveredge-app 组装、mklink、工位/TV/小程序私仓 | `features/riveredge-app-client-junctions.md` |
 | kuaicaiwu receivable ModuleNotFound、compose 空壳、external_master_data_sync | `features/compose-kuaicaiwu-empty-husk.md` |
+| 个性化主题保存后又暗、偏好与标签互相冲掉、jsonb merge | `features/user-preference-atomic-merge.md` |
 | 回显权限、display、reference_resources 单一真源、预设角色物料回显 | `features/permission-display-echo.md` |
 | 选物料 403、仅回显加载物料列表失败、UniMaterialSelect | `features/uni-material-select-reference-display.md` |
+| 建议供应商无搜索、SupplierSelectDropdown、UniDropdown 可搜 | `features/supplier-select-dropdown.md` |
+| 客户供应商多收付款账户、settlementAccounts、付款账户 | `features/partner-settlement-accounts.md` |
+| 付款申请、采购请款、push_payment_application、可请款占用 | `features/payment-application-procurement.md` |
+| 其他费用收入、其他费用支出、收支类别、other_income | `features/finance-other-misc-vouchers.md` |
 | 新建销售订单很慢、进页预拉物料 2000 | `features/sales-order-form-material-preload.md` |
 | 前端慢、进页卡、Top5 菜单性能基线、useDeferAfterPaint | `features/frontend-perf-baseline.md` |
 | 销售订单点详情很慢、get_sales_order_by_id 数秒 | `features/sales-order-detail-api-perf.md` |
 | 全链路追踪很慢、附件中心很慢、trace/attachment-center | `features/document-trace-attach-perf.md` |
 | 工作台待办、dashboard todos、无权限仍见待办 | `features/dashboard-todo-rbac-filter.md` |
-| 开源无专业包崩溃、kuaicaiwu ImportError、infra_license_keys、业务蓝图 graph | `features/oss-pro-decouple-startup.md` |
+| 开源无专业包崩溃、kuaicaiwu ImportError、销售采购订单列表 500、infra_license_keys、业务蓝图 graph、IKKZ4P、IKL5HM | `features/oss-pro-decouple-startup.md` |
 | 设备状态实时、MQTT 无感、external_device_id 绑定、台账 status 联动 | `features/kuaiiot-device-status-realtime.md` |
 | 指令设备 ID、command_device_id、清零报文 device_id | `features/iot-line-clear-mqtt.md` + `kuaiiot-device-status-realtime.md` |
 | 产线清零、zscl 清 0、发送型 MQTT、command_code t0/c0/z0、报工后自动清零 | `features/iot-line-clear-mqtt.md` |
@@ -110,6 +120,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `principles/mes-vault-index.md` | MES Vault 入口与源码图谱 | 有效 |
 | `principles/three-repo-map.md` | 三仓职责与跨端功能落点 | 有效 |
 | `principles/reuse-existing-patterns.md` | 复用优先：同一功能一套标准 | 有效 |
+| `principles/new-pc-page-hard-gate.md` | 新建 PC 页：先 Skill + AOCI，UniTable 壳硬门禁 | 有效 |
 | `principles/feature-delivery.md` | 新功能交付：迁移 + 菜单同步 | 有效 |
 | `principles/api-write-protection.md` | API 写防护运维要点 | 有效 |
 | `principles/memory-note-format.md` | 记忆库书写与检索约定 | 有效 |
@@ -125,8 +136,11 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/equipment-spot-check-plan.md` | 设备点检计划与日历 | kuaizhizao-ops | 已交付 |
 | `features/maintenance-plan-scheme-bind.md` | 保养计划绑定保养方案 | kuaizhizao-ops | 已交付 |
 | `features/equip-ops-scheme-bind-clients.md` | 移动/工位点检保养方案绑定对齐 | kuaizhizao-ops | 已交付 |
+| `features/user-preference-atomic-merge.md` | 用户偏好 JSON 原子深合并 | system | 已交付 |
 | `features/permission-display-echo.md` | 权限回显 display 矩阵与鉴权 | rbac | 已交付 |
 | `features/uni-material-select-reference-display.md` | 物料选择器走 reference-display | rbac | 已交付 |
+| `features/supplier-select-dropdown.md` | 供应商可搜索下拉 SupplierSelectDropdown | master-data | 已交付 |
+| `features/partner-settlement-accounts.md` | 客户/供应商多收付款账户 JSON | master-data | 已交付 |
 | `features/sales-order-form-material-preload.md` | 销售订单表单物料按需缓存 | master-data-ui | 已交付 |
 | `features/frontend-perf-baseline.md` | 前端性能基线与优化主线 | frontend-perf | 有效 |
 | `features/sales-order-detail-api-perf.md` | 销售订单详情接口并行取数 | kuaizhizao-sales | 已交付 |
@@ -144,6 +158,8 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/inventory-sync-empty-batch-no.md` | 即时库存同步空批号落空串 | sync-from-source | 已交付 |
 | `features/sync-push-hub-master-data.md` | 物料/BOM/工序 SyncPushHub + 外推 | sync-push | 已交付 |
 | `features/sync-from-source-multi-source-merge.md` | 入站多源：只补缺字段 + 匹配键合并 | sync-from-source | 已交付 |
+| `features/notify-warehouse-nested-tx-deadlock.md` | 通知仓库 Nested 事务死锁修复 | kuaizhizao-warehouse | 已交付 |
+| `features/unit-material-sync-decouple.md` | 单位/物料同步别名与写入前去重拆开 | sync-from-source | 已交付 |
 | `features/sync-material-source-type-conversion.md` | 物料来源类型转换依赖 FieldKeys | sync-from-source | 已交付 |
 | `features/bom-main-material-make-scope.md` | BOM 主物料自制件下拉须服务端滤 Make | master-data-ui | 已交付 |
 | `features/sync-material-group-empty-pull.md` | 物料分组空拉与 FormId/createorg | sync-from-source | 已交付 |
@@ -167,6 +183,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/code-rule-page-config-load.md` | 编码规则页面配置加载 | code-rule | 已交付 |
 | `features/equipment-factory-binding-quick-add.md` | 设备台账工厂绑定快速新增 | master-data-ui | 已交付 |
 | `features/inspection-plan-quick-type-default.md` | 快速新建质检方案默认锁定类型 | master-data-ui | 已交付 |
+| `features/quality-outsource-patrol.md` | 委外检验 OSQC 与质量巡检 | quality | 已交付 |
 | `features/fast-deploy-scripts.md` | fast-deploy 脚本入口 | deploy | 已交付 |
 | `features/riveredge-app-client-junctions.md` | 主仓 riveredge-app 联接到私仓终端 | deploy | 已交付 |
 | `features/compose-kuaicaiwu-empty-husk.md` | Pro 空壳导致 kuaicaiwu.models 缺失 | deploy | 已交付 |

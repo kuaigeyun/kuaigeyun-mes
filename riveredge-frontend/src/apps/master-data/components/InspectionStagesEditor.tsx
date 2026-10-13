@@ -14,9 +14,9 @@ import {
   type InspectionPlanRecord,
 } from '../../kuaizhizao/components/InspectionPlanFormModal';
 
-export type MaterialStageKey = 'iqc' | 'fqc' | 'oqc';
+export type MaterialStageKey = 'iqc' | 'osqc' | 'fqc' | 'oqc';
 
-export const MATERIAL_STAGE_KEYS: MaterialStageKey[] = ['iqc', 'fqc', 'oqc'];
+export const MATERIAL_STAGE_KEYS: MaterialStageKey[] = ['iqc', 'osqc', 'fqc', 'oqc'];
 
 export type StageKey = MaterialStageKey | 'ipqc';
 
@@ -29,6 +29,7 @@ export type InspectionStagesValue = Partial<Record<StageKey, StagePolicy>>;
 
 const STAGE_PLAN_TYPE: Record<StageKey, string> = {
   iqc: 'incoming',
+  osqc: 'outsource',
   fqc: 'finished',
   oqc: 'outbound',
   ipqc: 'process',
@@ -57,6 +58,7 @@ type InspectionStagesEditorProps = {
 function defaultStages(): InspectionStagesValue {
   return {
     iqc: { mode: 'none', planId: null },
+    osqc: { mode: 'none', planId: null },
     fqc: { mode: 'none', planId: null },
     oqc: { mode: 'none', planId: null },
     ipqc: { mode: 'none', planId: null },
@@ -85,7 +87,12 @@ export function stagesFromLegacy(
   const mode = (inspectionMode || 'none') as StagePolicy['mode'];
   const planId = mode === 'plan' ? defaultInspectionPlanId ?? null : null;
   const p: StagePolicy = { mode, planId };
-  return { iqc: { ...p }, fqc: { ...p }, oqc: { ...p } };
+  return {
+    iqc: { ...p },
+    osqc: { mode: 'none', planId: null },
+    fqc: { ...p },
+    oqc: { ...p },
+  };
 }
 
 export function legacyFromStages(stages: InspectionStagesValue): {
@@ -201,6 +208,7 @@ export const InspectionStagesEditor: React.FC<InspectionStagesEditorProps> = ({
     if (!effectiveCfg) return true;
     const map: Record<StageKey, boolean> = {
       iqc: !!(effectiveCfg.stage_enabled?.iqc && effectiveCfg.module_enabled?.incoming),
+      osqc: !!(effectiveCfg.stage_enabled?.osqc && effectiveCfg.module_enabled?.outsource),
       ipqc: !!(effectiveCfg.stage_enabled?.ipqc && effectiveCfg.module_enabled?.process),
       fqc: !!(effectiveCfg.stage_enabled?.fqc && effectiveCfg.module_enabled?.finished),
       oqc: !!effectiveCfg.stage_enabled?.oqc,
@@ -298,6 +306,7 @@ export const InspectionStagesEditor: React.FC<InspectionStagesEditorProps> = ({
     }
     const keys: Record<StageKey, string> = {
       iqc: 'app.master-data.materialForm.inspectionStageIqc',
+      osqc: 'app.master-data.materialForm.inspectionStageOsqc',
       fqc: 'app.master-data.materialForm.inspectionStageFqc',
       oqc: 'app.master-data.materialForm.inspectionStageOqc',
       ipqc: 'app.master-data.materialForm.inspectionStageIpqc',

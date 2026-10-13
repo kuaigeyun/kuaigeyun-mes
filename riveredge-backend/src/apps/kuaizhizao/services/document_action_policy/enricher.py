@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, TypeVar
 
 from infra.services.business_config_service import BusinessConfigService
@@ -985,11 +986,18 @@ async def _purchase_order_invoice_by_ids(tenant_id: int, order_ids: List[int]) -
     """True = 可开票余额已用尽（阻断再下推发票）；与进项加载剩余口径一致。"""
     from decimal import Decimal
 
-    from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
+    from apps.common.optional_pro import import_pro_attr, pro_app_available
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 
     if not order_ids:
         return {}
+    # 无轻财务：视为不可再下推发票（阻断），避免列表硬 import 500
+    if not pro_app_available("kuaicaiwu"):
+        return {oid: True for oid in order_ids}
+    PurchaseInvoicePullService = import_pro_attr(
+        "apps.kuaicaiwu.services.purchase_invoice_pull_service",
+        "PurchaseInvoicePullService",
+    )
     result: dict[int, bool] = {oid: True for oid in order_ids}
     rows = await PurchaseOrder.filter(tenant_id=tenant_id, id__in=order_ids).values(
         "id", "order_code", "total_amount"
@@ -1159,6 +1167,8 @@ def enrich_purchase_order_capabilities_on_response(
     has_pending_change: bool = False,
     has_returnable: bool = False,
     has_prepayment_payment: bool = False,
+    require_payment_application: bool = False,
+    prepayment_application_remaining: Optional[Decimal] = None,
 ) -> T:
     caps = derive_purchase_order_capabilities(
         order,
@@ -1173,6 +1183,8 @@ def enrich_purchase_order_capabilities_on_response(
         has_pending_change=has_pending_change,
         has_returnable=has_returnable,
         has_prepayment_payment=has_prepayment_payment,
+        require_payment_application=require_payment_application,
+        prepayment_application_remaining=prepayment_application_remaining,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -1186,6 +1198,12 @@ async def enrich_purchase_order_detail_capabilities(
     *,
     has_items: bool = True,
 ) -> T:
+    from decimal import Decimal
+    from infra.services.business_config_service import BusinessConfigService
+    from apps.kuaizhizao.services.payment_application_pull_service import (
+        PaymentApplicationPullService,
+    )
+
     order_id = int(order.id)
     has_outstanding = await _purchase_order_has_outstanding(tenant_id, order_id)
     pushable_receipt_map = await _purchase_order_pushable_receipt_outstanding_by_ids(
@@ -1202,6 +1220,12 @@ async def enrich_purchase_order_detail_capabilities(
     prepay_map = await _order_prepayment_linked_by_ids(
         tenant_id, [order_id], source_type="purchase_order", target_type="payment"
     )
+    require_app = await BusinessConfigService().get_finance_require_payment_application(tenant_id)
+    reserved_map = await PaymentApplicationPullService().prepayment_reserved_by_order_ids(
+        tenant_id, [order_id]
+    )
+    prepay_amount = Decimal(str(getattr(order, "prepayment_amount", 0) or 0))
+    prepay_remaining = max(Decimal("0"), prepay_amount - reserved_map.get(order_id, Decimal("0")))
     return enrich_purchase_order_capabilities_on_response(
         order,
         response,
@@ -1215,6 +1239,8 @@ async def enrich_purchase_order_detail_capabilities(
         has_pending_change=pending_change_map.get(order_id, False),
         has_returnable=returnable_map.get(order_id, False),
         has_prepayment_payment=prepay_map.get(order_id, False),
+        require_payment_application=require_app,
+        prepayment_application_remaining=prepay_remaining,
     )
 
 
@@ -1241,10 +1267,22 @@ async def enrich_purchase_order_list_capabilities(
     prepay_map = await _order_prepayment_linked_by_ids(
         tenant_id, order_ids, source_type="purchase_order", target_type="payment"
     )
+    from decimal import Decimal
+    from infra.services.business_config_service import BusinessConfigService
+    from apps.kuaizhizao.services.payment_application_pull_service import (
+        PaymentApplicationPullService,
+    )
+
+    require_app = await BusinessConfigService().get_finance_require_payment_application(tenant_id)
+    reserved_map = await PaymentApplicationPullService().prepayment_reserved_by_order_ids(
+        tenant_id, order_ids
+    )
     items_map = has_items_by_id or {}
     out: List[T] = []
     for order_model, resp in zip(orders, responses):
         oid = int(getattr(order_model, "id", 0) or 0)
+        prepay_amount = Decimal(str(getattr(order_model, "prepayment_amount", 0) or 0))
+        prepay_remaining = max(Decimal("0"), prepay_amount - reserved_map.get(oid, Decimal("0")))
         caps = derive_purchase_order_capabilities(
             order_model,
             has_items=items_map.get(oid, True),
@@ -1257,6 +1295,8 @@ async def enrich_purchase_order_list_capabilities(
             has_pending_change=pending_change_map.get(oid, False),
             has_returnable=returnable_map.get(oid, False),
             has_prepayment_payment=prepay_map.get(oid, False),
+            require_payment_application=require_app,
+            prepayment_application_remaining=prepay_remaining,
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))

@@ -115,28 +115,11 @@ export const faiOrderApi = {
       method: 'POST',
       data: { inspection_plan_id },
     }),
+  importFromBalloonSheet: (id: number, sheet_id: number, replace_existing = true) =>
+    apiRequest<FaiOrder>(`/apps/kuaizhizao/fai-orders/${id}/import-from-balloon-sheet`, {
+      method: 'POST',
+      data: { sheet_id, replace_existing },
+    }),
   fairExport: (id: number) =>
     apiRequest<FaiFairExport>(`/apps/kuaizhizao/fai-orders/${id}/fair-export`, { method: 'GET' }),
-  saveBalloonCandidates: (id: number, candidates: FaiBalloonCandidate[], drawing_file_url?: string) =>
-    apiRequest<FaiOrder>(`/apps/kuaizhizao/fai-orders/${id}/balloon-candidates`, {
-      method: 'PUT',
-      data: { candidates, drawing_file_url },
-    }),
-  confirmBalloons: (id: number, candidates: FaiBalloonCandidate[], replace_existing = true) =>
-    apiRequest<FaiOrder>(`/apps/kuaizhizao/fai-orders/${id}/confirm-balloons`, {
-      method: 'POST',
-      data: { candidates, replace_existing },
-    }),
-  balloonOcr: (id: number, file: Blob | File, persist = true) => {
-    const formData = new FormData();
-    const name = file instanceof File ? file.name : 'drawing.png';
-    formData.append('file', file, name);
-    return apiRequest<FaiBalloonOcrResult>(
-      `/apps/kuaizhizao/fai-orders/${id}/balloon-ocr?persist=${persist ? 'true' : 'false'}`,
-      {
-        method: 'POST',
-        body: formData,
-      },
-    );
-  },
 };

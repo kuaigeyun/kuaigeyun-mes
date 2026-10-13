@@ -84,8 +84,11 @@ class SalesOrderService:
 
     @staticmethod
     async def _tenant_base_currency(tenant_id: int) -> str:
-        from apps.kuaicaiwu.services.gl.settings_service import GlSettingsService
-
+        if not pro_app_available("kuaicaiwu"):
+            return ""
+        GlSettingsService = import_pro_attr(
+            "apps.kuaicaiwu.services.gl.settings_service", "GlSettingsService"
+        )
         row = await GlSettingsService().get_or_create(tenant_id)
         return (row.base_currency or "").strip()
 
@@ -99,7 +102,13 @@ class SalesOrderService:
     ) -> Decimal:
         base = await self._tenant_base_currency(tenant_id)
         if not base:
-            raise ValidationError("未配置总账本位币，无法保存销售订单汇率")
+            # 无轻财务总账时：未填汇率默认 1；已填则只校验正数
+            if not exchange_rate_provided or exchange_rate is None:
+                return Decimal("1")
+            rate = Decimal(str(exchange_rate))
+            if rate <= 0:
+                raise ValidationError("汇率须大于 0")
+            return rate
         code = (currency_code or base).strip().upper()
         if code == base.strip().upper():
             return Decimal("1")
@@ -227,7 +236,7 @@ class SalesOrderService:
         partner_settlement_method: Optional[str] = None,
         price_type: Optional[str] = None,
     ) -> Dict[str, Any]:
-        from apps.kuaicaiwu.utils.price_settlement_helpers import (
+        from apps.kuaizhizao.utils.price_settlement_helpers import (
             derive_price_settlement_status,
             derive_provisional_unit_price,
         )
@@ -1323,11 +1332,14 @@ class SalesOrderService:
                 Decimal("0"),
             )
         remaining_wo = order_total - pushed_wo_qty
-        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
-
-        invoice_remainder = await SalesInvoiceService().resolve_sales_order_invoice_remainder(
-            tenant_id, order
-        )
+        invoice_remainder = Decimal("0")
+        if pro_app_available("kuaicaiwu"):
+            SalesInvoiceService = import_pro_attr(
+                "apps.kuaicaiwu.services.sales_invoice_service", "SalesInvoiceService"
+            )
+            invoice_remainder = await SalesInvoiceService().resolve_sales_order_invoice_remainder(
+                tenant_id, order
+            )
         from apps.kuaizhizao.services.sales_order_purchase_push import (
             batch_has_purchasable_remaining,
             require_purchase_requisition_for_tenant,
@@ -1612,8 +1624,11 @@ class SalesOrderService:
         customer_name: Optional[str],
         order_total_amount: Decimal,
     ) -> None:
-        from apps.kuaicaiwu.services.credit_limit_service import CreditLimitService
-
+        if not pro_app_available("kuaicaiwu"):
+            return
+        CreditLimitService = import_pro_attr(
+            "apps.kuaicaiwu.services.credit_limit_service", "CreditLimitService"
+        )
         await CreditLimitService().validate_customer_exposure(
             tenant_id=tenant_id,
             customer_id=customer_id,
@@ -2923,11 +2938,16 @@ class SalesOrderService:
 
         downstream_by_order = await sales_order_downstream_by_ids(tenant_id, order_ids)
 
-        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
-
-        invoice_remainder_by_order = await SalesInvoiceService().batch_sales_order_invoice_remainder(
-            tenant_id, orders
-        )
+        invoice_remainder_by_order: Dict[int, Decimal] = {}
+        if pro_app_available("kuaicaiwu"):
+            SalesInvoiceService = import_pro_attr(
+                "apps.kuaicaiwu.services.sales_invoice_service", "SalesInvoiceService"
+            )
+            invoice_remainder_by_order = (
+                await SalesInvoiceService().batch_sales_order_invoice_remainder(
+                    tenant_id, orders
+                )
+            )
         from apps.kuaizhizao.services.sales_order_purchase_push import (
             batch_has_purchasable_remaining,
             require_purchase_requisition_for_tenant,
@@ -3152,22 +3172,35 @@ class SalesOrderService:
             if "currency_code" in upd or rate_provided:
                 base = await self._tenant_base_currency(tenant_id)
                 if not base:
-                    raise ValidationError("未配置总账本位币，无法保存销售订单汇率")
-                foreign_code = (effective_currency or base).strip().upper()
-                is_foreign = foreign_code != base.strip().upper()
-                if is_foreign and "currency_code" in upd and not rate_provided:
-                    prev_code = (getattr(order, "currency_code", None) or base).strip().upper()
-                    if prev_code != foreign_code:
-                        raise ValidationError("外币销售订单须填写汇率")
-                effective_rate = (
-                    upd["exchange_rate"] if rate_provided else getattr(order, "exchange_rate", None)
-                )
-                upd["exchange_rate"] = await self._resolve_sales_order_exchange_rate(
-                    tenant_id,
-                    effective_currency,
-                    effective_rate,
-                    exchange_rate_provided=rate_provided or not is_foreign,
-                )
+                    effective_rate = (
+                        upd["exchange_rate"]
+                        if rate_provided
+                        else getattr(order, "exchange_rate", None)
+                    )
+                    upd["exchange_rate"] = await self._resolve_sales_order_exchange_rate(
+                        tenant_id,
+                        effective_currency,
+                        effective_rate,
+                        exchange_rate_provided=rate_provided,
+                    )
+                else:
+                    foreign_code = (effective_currency or base).strip().upper()
+                    is_foreign = foreign_code != base.strip().upper()
+                    if is_foreign and "currency_code" in upd and not rate_provided:
+                        prev_code = (getattr(order, "currency_code", None) or base).strip().upper()
+                        if prev_code != foreign_code:
+                            raise ValidationError("外币销售订单须填写汇率")
+                    effective_rate = (
+                        upd["exchange_rate"]
+                        if rate_provided
+                        else getattr(order, "exchange_rate", None)
+                    )
+                    upd["exchange_rate"] = await self._resolve_sales_order_exchange_rate(
+                        tenant_id,
+                        effective_currency,
+                        effective_rate,
+                        exchange_rate_provided=rate_provided or not is_foreign,
+                    )
             if "price_type" in upd and not upd["price_type"]:
                 upd["price_type"] = order.price_type or DEFAULT_SALES_PRICE_TYPE
             if "term_group_id" in sales_order_data.model_fields_set or sales_order_data.contract_terms is not None:
@@ -3541,27 +3574,28 @@ class SalesOrderService:
                 tenant_id, sales_order_id, submitted_by
             )
             order_row = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
-            from apps.kuaicaiwu.services.finance_integration_hooks import (
-                ensure_prepayment_receipt_for_sales_order,
-            )
+            if pro_app_available("kuaicaiwu"):
+                ensure_prepayment_receipt_for_sales_order = import_pro_attr(
+                    "apps.kuaicaiwu.services.finance_integration_hooks",
+                    "ensure_prepayment_receipt_for_sales_order",
+                )
+                await ensure_prepayment_receipt_for_sales_order(
+                    tenant_id=tenant_id,
+                    order_id=sales_order_id,
+                    order_code=order_row.order_code,
+                    customer_id=order_row.customer_id,
+                    customer_name=order_row.customer_name,
+                    prepayment_amount=order_row.prepayment_amount,
+                    prepayment_bank_account_id=order_row.prepayment_bank_account_id,
+                    operator_id=submitted_by,
+                )
+                from apps.kuaizhizao.services.contract_milestone_billing_service import (
+                    ContractMilestoneBillingService,
+                )
 
-            await ensure_prepayment_receipt_for_sales_order(
-                tenant_id=tenant_id,
-                order_id=sales_order_id,
-                order_code=order_row.order_code,
-                customer_id=order_row.customer_id,
-                customer_name=order_row.customer_name,
-                prepayment_amount=order_row.prepayment_amount,
-                prepayment_bank_account_id=order_row.prepayment_bank_account_id,
-                operator_id=submitted_by,
-            )
-            from apps.kuaizhizao.services.contract_milestone_billing_service import (
-                ContractMilestoneBillingService,
-            )
-
-            await ContractMilestoneBillingService().auto_generate_receivables_for_sales_order(
-                tenant_id, sales_order_id, submitted_by
-            )
+                await ContractMilestoneBillingService().auto_generate_receivables_for_sales_order(
+                    tenant_id, sales_order_id, submitted_by
+                )
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
         from core.services.approval.approval_instance_service import ApprovalInstanceService
@@ -3709,33 +3743,34 @@ class SalesOrderService:
                     side_effect_errors.append(msg)
                     return None
 
-            from apps.kuaicaiwu.services.finance_integration_hooks import (
-                ensure_prepayment_receipt_for_sales_order,
-            )
+            if pro_app_available("kuaicaiwu"):
+                ensure_prepayment_receipt_for_sales_order = import_pro_attr(
+                    "apps.kuaicaiwu.services.finance_integration_hooks",
+                    "ensure_prepayment_receipt_for_sales_order",
+                )
+                await _run_side(
+                    "ensure_prepayment_receipt",
+                    ensure_prepayment_receipt_for_sales_order(
+                        tenant_id=tenant_id,
+                        order_id=sales_order_id,
+                        order_code=order_row.order_code,
+                        customer_id=order_row.customer_id,
+                        customer_name=order_row.customer_name,
+                        prepayment_amount=order_row.prepayment_amount,
+                        prepayment_bank_account_id=order_row.prepayment_bank_account_id,
+                        operator_id=approved_by,
+                    ),
+                )
+                from apps.kuaizhizao.services.contract_milestone_billing_service import (
+                    ContractMilestoneBillingService,
+                )
 
-            await _run_side(
-                "ensure_prepayment_receipt",
-                ensure_prepayment_receipt_for_sales_order(
-                    tenant_id=tenant_id,
-                    order_id=sales_order_id,
-                    order_code=order_row.order_code,
-                    customer_id=order_row.customer_id,
-                    customer_name=order_row.customer_name,
-                    prepayment_amount=order_row.prepayment_amount,
-                    prepayment_bank_account_id=order_row.prepayment_bank_account_id,
-                    operator_id=approved_by,
-                ),
-            )
-            from apps.kuaizhizao.services.contract_milestone_billing_service import (
-                ContractMilestoneBillingService,
-            )
-
-            await _run_side(
-                "auto_generate_receivables",
-                ContractMilestoneBillingService().auto_generate_receivables_for_sales_order(
-                    tenant_id, sales_order_id, approved_by
-                ),
-            )
+                await _run_side(
+                    "auto_generate_receivables",
+                    ContractMilestoneBillingService().auto_generate_receivables_for_sales_order(
+                        tenant_id, sales_order_id, approved_by
+                    ),
+                )
             auto_push_result = await self._try_auto_push_order_to_computation(
                 tenant_id=tenant_id,
                 sales_order_id=sales_order_id,
@@ -6485,8 +6520,9 @@ class SalesOrderService:
         if order_total <= Decimal("0"):
             raise BusinessLogicError("订单无计费金额，无法下推销售发票")
 
-        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
-
+        SalesInvoiceService = import_pro_attr(
+            "apps.kuaicaiwu.services.sales_invoice_service", "SalesInvoiceService"
+        )
         invoice_svc = SalesInvoiceService()
         invoice_preview_items = await invoice_svc._build_preview_items_for_sales_order(
             tenant_id, order
@@ -6541,7 +6577,9 @@ class SalesOrderService:
         self, tenant_id: int, sales_order_id: int
     ) -> Dict[str, Any]:
         """下推预收收款单预览。"""
-        from apps.kuaicaiwu.services.finance_tax import money_to_json_float, quantize_money
+        finance_tax = import_pro_module("apps.kuaicaiwu.services.finance_tax")
+        money_to_json_float = finance_tax.money_to_json_float
+        quantize_money = finance_tax.quantize_money
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             _order_prepayment_linked_by_ids,
         )
@@ -6601,11 +6639,14 @@ class SalesOrderService:
         notes: Optional[str] = None,
     ) -> Dict[str, Any]:
         """从销售订单下推预收收款单。"""
-        from apps.kuaicaiwu.models.receipt import Receipt
-        from apps.kuaicaiwu.services.finance_integration_hooks import (
-            ensure_prepayment_receipt_for_sales_order,
+        Receipt = import_pro_attr("apps.kuaicaiwu.models.receipt", "Receipt")
+        ensure_prepayment_receipt_for_sales_order = import_pro_attr(
+            "apps.kuaicaiwu.services.finance_integration_hooks",
+            "ensure_prepayment_receipt_for_sales_order",
         )
-        from apps.kuaicaiwu.services.finance_tax import quantize_money
+        quantize_money = import_pro_module(
+            "apps.kuaicaiwu.services.finance_tax"
+        ).quantize_money
 
         order = await SalesOrder.get_or_none(
             tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
@@ -6794,8 +6835,9 @@ class SalesOrderService:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         await self._assert_sales_order_capability_for_order(tenant_id, order, "push_invoice")
 
-        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
-
+        SalesInvoiceService = import_pro_attr(
+            "apps.kuaicaiwu.services.sales_invoice_service", "SalesInvoiceService"
+        )
         invoice_remainder = await SalesInvoiceService().resolve_sales_order_invoice_remainder(
             tenant_id, order
         )
@@ -6818,8 +6860,12 @@ class SalesOrderService:
         if order_total <= Decimal("0"):
             raise BusinessLogicError("订单无计费金额，无法下推销售发票")
 
-        from apps.kuaicaiwu.services.invoice_service import InvoiceService
-        from apps.kuaicaiwu.schemas.invoice import InvoiceCreate, InvoiceItemCreate
+        InvoiceService = import_pro_attr(
+            "apps.kuaicaiwu.services.invoice_service", "InvoiceService"
+        )
+        invoice_schemas = import_pro_module("apps.kuaicaiwu.schemas.invoice")
+        InvoiceCreate = invoice_schemas.InvoiceCreate
+        InvoiceItemCreate = invoice_schemas.InvoiceItemCreate
 
         money_q = Decimal("0.01")
 

@@ -365,6 +365,7 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.work_order.picking_confirm_allowed_role_codes": {"type": "tags"},
     "parameters.work_order.picking_confirm_allowed_functional_domains": {"type": "multiselect"},
     "parameters.finance.gl_closed_periods": {"type": "object"},
+    "parameters.finance.require_payment_application": {"type": "boolean"},
     "parameters.kuaiplm.lab_request_delegate_dept_uuids": {"type": "tags"},
     "parameters.kuaiplm.lab_request_test_dept_uuids": {"type": "tags"},
 }
@@ -538,6 +539,7 @@ PARAMETER_KEYS = {
     "parameters.finance.credit_limit_enabled",
     "parameters.finance.gl_period_close_enabled",
     "parameters.finance.gl_closed_periods",
+    "parameters.finance.require_payment_application",
     "parameters.sales.low_margin_threshold_percent",
     "parameters.sales.price_deviation_approval_threshold_percent",
     "parameters.sales.require_audit_before_print",
@@ -622,6 +624,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.finance.credit_limit_enabled",
     "parameters.finance.gl_period_close_enabled",
     "parameters.finance.gl_closed_periods",
+    "parameters.finance.require_payment_application",
     "parameters.sales.low_margin_threshold_percent",
     "parameters.sales.price_deviation_approval_threshold_percent",
     "parameters.sales.require_audit_before_print",
@@ -952,6 +955,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "auto_generate_receivable_from_sales_invoice": False,
         "auto_generate_payable_from_purchase_invoice": False,
         "credit_limit_enabled": False,
+        "require_payment_application": False,
         "gl_period_close_enabled": False,
         "gl_closed_periods": [],
     },
@@ -1103,6 +1107,7 @@ class BusinessConfigService:
             "purchase_inquiry",
             "purchase_contract",
             "quality_analysis",
+            "drawing_balloon_annotation",
             "customer_material",
             "warehouse_optimization",
             "supply_chain",
@@ -1346,6 +1351,10 @@ class BusinessConfigService:
     async def get_finance_auto_generate_payable_from_purchase_invoice(self, tenant_id: int) -> bool:
         config = await self.get_business_config(tenant_id)
         return bool(config["parameters"].get("finance", {}).get("auto_generate_payable_from_purchase_invoice", False))
+
+    async def get_finance_require_payment_application(self, tenant_id: int) -> bool:
+        config = await self.get_business_config(tenant_id)
+        return bool(config["parameters"].get("finance", {}).get("require_payment_application", False))
 
     async def resolve_revenue_recognition(self, tenant_id: int, customer_id: Optional[int]) -> str:
         """有效应收确认策略：客户覆盖非空则用覆盖，否则用组织 finance.revenue_recognition（已 coerce）。"""

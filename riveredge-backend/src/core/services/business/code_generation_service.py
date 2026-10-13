@@ -15,7 +15,6 @@ import re
 import importlib
 
 from loguru import logger
-from tortoise.transactions import in_transaction
 
 from core.models.code_rule import CodeRule
 from core.models.code_sequence import CodeSequence
@@ -26,6 +25,7 @@ from core.services.code_rule.code_rule_component_service import (
     resolve_code_render_datetime,
 )
 from core.config.code_rule_pages import get_seq_sync_entity_for_rule
+from core.utils.db_transaction import reuse_or_begin_transaction
 from infra.exceptions.exceptions import ValidationError
 from core.utils.timezone_utils import now_utc, resolve_business_datetime, to_site_date
 
@@ -389,8 +389,9 @@ class CodeGenerationService:
             rule, rule_code, context, components
         )
         
-        # 事务内对序号行加锁再递增，否则 FOR UPDATE 在语句结束后立即释放
-        async with in_transaction():
+        # 事务内对序号行加锁再递增，否则 FOR UPDATE 在语句结束后立即释放。
+        # 须 reuse_or_begin：外层已有事务时再 in_transaction 会 Nested 死锁（通知仓库等 504）。
+        async with reuse_or_begin_transaction():
             sequence = (
                 await CodeSequence.filter(
                     code_rule_id=rule.id,
@@ -529,7 +530,7 @@ class CodeGenerationService:
         )
 
         codes: List[str] = []
-        async with in_transaction():
+        async with reuse_or_begin_transaction():
             sequence = (
                 await CodeSequence.filter(
                     code_rule_id=rule.id,

@@ -14,7 +14,7 @@ keywords:
   - auto_clear
   - LineClearService
   - 发送型 MQTT
-standard: 发送型 IotConnection + LineClearService.dispatch；手动走设备指令下发；自动挂 ind_relay 报工成功后
+standard: 发送型 IotConnection + LineClearService.dispatch；手动走设备指令下发；自动挂 ind_relay 报工成功且工单已完成后
 ---
 
 # 产线 MQTT 清零（接入/发送 + 手动/自动）
@@ -35,7 +35,7 @@ MES 经 MQTT **publish** 清零指令到上位机（再转 PLC）。分手动与
 | 连接 | `config.direction=ingest\|publish\|callback`；发送须 `publish_topic`；ingest+callback 被 Worker 订阅 |
 | 下发 | `LineClearService.dispatch` → `mqtt_publisher.publish_once` |
 | 手动 FE | 设备连接 → 指令下发 → 产线清零表单 → `POST .../devices/{uuid}/line-clear` |
-| 自动 | `AutoReportService._maybe_dispatch_auto_clear`（报工成功且绑定开关开；连接取设备侧发送/回调 MQTT，`source=auto`） |
+| 自动 | `AutoReportService._maybe_dispatch_auto_clear`（绑定开关开 + 本轮报工成功 + 报工工单 `status=completed`；连接取设备侧发送/回调 MQTT，`source=auto`；未完成记 `auto_clear_skip`） |
 | 权限 | `kuaiiot:device:update` / `ind-relay:auto-report:update` |
 
 ## 关键文件
@@ -78,7 +78,8 @@ MES 经 MQTT **publish** 清零指令到上位机（再转 PLC）。分手动与
 - publish 用短连接独立 client_id，避免踢掉订阅会话
 - `device_id` 用 `DeviceService.resolve_command_device_id`（`command_device_id` 优先，否则 `external_device_id`），不是 MES 展示编码
 - 自动清零不在自动报工页配 MQTT：须已有发送型连接（及可选回调连接）；指令码沿用该设备最近一次清零，否则 z0
-- 指令 `params.source` / `dispatch_type`：`manual`=设备页手动，`auto`=报工后自动；运行日志合并 `IotDeviceCommand`
+- 指令 `params.source` / `dispatch_type`：`manual`=设备页手动（不看工单是否结束），`auto`=报工成功且工单已完成后自动；运行日志合并 `IotDeviceCommand`
+- 自动清零门禁：仅看本轮报工涉及工单是否已 `completed`；报工成功但未完工写 `auto_clear_skip`，勿在仅报工成功时下发
 - 主仓 kuaiiot 与 Pro 需双向同步，勿只改组装态
 - **指令表空白但后端已有记录**：`devices/index.tsx` 的 `reloadDeviceData` 曾用 `listTags(page_size:200)`，tags API `le=100` → 422，Promise.all 整批失败、`setCommands` 不执行；须 `page_size≤100` 且各接口独立 catch
 

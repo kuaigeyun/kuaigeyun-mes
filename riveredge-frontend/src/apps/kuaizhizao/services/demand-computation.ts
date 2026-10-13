@@ -600,6 +600,8 @@ export interface PushPreview {
   work_order_count: number
   work_order_group_count?: number
   work_order_granularity?: WorkOrderGranularity
+  pushable_demand_line_count?: number
+  group_work_order_eligible?: boolean
   outsource_work_order_count: number
   purchase_requisition_count: number
   purchase_order_count: number
@@ -626,6 +628,7 @@ export async function getPushPreview(
     generate_mode?: 'work_order_only' | 'all' | 'purchase_only' | 'outsource_only'
     push_mode?: 'draft' | 'confirm'
     work_order_granularity?: WorkOrderGranularity
+    production_item_ids?: number[]
   },
 ): Promise<PushPreview> {
   return apiRequest<PushPreview>(`/apps/kuaizhizao/demand-computations/${id}/push-preview`, {

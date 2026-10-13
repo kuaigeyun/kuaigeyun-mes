@@ -49,7 +49,7 @@ def _merge_cosmic_filter(existing: Any, clause: str) -> str:
 
 
 def is_cosmic_paged_query(request_body: Optional[Dict[str, Any]]) -> bool:
-    """识别苍穹 v2 分页体：data/params + pageNo/pageSize（非星空 ExecuteBillQuery）。"""
+    """识别苍穹 v2 分页体：data/params + pageNo/pageSize，或扁平商品分类体（非星空 ExecuteBillQuery）。"""
     if not isinstance(request_body, dict):
         return False
     has_page = any(
@@ -58,7 +58,10 @@ def is_cosmic_paged_query(request_body: Optional[Dict[str, Any]]) -> bool:
     )
     if not has_page:
         return False
-    return "data" in request_body or "params" in request_body
+    if "data" in request_body or "params" in request_body:
+        return True
+    # getMalGoodsClass 等：筛选项与分页同级，无 data/params；排除星空 parameters
+    return "parameters" not in request_body
 
 
 def resolve_cosmic_page_size(request_body: Dict[str, Any], *, default: int = 100) -> int:

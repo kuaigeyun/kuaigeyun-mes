@@ -7093,8 +7093,8 @@ index.tsx[EU5S]: F:Implements index.tsx | R:- | A:- | S:169L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/components/uni-dropdown/===
 AdvancedSearchModal.tsx[EU5S]: F:Implements AdvancedSearchModal.tsx | R:- | A:- | S:143L
-QuickCreateModal.tsx[EU5T]: F:Implements QuickCreateModal.tsx | R:- | A:- | S:49L
-index.tsx[EU5M]: F:模糊搜索：按 label 文案匹配 + 拼音/拼音首字母匹配（pinyin-pro 懒加载） | R:- | A:- | S:313L
+QuickCreateModal.tsx[EU5M]: F:下拉快速新建的嵌套 Modal 壳（焦点栈/zIndex） | R:code:riveredge-frontend/src/components/uni-dropdown/index.tsx | A:由 UniDropdown quickCreate.onClick 打开；zIndex 高于宿主 FormModal | S:禁止 Popover/Portal 锚点快速建；须 destroyOnHidden；与 MaterialUnitQuickSelect 同模式
+index.tsx[EU5M]: F:管理型 Select 增强：下拉底栏快速新建与高级搜索入口 | R:code:riveredge-frontend/src/components/uni-dropdown/QuickCreateModal.tsx,code:riveredge-frontend/src/components/uni-dropdown/AdvancedSearchModal.tsx | A:Form.Item 内 quickCreate/onClick 打开 QuickCreateModal；禁止页面 Select 自写 popupRender 底栏 | S:新建页下拉快速增项必须用本组件+QuickCreateModal；嵌套 zIndex 用 MODAL_NESTED_ABOVE_PARENT_OFFSET；默认 showSearch+拼音 filterOption
 types.ts[EU5T]: F:Implements types.ts | R:- | A:- | S:42L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/components/uni-export/===
@@ -8185,10 +8185,16 @@ ai-memory.mdc[XC5S]: F:约定Agent开任务先读Vault与本仓memory路由 | R:
 api-write-protection.mdc[XS6S]: F:固化/api写防护渠道限流幂等与开放账套约定 | R:code:riveredge-backend/docs/api-write-protection-ops.md | A:- | S:新公开写接口须进interactive_client_guard豁免;关键路径须匹配_CRITICAL_PATH_RE;integration写须open Token
 dev-memory-library.mdc[XC5S]: F:约定.cursor/memory开发前检索与交付后写笔记 | R:code:.cursor/rules/ai-memory.mdc | A:- | S:先读README关键词路由再开1-3篇;交付须features笔记并更新README索引;与rules行为分工不重复
 feature-delivery-checklist.mdc[XC6M]: F:强制新功能交付完成迁移菜单同步与更新日志 | R:code:.cursor/rules/dev-memory-library.mdc | A:- | S:前后端manifest同改并当场sync;Windows aerich须UTF-8;用户可见改动写platformUpdateLog;勿留给用户点同步
-reuse-existing-patterns.mdc[XC5S]: F:禁止同类功能平行第二套实现须复用标准入口 | R:code:.cursor/rules/dev-memory-library.mdc | A:- | S:先搜memory与代码定唯一标准;只挂既有扩展点;标准有缺口先修标准再复用
+reuse-existing-patterns.mdc[XC9M]: F:同类功能唯一标准实现；新建 PC 页须先跟 Skill/组件契约 | R:code:.cursor/rules/dev-memory-library.mdc,code:.cursor/skills/new-document-page/SKILL.md,code:riveredge-frontend/src/components/uni-dropdown/index.tsx | A:alwaysApply；动手前搜 memory+代码；有规范禁止平行第二套 | S:新建页最基础=列表壳(新建/多选/批量/操作列)+UniDropdown 快速新建+ThemedSegmented beforeSearch；缺口先修标准再复用
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaioa/utils/===
 form_request_confirmation.py[KB3T]: F:确认单kind/附件/销售回复校验 | R:- | A:confirmation_kind_from_form_data | S:kind=complete_machine|material; 查附件字段
 form_request_issue_access.py[DI5M]: F:会签下发可见性与能力位计算 | R:code:riveredge-backend/src/apps/kuaioa/constants/form_request_issue.py, code:riveredge-backend/src/apps/kuaioa/models/form_request_issue.py | A:compute_form_request_capabilities,user_can_view_form_request_row | S:issue范围类型非维护人须命中grant才可见
 form_request_material_issue.py[KB3T]: F:发料单提交内容与会签目标校验 | R:code:riveredge-backend/src/apps/kuaioa/utils/form_request_review_sheet.py | A:validate_material_issue_on_submit | S:须purpose+lines; 会签复用countersign
 form_request_review_sheet.py[KB3T]: F:评审单会签人解析与提交校验 | R:- | A:countersign_user_ids | S:从form_data解析正整数user id列表
+
+===D:/kuaigeyun-pro/kuaigeyun/.cursor/skills/new-document-page/===
+SKILL.md[SG7M]: F:新建业务单据页与主数据/设置类列表的唯一交付清单 | R:code:.cursor/skills/unitable-list/SKILL.md,code:.cursor/skills/detail-drawer/SKILL.md,code:.cursor/skills/form-modal/SKILL.md | A:新页或收口不规范列表前先读本 Skill 再写代码 | S:主数据列表试点 finance-misc-categories/fa masters；禁止裸新建/缺行缓存/onTableDataChange 契约
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/===
+MiscVoucherListPage.tsx[AU6M]: F:其他费用收入/支出共享列表+FormModal+DetailDrawer | R:code:riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/other-incomes/index.tsx,code:riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/other-expenses/index.tsx | A:明细类别 MiscCategoryQuickSelect 走 UniDropdown+QuickCreateModal | S:行缓存仅 onTableDataChange；UniTable 标准工具栏与三桶列；禁止 request 写 tableRowsRef

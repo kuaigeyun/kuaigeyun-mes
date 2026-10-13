@@ -17,9 +17,17 @@ import {
   type APITestResponse,
 } from '../../../services/apiManagement';
 import { ApiTestResultBodyPreview } from './ApiTestResultBodyPreview';
+import {
+  collapseMaterialRowsToUniqueUnits,
+  normalizeApiBodyToRows,
+} from '../../../components/sync-from-source-modal/syncSourceUtils';
 
 const { TextArea } = Input;
 const { Text } = Typography;
+
+/** 单位同步接口测试：翻页抽物料基础单位，避免只测第 1 页去重后「只剩 1 个」 */
+const UNIT_SYNC_TEST_MAX_PAGES = 20;
+const UNIT_SYNC_TEST_PAGE_SIZE = 500;
 
 const JSON_PRE_STYLE: React.CSSProperties = {
   margin: 0,
@@ -31,18 +39,112 @@ const JSON_PRE_STYLE: React.CSSProperties = {
   fontFamily: CODE_FONT_FAMILY,
 };
 
+const UNIT_SYNC_MATERIAL_SELECT = 'number,name,baseunit.number,baseunit.name';
+
+/** 仅单位同步预置 code（query_measureunits）；禁止用名称/baseunit 推断，以免误伤物料接口测试 */
+function isCosmicUnitSyncMaterialApi(api: API): boolean {
+  const code = String(api.code || '').toLowerCase();
+  return code.includes('query_measureunits');
+}
+
 function buildTestRequestPreview(api: API): APITestRequest {
   const preview: APITestRequest = {};
   if (api.request_headers && Object.keys(api.request_headers).length > 0) {
     preview.headers = api.request_headers;
   }
   if (api.request_params && Object.keys(api.request_params).length > 0) {
-    preview.params = api.request_params;
+    preview.params = { ...api.request_params };
   }
   if (api.request_body && Object.keys(api.request_body).length > 0) {
-    preview.body = api.request_body;
+    preview.body = { ...api.request_body };
+  }
+  // 苍穹单位同步：旧接口未带 select 时测试请求自动补上，表格只显示需要的列
+  if (isCosmicUnitSyncMaterialApi(api)) {
+    const body =
+      preview.body && typeof preview.body === 'object' && !Array.isArray(preview.body)
+        ? { ...(preview.body as Record<string, unknown>) }
+        : { data: {}, pageNo: 1, pageSize: 100 };
+    if (!String(body.select || '').trim()) {
+      body.select = UNIT_SYNC_MATERIAL_SELECT;
+    }
+    if (!body.data || typeof body.data !== 'object') {
+      body.data = {};
+    }
+    body.pageNo = 1;
+    body.pageSize = Math.max(Number(body.pageSize) || 0, UNIT_SYNC_TEST_PAGE_SIZE);
+    preview.body = body;
+    preview.params = {
+      ...(preview.params || {}),
+      select: String(body.select || UNIT_SYNC_MATERIAL_SELECT),
+    };
   }
   return preview;
+}
+
+function extractNestedRowArray(body: unknown): Record<string, unknown>[] {
+  return normalizeApiBodyToRows(body);
+}
+
+async function executeUnitSyncPagedTest(
+  apiUuid: string,
+  testRequest: APITestRequest,
+): Promise<APITestResponse> {
+  const baseBody =
+    testRequest.body && typeof testRequest.body === 'object' && !Array.isArray(testRequest.body)
+      ? { ...(testRequest.body as Record<string, unknown>) }
+      : { data: {}, pageNo: 1, pageSize: UNIT_SYNC_TEST_PAGE_SIZE };
+  const pageSize = Math.max(Number(baseBody.pageSize) || 0, UNIT_SYNC_TEST_PAGE_SIZE);
+  const allMaterialRows: Record<string, unknown>[] = [];
+  let lastResult: APITestResponse | null = null;
+  let elapsed = 0;
+
+  for (let pageNo = 1; pageNo <= UNIT_SYNC_TEST_MAX_PAGES; pageNo += 1) {
+    const pageBody = {
+      ...baseBody,
+      data: (baseBody.data as Record<string, unknown>) || {},
+      pageNo,
+      pageSize,
+      select: baseBody.select || UNIT_SYNC_MATERIAL_SELECT,
+    };
+    const result = await testAPI(apiUuid, {
+      ...testRequest,
+      body: pageBody,
+      params: {
+        ...(testRequest.params || {}),
+        select: String(pageBody.select),
+      },
+    });
+    lastResult = result;
+    elapsed += Number(result.elapsed_time || 0);
+    if (result.status_code < 200 || result.status_code >= 300) {
+      return result;
+    }
+    const chunk = extractNestedRowArray(result.body);
+    if (!chunk.length) break;
+    allMaterialRows.push(...chunk);
+    if (chunk.length < pageSize) break;
+  }
+
+  const units = collapseMaterialRowsToUniqueUnits(allMaterialRows);
+  return {
+    status_code: lastResult?.status_code ?? 0,
+    headers: lastResult?.headers ?? {},
+    body: {
+      data: units,
+      pageNo: 1,
+      pageSize: units.length,
+      _unit_sync_test: {
+        material_rows: allMaterialRows.length,
+        unique_units: units.length,
+        pages: Math.min(
+          UNIT_SYNC_TEST_MAX_PAGES,
+          Math.max(1, Math.ceil(allMaterialRows.length / pageSize) || 1),
+        ),
+        note: '已按物料翻页抽取基础单位并去重；正式同步会继续翻完全部分页。',
+      },
+    },
+    elapsed_time: Math.round(elapsed * 1000) / 1000,
+  };
 }
 
 function formatTestRequestPreview(api: API): string {
@@ -147,10 +249,28 @@ export const ApiTestDrawer: React.FC<ApiTestDrawerProps> = ({ open, apiUuid, onC
 
     try {
       setTestLoading(true);
-      const result = await testAPI(apiUuid, testRequest);
+      const detail = await getAPIByUuid(apiUuid);
+      const result = isCosmicUnitSyncMaterialApi(detail)
+        ? await executeUnitSyncPagedTest(apiUuid, testRequest)
+        : await testAPI(apiUuid, testRequest);
       setTestResult(result);
       if (result.status_code >= 200 && result.status_code < 300) {
-        messageApi.success(t('pages.system.apis.testSuccess'));
+        const meta =
+          result.body &&
+          typeof result.body === 'object' &&
+          !Array.isArray(result.body) &&
+          (result.body as { _unit_sync_test?: { unique_units?: number; material_rows?: number } })
+            ._unit_sync_test;
+        if (meta?.unique_units != null) {
+          messageApi.success(
+            t('pages.system.apis.testUnitSyncCollapsed', {
+              materials: meta.material_rows ?? 0,
+              units: meta.unique_units,
+            }),
+          );
+        } else {
+          messageApi.success(t('pages.system.apis.testSuccess'));
+        }
       } else if (
         result.status_code === 0 &&
         result.body &&

@@ -2799,7 +2799,7 @@ const ReworkOrdersPage: React.FC = () => {
                 }));
             }}
           />
-          <Form.Item name="remarks" label={t('common.remarks')}>
+          <Form.Item name="remarks" label={t('common.remark')}>
             <Input.TextArea rows={3} />
           </Form.Item>
         </Form>

@@ -123,9 +123,16 @@ import {
   PURCHASE_REQUISITION_WORKFLOW_PROPS,
 } from './components/PurchaseRequisitionDetailDrawer';
 import {
+  PurchaseRequisitionLineStockCell,
+  PurchaseRequisitionLineStockHint,
+  PurchaseRequisitionLineStockProvider,
+} from './components/PurchaseRequisitionLineStock';
+import {
   KUAIZHIZAO_DOC_HOST,
   loadSupplierFormReferenceList,
 } from '../../../../../utils/documentFormReferenceLoad';
+import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
+import type { Supplier } from '../../../../master-data/types/supply-chain';
 import { ROUTES } from '../../../constants/routes';
 import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../../../../stores';
@@ -1878,6 +1885,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
       </DetailDrawerSection>
 
       <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
+        <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items !== curr?.items}>
+          {({ getFieldValue }) => {
+            const formItems = (getFieldValue('items') as Array<{ material_id?: number }>) ?? [];
+            const lineMaterialIds = formItems
+              .map((row) => Number(row?.material_id))
+              .filter((id) => Number.isFinite(id) && id > 0);
+            return (
+              <PurchaseRequisitionLineStockProvider materialIds={lineMaterialIds}>
         <UniTableDetail
           name="items"
           title={t('app.kuaizhizao.purchaseRequisition.form.itemsTitle')}
@@ -1978,11 +1993,30 @@ const PurchaseRequisitionsPage: React.FC = () => {
                                   />
                                 </div>
                               </div>
+                              <PurchaseRequisitionLineStockHint materialId={mid} />
                               <AntForm.Item name={[index, 'demand_computation_item_id']} hidden>
                                 <Input type="hidden" />
                               </AntForm.Item>
                             </>
                           );
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: t('app.kuaizhizao.purchaseRequisition.form.warehouseStock'),
+                    dataIndex: '_warehouse_stock',
+                    width: 200,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item
+                        noStyle
+                        shouldUpdate={(prev: any, curr: any) =>
+                          prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id
+                        }
+                      >
+                        {({ getFieldValue }) => {
+                          const materialId = getFieldValue(['items', index, 'material_id']);
+                          return <PurchaseRequisitionLineStockCell materialId={materialId} />;
                         }}
                       </AntForm.Item>
                     ),
@@ -2071,15 +2105,16 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   {
                     title: t('app.kuaizhizao.purchaseRequisition.form.suggestedSupplier'),
                     dataIndex: 'supplier_id',
-                    width: 160,
+                    width: 200,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'supplier_id']} style={{ margin: 0 }}>
-                        <Select
-                          allowClear
+                        <SupplierSelectDropdown
+                          hostResource={KUAIZHIZAO_DOC_HOST.purchaseRequisition}
+                          suppliers={supplierList as Supplier[]}
+                          onSuppliersChange={(list) => setSupplierList(list)}
                           placeholder={t('app.kuaizhizao.purchaseRequisition.form.optional')}
                           size="small"
                           style={{ width: '100%' }}
-                          options={supplierList.map((s) => ({ label: s.name, value: s.id }))}
                         />
                       </AntForm.Item>
                     ),
@@ -2124,6 +2159,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
             style: { width: '100%', margin: 0 },
           }}
         />
+              </PurchaseRequisitionLineStockProvider>
+            );
+          }}
+        </AntForm.Item>
         <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('common.remark')} />
       </DetailDrawerSection>
 
@@ -2882,22 +2921,19 @@ const ConvertForm: React.FC<{
     formRef.current.supplierName = suppliers.find((x) => x.id === currentSupplierId)?.name || '';
   }, [selected, quantities, unitPrices, rowSuppliers, persistDefault, batchSupplierId, suppliers, formRef]);
 
-  const supplierOptions = suppliers.map((s) => ({
-    label: `${s.code ? `${s.code} - ` : ''}${s.name}`.trim(),
-    value: s.id,
-  }));
-
   return (
     <div style={{ margin: 0 }}>
       {hasSuppliers && (
         <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ color: '#666', whiteSpace: 'nowrap' }}>{t('app.kuaizhizao.purchaseRequisition.convert.batchSupplier')}</span>
-          <Select
+          <SupplierSelectDropdown
+            hostResource={KUAIZHIZAO_DOC_HOST.purchaseRequisition}
+            suppliers={suppliers as Supplier[]}
+            autoLoad={false}
             style={{ minWidth: 220, flex: 1 }}
             placeholder={t('app.kuaizhizao.purchaseRequisition.convert.batchPlaceholder')}
             value={batchSupplierId || undefined}
-            onChange={(v: number) => setBatchSupplierId(v)}
-            options={supplierOptions}
+            onChange={(v) => setBatchSupplierId(Number(v) || 0)}
           />
           <Button type="default" onClick={applyBatchToSelected} disabled={!hasBatchTargetRows}>
             {t('app.kuaizhizao.purchaseRequisition.convert.applyToSelected')}
@@ -2949,14 +2985,16 @@ const ConvertForm: React.FC<{
                     minWidth: 0,
                   }}
                 >
-                  <Select
+                  <SupplierSelectDropdown
+                    hostResource={KUAIZHIZAO_DOC_HOST.purchaseRequisition}
+                    suppliers={suppliers as Supplier[]}
+                    autoLoad={false}
                     style={{ flex: '1 1 auto', minWidth: 0 }}
                     placeholder={t('app.kuaizhizao.purchaseRequisition.convert.selectSupplier')}
                     value={rowSuppliers[record.id] || undefined}
-                    onChange={(v: number) => setRowSuppliers((prev) => ({ ...prev, [record.id!]: v }))}
-                    options={supplierOptions}
-                    showSearch
-                    optionFilterProp="label"
+                    onChange={(v) =>
+                      setRowSuppliers((prev) => ({ ...prev, [record.id!]: Number(v) || 0 }))
+                    }
                   />
                 </div>
               ) : record.purchase_order_id ? (

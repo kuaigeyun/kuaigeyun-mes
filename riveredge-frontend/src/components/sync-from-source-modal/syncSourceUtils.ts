@@ -38,22 +38,69 @@ const KINGDEE_TARGET_ALIASES: Record<string, string[]> = {
   document_status: ['FDocumentStatus'],
   close_status: ['FCloseStatus'],
   status: ['FStatus', 'FDocumentStatus'],
-  base_unit: ['FBaseUnitId.FName', 'FBaseUnitId.FNumber', 'FUnitId.FName', 'FUnitId.FNumber'],
-  base_unit_name: ['FBaseUnitId.FName', 'FUnitId.FName'],
-  code: ['FName', 'FNumber'],
-  name: ['FName'],
+  base_unit: [
+    'baseunit.number',
+    'baseunit_number',
+    'measureunitid_number',
+    'FBaseUnitId.FNumber',
+    'FUnitId.FNumber',
+  ],
+  base_unit_name: [
+    'baseunit.name',
+    'baseunit_name',
+    'measureunitid_name',
+    'FBaseUnitId.FName',
+    'FUnitId.FName',
+  ],
+  code: [
+    'FNumber',
+    'number',
+    'measureunitid_number',
+    'baseunit.number',
+    'baseunit_number',
+  ],
+  name: [
+    'name',
+    'FName',
+    'measureunitid_name',
+    'baseunit.name',
+    'baseunit_name',
+  ],
   short_name: ['FShortName'],
-  main_code: ['FNumber'],
-  specification: ['FSpecification', 'FMaterialId.FSpecification'],
-  group_code: ['FMaterialGroup.FNumber'],
-  group_name: ['FMaterialGroup.FName'],
+  main_code: ['number', 'FNumber', 'material.number', 'material_number'],
+  specification: [
+    'modelnum',
+    'model_num',
+    'modelnumber',
+    'model',
+    'modelNum',
+    'FSpecification',
+    'FMaterialId.FSpecification',
+  ],
+  group_code: [
+    'group_number',
+    'group.number',
+    'materialgroup_number',
+    'materialgroup.number',
+    'FMaterialGroup.FNumber',
+  ],
+  group_name: [
+    'group_name',
+    'group.name',
+    'materialgroup_name',
+    'materialgroup.name',
+    'FMaterialGroup.FName',
+  ],
   parent_code: [
+    'parent_parent_number',
+    'parent_number',
+    'parentid_number',
+    'parent.number',
     'FParentId.FNumber',
     'FMaterialGroup.FParentId.FNumber',
     'material_number',
     'materialnumber',
     'materialid_number',
-    'number',
   ],
   component_code: [
     'entrymaterial_number',
@@ -242,6 +289,73 @@ export function collectRowColumnKeys(rows: Record<string, unknown>[]): string[] 
   return columns;
 }
 
+/** 物料行按基础单位编码去重，供单位同步预览/映射 */
+export function collapseMaterialRowsToUniqueUnits(
+  rows: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  const seen = new Set<string>();
+  const out: Record<string, unknown>[] = [];
+  for (const row of rows) {
+    const code = String(
+      row.baseunit_number ??
+        row['baseunit.number'] ??
+        row.measureunitid_number ??
+        row['measureunitid.number'] ??
+        '',
+    ).trim();
+    const name = String(
+      row.baseunit_name ??
+        row['baseunit.name'] ??
+        row.measureunitid_name ??
+        row['measureunitid.name'] ??
+        code,
+    ).trim();
+    if (!code) continue;
+    const key = code.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      baseunit_number: code,
+      baseunit_name: name || code,
+      number: code,
+      name: name || code,
+      code,
+    });
+  }
+  return out.length ? out : rows;
+}
+
+/** 预览只保留映射相关列，避免苍穹 batchQuery 默认全量字段刷屏 */
+export function filterPreviewColumns(
+  columns: string[],
+  preferredKeys?: string[] | null,
+  mappedSources?: string[] | null,
+): string[] {
+  if (!columns.length) return columns;
+  const keep = new Set<string>();
+  for (const raw of mappedSources || []) {
+    const key = String(raw || '').trim();
+    if (key && columns.includes(key)) keep.add(key);
+  }
+  const preferred = (preferredKeys || []).map((item) => String(item || '').trim()).filter(Boolean);
+  if (preferred.length) {
+    const preferredLower = preferred.map((item) => item.toLowerCase());
+    for (const column of columns) {
+      const lower = column.toLowerCase();
+      if (
+        preferredLower.some(
+          (key) => lower === key || lower.endsWith(`.${key}`) || lower.includes(key.replace(/\./g, '_')),
+        )
+      ) {
+        keep.add(column);
+      }
+    }
+  }
+  if (!keep.size) return columns;
+  const ordered = columns.filter((column) => keep.has(column));
+  return ordered.length ? ordered : columns;
+}
+
 /** 与接口测试预览一致：解包 data.rows / items / records 等嵌套数组。 */
 function extractArrayFromObject(body: Record<string, unknown>, depth = 0): unknown[] | null {
   const candidates = ['data', 'items', 'rows', 'records', 'Results', 'result', 'list'];
@@ -360,12 +474,26 @@ const CAMEL_SNAKE_PAIRS: Array<[string, string]> = [
   ['short_name', 'shortName'],
 ];
 
-function columnMatchesTarget(column: string, target: string): boolean {
+function resolveTargetAliases(
+  target: string,
+  targetAliases?: Record<string, string[]> | null,
+): string[] {
+  if (targetAliases && Object.prototype.hasOwnProperty.call(targetAliases, target)) {
+    return targetAliases[target] ?? [];
+  }
+  return KINGDEE_TARGET_ALIASES[target] ?? [];
+}
+
+function columnMatchesTarget(
+  column: string,
+  target: string,
+  targetAliases?: Record<string, string[]> | null,
+): boolean {
   const col = column.trim();
   const tgt = target.trim();
   if (!col || !tgt) return false;
   if (col === tgt) return true;
-  const aliases = KINGDEE_TARGET_ALIASES[tgt] ?? [];
+  const aliases = resolveTargetAliases(tgt, targetAliases);
   if (aliases.includes(col)) return true;
   const colLower = col.toLowerCase();
   const tgtLower = tgt.replace(/^item\./, '').toLowerCase();
@@ -385,21 +513,46 @@ function columnMatchesTarget(column: string, target: string): boolean {
 export function suggestTargetToSourceMapping(
   columns: string[],
   targetFields: string[],
+  targetAliases?: Record<string, string[]> | null,
 ): Record<string, string> {
   const mapping: Record<string, string> = {};
   const columnByLower = new Map(columns.map((column) => [column.toLowerCase(), column]));
   for (const target of targetFields) {
-    let hit: string | undefined;
-    for (const alias of KINGDEE_TARGET_ALIASES[target] ?? []) {
-      hit = columnByLower.get(alias.toLowerCase());
-      if (hit) break;
+    // 优先同名列（苍穹 name→物料名称），避免被 baseunit_name 等别名抢先
+    let hit = columnByLower.get(target.toLowerCase());
+    if (!hit) {
+      for (const alias of resolveTargetAliases(target, targetAliases)) {
+        hit = columnByLower.get(alias.toLowerCase());
+        if (hit) break;
+      }
     }
     if (!hit) {
-      hit = columns.find((column) => columnMatchesTarget(column, target));
+      hit = columns.find((column) =>
+        columnMatchesTarget(column, target, targetAliases),
+      );
     }
     if (hit) mapping[target] = hit;
   }
   return mapping;
+}
+
+/** 丢弃来源列已不在预览中的映射，再用建议补齐空目标 */
+export function mergeSuggestedMapping(
+  columns: string[],
+  targetFields: string[],
+  existing: Record<string, string>,
+  targetAliases?: Record<string, string[]> | null,
+): Record<string, string> {
+  const suggested = suggestTargetToSourceMapping(columns, targetFields, targetAliases);
+  const columnSet = new Set(columns);
+  const next: Record<string, string> = { ...suggested };
+  for (const [target, source] of Object.entries(existing)) {
+    if (!target || !source) continue;
+    if (columnSet.size === 0 || columnSet.has(source)) {
+      next[target] = source;
+    }
+  }
+  return next;
 }
 
 export function invertFieldMapping(targetToSource: Record<string, string>): Record<string, string> {

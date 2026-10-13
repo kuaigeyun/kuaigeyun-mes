@@ -35,6 +35,7 @@ from apps.master_data.services.master_data_sync_common import (
     upsert_sync_binding,
 )
 from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
+from core.services.integration.kingdee_cosmic_paths import collapse_material_rows_to_unique_units
 from core.utils.timezone_utils import resolve_business_datetime
 
 UNIT_SYNC_STRING_FIELDS = frozenset({"description"})
@@ -124,11 +125,14 @@ class MaterialUnitSyncService:
             request_incremental=req.incremental,
         )
         try:
+            # 单位源常走物料 batchQuery：先按基础单位去重再映射，避免把物料编码写成单位编码。
+            # 去重不得在接口分页阶段做（否则会误判翻页结束）；仅在本服务写入前执行。
             rows, source_errors, _fetched = await fetch_mapped_rows_from_sources(
                 tenant_id,
                 sources,
                 since=since,
                 active_only=req.active_only,
+                transform_raw_rows=collapse_material_rows_to_unique_units,
             )
             result = await self._upsert_units(tenant_id, current_user, rows, match_key)
             if source_errors:
@@ -159,9 +163,23 @@ class MaterialUnitSyncService:
         sync_at = resolve_business_datetime()
 
         pending: List[tuple[str, str, bool, Dict[str, Any]]] = []
+        seen_codes: set[str] = set()
         for row in rows:
-            code = cell_str(row.get(match_key) or row.get("code"))
-            name = cell_str(row.get("name"))
+            # 物料源行：优先取基础单位；已映射行则用 code/name
+            code = cell_str(
+                row.get(match_key)
+                or row.get("code")
+                or row.get("baseunit_number")
+                or row.get("baseunit.number")
+                or row.get("measureunitid_number")
+            )
+            name = cell_str(
+                row.get("name")
+                or row.get("baseunit_name")
+                or row.get("baseunit.name")
+                or row.get("measureunitid_name")
+                or code
+            )
             if not code:
                 skipped += 1
                 errors.append("存在缺少单位编码的行，已跳过")
@@ -170,6 +188,11 @@ class MaterialUnitSyncService:
                 skipped += 1
                 errors.append(f"单位 {code} 缺少名称，已跳过")
                 continue
+            dedupe_key = code.casefold()
+            if dedupe_key in seen_codes:
+                skipped += 1
+                continue
+            seen_codes.add(dedupe_key)
             is_active_raw = row.get("is_active")
             is_active = True
             if is_active_raw is not None and str(is_active_raw).strip():

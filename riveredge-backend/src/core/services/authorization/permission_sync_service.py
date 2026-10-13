@@ -523,6 +523,52 @@ class PermissionSyncService:
             "kuaizhizao:oqc-inspection:update",
             "kuaizhizao:oqc-inspection:conduct",
         ),
+        # 调拨单：路由 /execute 需 :execute，历史角色仅勾了录入类权限会 403
+        "kuaizhizao:warehouse-management-inventory-transfer:execute": (
+            "kuaizhizao:warehouse-management-inventory-transfer:update",
+            "kuaizhizao:warehouse-management-inventory-transfer:create",
+        ),
+        # 仓储执行/确认：POST /execute|/confirm 解析为 :execute
+        "kuaizhizao:warehouse-management-assembly-orders:execute": (
+            "kuaizhizao:warehouse-management-assembly-orders:update",
+            "kuaizhizao:warehouse-management-assembly-orders:create",
+        ),
+        "kuaizhizao:warehouse-management-disassembly-orders:execute": (
+            "kuaizhizao:warehouse-management-disassembly-orders:update",
+            "kuaizhizao:warehouse-management-disassembly-orders:create",
+        ),
+        "kuaizhizao:warehouse-management-stocktaking:execute": (
+            "kuaizhizao:warehouse-management-stocktaking:update",
+            "kuaizhizao:warehouse-management-stocktaking:create",
+        ),
+        "kuaizhizao:warehouse-management-batching-center:execute": (
+            "kuaizhizao:warehouse-management-batching-center:update",
+            "kuaizhizao:warehouse-management-batching-center:create",
+        ),
+        "kuaizhizao:material-borrow:execute": (
+            "kuaizhizao:material-borrow:update",
+            "kuaizhizao:material-borrow:create",
+        ),
+        "kuaizhizao:material-return:execute": (
+            "kuaizhizao:material-return:update",
+            "kuaizhizao:material-return:create",
+        ),
+        "kuaizhizao:other-outbound:execute": (
+            "kuaizhizao:other-outbound:update",
+            "kuaizhizao:other-outbound:create",
+        ),
+        "kuaizhizao:other-inbound:execute": (
+            "kuaizhizao:other-inbound:update",
+            "kuaizhizao:other-inbound:create",
+        ),
+        "kuaizhizao:purchase-return:execute": (
+            "kuaizhizao:purchase-return:update",
+            "kuaizhizao:purchase-return:create",
+        ),
+        "kuaizhizao:sales-return:execute": (
+            "kuaizhizao:sales-return:update",
+            "kuaizhizao:sales-return:create",
+        ),
     }
 
     @classmethod
@@ -787,7 +833,8 @@ class PermissionSyncService:
         默认授予非敏感 :display（回显）。
 
         - 若租户尚无任何回显授权（切流前），对全部角色回填全部非敏感 display（一次）。
-        - 否则仅把本次同步新建的 display 码授予全部角色（不恢复管理员已取消的勾选）。
+        - 否则：本次同步新建的 display 码 + 尚未授予任何角色的 display 码（零授权孤儿）
+          授予全部角色。已有部分角色勾选的码不强制补齐，避免恢复管理员取消。
         """
         from core.services.authorization.reference_registry_service import ReferenceRegistryService
 
@@ -826,7 +873,23 @@ class PermissionSyncService:
             codes_to_grant = display_codes
         else:
             created = {c.strip().lower() for c in (newly_created_codes or set()) if c}
-            codes_to_grant = sorted(c for c in display_codes if c in created)
+            zero_grant_rows = await conn.fetch(
+                """
+                SELECT p.code
+                FROM core_permissions p
+                WHERE p.id = ANY($1::int[])
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM core_role_permissions rp
+                    WHERE rp.permission_id = p.id
+                  )
+                """,
+                perm_ids,
+            )
+            zero_codes = {str(r["code"]) for r in zero_grant_rows}
+            codes_to_grant = sorted(
+                c for c in display_codes if c in created or c in zero_codes
+            )
         if not codes_to_grant:
             return 0
         grant_rows = [r for r in perm_rows if str(r["code"]) in codes_to_grant]

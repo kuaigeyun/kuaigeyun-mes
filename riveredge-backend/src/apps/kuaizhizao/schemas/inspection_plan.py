@@ -88,7 +88,11 @@ class InspectionPlanBase(BaseSchema):
     """质检方案基础 schema"""
     plan_code: str = Field(..., max_length=50, description="方案编码")
     plan_name: str = Field(..., max_length=200, description="方案名称")
-    plan_type: str = Field(..., max_length=50, description="类型（incoming/process/finished）")
+    plan_type: str = Field(
+        ...,
+        max_length=50,
+        description="类型（incoming/outsource/process/finished/outbound/patrol）",
+    )
     material_id: Optional[int] = Field(None, description="适用物料ID（可选）")
     material_code: Optional[str] = Field(None, max_length=50, description="物料编码")
     material_name: Optional[str] = Field(None, max_length=200, description="物料名称")

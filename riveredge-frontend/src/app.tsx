@@ -27,6 +27,7 @@ import {
   clearAuth,
   setUserInfo,
   setTenantId,
+  syncStoredTenantId,
   getTenantId,
   isTokenExpired,
   getTokenRemainingTime,
@@ -212,6 +213,9 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       setCurrentUser(nextUser);
     }
     setUserInfo(nextUser);
+    if (nextUser.tenant_id != null) {
+      syncStoredTenantId(nextUser.tenant_id);
+    }
     if (nextUser.avatar) prefetchAvatarUrl(nextUser.avatar);
     // 权限版本变化只需重算侧栏 RBAC 过滤（currentUser 已更新）；navigation-tree 是租户全量树，勿失效重拉
     if (permissionVersionChanged) {

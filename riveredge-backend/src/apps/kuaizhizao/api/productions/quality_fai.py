@@ -2,12 +2,10 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, File, Query, UploadFile
-from loguru import logger
+from fastapi import APIRouter, Depends, Query
 
-from apps.kuaizhizao.schemas.fai_balloon_ocr import FaiBalloonOcrResult
+from apps.kuaizhizao.schemas.drawing_balloon_sheet import FaiImportFromBalloonSheetRequest
 from apps.kuaizhizao.schemas.quality_fai import (
-    FaiConfirmBalloonsRequest,
     FaiFairExportResponse,
     FaiImportFromPlanRequest,
     FaiOrderCreate,
@@ -15,11 +13,9 @@ from apps.kuaizhizao.schemas.quality_fai import (
     FaiOrderResponse,
     FaiOrderUpdate,
 )
-from apps.kuaizhizao.services.fai_balloon_ocr_service import FaiBalloonOcrService
 from apps.kuaizhizao.services.quality_fai_service import FaiOrderService
 from core.api.deps import get_current_tenant, get_current_user
 from core.api.deps.access import require_permission_codes
-from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
 router = APIRouter(tags=["App - Kuaige Zhizao - FAI"])
@@ -178,78 +174,21 @@ async def export_fai_fair(
 
 
 @router.post(
-    "/fai-orders/{order_id}/confirm-balloons",
+    "/fai-orders/{order_id}/import-from-balloon-sheet",
     response_model=FaiOrderResponse,
-    summary="Confirm balloon candidates into characteristics",
+    summary="Import characteristics from confirmed drawing balloon sheet",
 )
-async def confirm_fai_balloons(
+async def import_fai_from_balloon_sheet(
     order_id: int,
-    payload: FaiConfirmBalloonsRequest,
+    payload: FaiImportFromBalloonSheetRequest,
     _auth=_UPDATE,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> FaiOrderResponse:
-    return await fai_service.confirm_balloons(
-        tenant_id=tenant_id, order_id=order_id, payload=payload, user=current_user
-    )
-
-
-@router.put(
-    "/fai-orders/{order_id}/balloon-candidates",
-    response_model=FaiOrderResponse,
-    summary="Save balloon OCR candidates (no characteristics yet)",
-)
-async def save_balloon_candidates(
-    order_id: int,
-    candidates: list = Body(..., embed=True),
-    drawing_file_url: Optional[str] = Body(None, embed=True),
-    _auth=_UPDATE,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> FaiOrderResponse:
-    return await fai_service.update_order(
+    return await fai_service.import_from_balloon_sheet(
         tenant_id=tenant_id,
         order_id=order_id,
-        payload=FaiOrderUpdate(balloon_candidates=candidates, drawing_file_url=drawing_file_url),
+        sheet_id=payload.sheet_id,
+        replace_existing=payload.replace_existing,
         user=current_user,
     )
-
-
-@router.post(
-    "/fai-orders/{order_id}/balloon-ocr",
-    response_model=FaiBalloonOcrResult,
-    summary="OCR engineering drawing into balloon candidates",
-)
-async def ocr_fai_balloons(
-    order_id: int,
-    file: UploadFile = File(..., description="工程图纸图片 JPG/PNG/WEBP"),
-    persist: bool = Query(True, description="是否写回 balloon_candidates"),
-    _auth=_UPDATE,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> FaiBalloonOcrResult:
-    # 校验单据存在且可编辑
-    await fai_service.get_order(tenant_id=tenant_id, order_id=order_id)
-    try:
-        image_bytes = await file.read()
-        result = await FaiBalloonOcrService.extract_from_image(
-            tenant_id=tenant_id,
-            image_bytes=image_bytes,
-            content_type=file.content_type,
-        )
-    except ValidationError:
-        raise
-    except Exception as e:
-        logger.exception("fai balloon OCR failed tenant_id={} order_id={}", tenant_id, order_id)
-        raise ValidationError(f"气泡 OCR 识别失败: {e}") from e
-
-    if persist and result.candidates:
-        await fai_service.update_order(
-            tenant_id=tenant_id,
-            order_id=order_id,
-            payload=FaiOrderUpdate(
-                balloon_candidates=[c.model_dump(exclude_none=True) for c in result.candidates]
-            ),
-            user=current_user,
-        )
-    return result

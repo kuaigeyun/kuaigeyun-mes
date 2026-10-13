@@ -32,6 +32,7 @@ export interface PurchaseOrderCapabilities {
   push_receipt?: ActionCapability;
   push_invoice?: ActionCapability;
   push_prepayment?: ActionCapability;
+  push_payment_application?: ActionCapability;
   push_purchase_return?: ActionCapability;
   push_incoming_inspection?: ActionCapability;
   create_change_order?: ActionCapability;
@@ -450,6 +451,27 @@ export async function previewPushToPrepayment(orderId: number): Promise<Document
     { method: 'GET' },
   );
 }
+
+export async function previewPushToPaymentApplication(orderId: number): Promise<DocumentPushPreview & { max_push_quantity?: number }> {
+  return apiRequest(`/apps/kuaizhizao/purchase-orders/${orderId}/push-to-payment-application/preview`, {
+    method: 'GET',
+  });
+}
+
+export async function pushPurchaseOrderToPaymentApplication(
+  orderId: number,
+  data: { amount: number },
+): Promise<PaymentApplicationBrief> {
+  return apiRequest(`/apps/kuaizhizao/purchase-orders/${orderId}/push-to-payment-application`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export type PaymentApplicationBrief = {
+  id: number;
+  applicationCode: string;
+};
 
 /**
  * 下推采购退货预览

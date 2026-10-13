@@ -954,7 +954,7 @@ class ExceptionService:
         """
         从检验单创建质量异常记录。
 
-        source_type: incoming_inspection | process_inspection | finished_goods_inspection | oqc_inspection | lab_request
+        source_type: incoming_inspection | outsource_inspection | process_inspection | finished_goods_inspection | oqc_inspection | lab_request
 
         幂等：同一检验单 + inspection_failure 已有未删除记录时不再新建。
         - 仍有未闭环（pending/investigating/correcting）→ 返回最早一条
@@ -1014,6 +1014,36 @@ class ExceptionService:
             material_name = insp.material_name
             if not desc:
                 desc = insp.nonconformance_reason or f"来料检验不合格：{insp.inspection_code}"
+        elif source_type == "outsource_inspection":
+            from apps.kuaizhizao.models.outsource_inspection import OutsourceInspection
+
+            insp = await OutsourceInspection.get_or_none(
+                tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+            )
+            if not insp:
+                raise NotFoundError(f"委外检验单不存在: {source_id}")
+            material_id = insp.material_id
+            material_code = insp.material_code
+            material_name = insp.material_name
+            batch_no = insp.batch_number
+            if not desc:
+                desc = insp.nonconformance_reason or f"委外检验不合格：{insp.inspection_code}"
+        elif source_type == "quality_patrol":
+            from apps.kuaizhizao.models.quality_patrol import QualityPatrol
+
+            insp = await QualityPatrol.get_or_none(
+                tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+            )
+            if not insp:
+                raise NotFoundError(f"质量巡检单不存在: {source_id}")
+            material_id = insp.material_id
+            material_code = insp.material_code
+            material_name = insp.material_name
+            batch_no = insp.batch_number
+            work_order_id = insp.work_order_id
+            work_order_code = insp.work_order_code
+            if not desc:
+                desc = insp.nonconformance_reason or f"质量巡检不合格：{insp.inspection_code}"
         elif source_type == "process_inspection":
             from apps.kuaizhizao.models.process_inspection import ProcessInspection
 

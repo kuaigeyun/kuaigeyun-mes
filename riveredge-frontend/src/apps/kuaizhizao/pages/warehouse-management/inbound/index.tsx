@@ -115,6 +115,7 @@ import {
   type InboundHubDeepLinkFilter,
 } from './inboundHubDeepLink';
 import { fetchPurchaseReceiptIqcEnsure } from './inboundPurchaseIqcGate';
+import { pullPaymentApplicationFromPurchaseReceipt } from '../../../services/payment-application';
 import { PurchaseReceiptIqcReviewModal } from './PurchaseReceiptIqcReviewModal';
 import PurchaseReceiptEditModal from './PurchaseReceiptEditModal';
 import { fetchCustomerMaterialIqcEnsure } from './inboundCustomerMaterialIqcGate';
@@ -586,6 +587,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     [t],
   );
   const inboundPerms = useResourcePermissions(permissionResource);
+  const paymentApplicationPerms = useResourcePermissions('kuaizhizao:payment-application');
   const currentUser = useCurrentUser();
   const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -2034,6 +2036,42 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
               {record.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.withdrawReturn') : t('app.kuaizhizao.warehouseInbound.action.withdrawInbound')}
             </Button>
             </ActionConfirmPopconfirm>
+          );
+        }
+        if (
+          record.receipt_type === 'purchase' &&
+          posted &&
+          record.id &&
+          paymentApplicationPerms.canCreate
+        ) {
+          nodes.push(
+            <Button
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
+              key="payment-application"
+              onClick={() => {
+                void (async () => {
+                  try {
+                    const app = await pullPaymentApplicationFromPurchaseReceipt({
+                      purchaseReceiptId: Number(record.id),
+                    });
+                    messageApi.success(
+                      t('app.kuaizhizao.paymentApplication.createFromReceiptSuccess', {
+                        code: app.applicationCode,
+                      }),
+                    );
+                    navigate('/apps/kuaizhizao/purchase-management/payment-applications');
+                  } catch (error: unknown) {
+                    messageApi.error(
+                      formatApiErrorDetail(error) ||
+                        t('app.kuaizhizao.paymentApplication.createFailed'),
+                    );
+                  }
+                })();
+              }}
+            >
+              {t('app.kuaizhizao.paymentApplication.pushFromPurchaseReceipt')}
+            </Button>,
           );
         }
         return nodes;

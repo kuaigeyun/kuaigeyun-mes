@@ -76,6 +76,7 @@ _QUALITY_INSPECTION_APPROVED_MAIN_STATUSES = frozenset({
 _ENTITY_APPROVED_BUSINESS_STATUSES: Dict[str, frozenset[str]] = {
     "shipment_notice": frozenset({"待发货", "已通知", "已出库", "notified", "shipped"}),
     "sales_delivery": frozenset({"待出库", "已出库", "completed", "已完成"}),
+    "payment_application": frozenset({"已批准", "部分付款", "approved", "audited"}),
 }
 # 业务 status 与 review_status 分离的退货单（主状态待退货/已退货，审核看 review_status）
 _RETURN_REVIEW_ENTITY_TYPES = frozenset({"sales_return", "purchase_return"})

@@ -34,6 +34,16 @@ import {
 } from '../shared/equipmentMasterDataDetail';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  createMasterCrudExportHandler,
+  createMasterCrudImportHandler,
+  parseImportActiveFlag,
+  parseImportNumber,
+} from '../shared/equipmentMasterCrudImportExport';
+import {
+  buildEquipmentMaintenanceItemImportTemplate,
+  equipmentMaintenanceItemExportColumns,
+} from '../shared/equipmentMasterImportTemplates';
 
 const P = 'app.kuaizhizao.equipmentOps.maintenanceItem';
 const RESOURCE = 'kuaizhizao:equipment-maintenance-item';
@@ -131,6 +141,49 @@ const MaintenanceItemsPage: React.FC = () => {
   };
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
+
+  const importTemplate = useMemo(() => buildEquipmentMaintenanceItemImportTemplate(t), [t]);
+  const exportColumns = useMemo(() => equipmentMaintenanceItemExportColumns(t), [t]);
+  const handleImport = useMemo(
+    () =>
+      createMasterCrudImportHandler({
+        t,
+        messageApi,
+        actionRef,
+        api: maintenanceItemsApi,
+        template: importTemplate,
+        importTitle: t(`${P}.title`),
+        importEmptyKey: `${P}.importEmpty`,
+        importNoRowsKey: `${P}.importNoRows`,
+        importHeaderMissingNameKey: `${P}.importHeaderMissingName`,
+        mapRow: (cellAt) => {
+          const code = cellAt('code');
+          const name = cellAt('name');
+          if (!code || !name) return null;
+          const isActive = parseImportActiveFlag(cellAt('is_active'));
+          const payload: Record<string, unknown> = {
+            code,
+            name,
+            standard_hours: parseImportNumber(cellAt('standard_hours')),
+            requirement: cellAt('requirement') || null,
+          };
+          if (isActive !== undefined) payload.is_active = isActive;
+          return payload;
+        },
+      }),
+    [t, messageApi, importTemplate],
+  );
+  const handleExport = useMemo(
+    () =>
+      createMasterCrudExportHandler<MaintenanceItem>({
+        t,
+        messageApi,
+        api: maintenanceItemsApi,
+        fileName: t(`${P}.exportFileName`),
+        columns: exportColumns,
+      }),
+    [t, messageApi, exportColumns],
+  );
 
   const detailBasicColumns = useMemo<ProDescriptionsItemProps<MaintenanceItem>[]>(
     () => [
@@ -274,12 +327,20 @@ const MaintenanceItemsPage: React.FC = () => {
           showCreateButton={perms.canCreate}
           createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
           onCreate={handleCreate}
+          showImportButton={perms.canImport}
+          onImport={handleImport}
+          importHeaders={importTemplate.importHeaders}
+          importExampleRow={importTemplate.importExampleRow}
+          importColumnOptions={importTemplate.importColumnOptions}
+          importFieldMap={importTemplate.importHeaderMap}
+          importTemplateName={t(`${P}.importTemplateName`)}
+          showExportButton={perms.canExport}
+          onExport={handleExport}
           showDeleteButton={perms.canDelete}
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
-          
           onDelete={handleDelete}
-          enableRowSelection={perms.canDelete}
+          enableRowSelection={perms.canDelete || perms.canExport}
         />
       </ListPageTemplate>
 

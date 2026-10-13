@@ -52,6 +52,7 @@ export interface QualityAnomaliesResponse {
 /** 组织级质检环节总开关（与后端 TenantConfig quality_inspection_stages 一致） */
 export interface QualityInspectionStageToggles {
   iqc_enabled: boolean;
+  osqc_enabled?: boolean;
   ipqc_enabled: boolean;
   fqc_enabled: boolean;
   oqc_enabled: boolean;
@@ -451,7 +452,62 @@ export const qualityApi = {
         responseType: 'blob',
       }),
   },
-  /** IQC/IPQC/FQC/OQC 环节是否允许下推/创建对应质检单（关闭后服务端直接拒绝） */
+  outsourceInspection: {
+    list: async (params?: Record<string, unknown>) =>
+      apiRequest('/apps/kuaizhizao/outsource-inspections', { method: 'GET', params }),
+    create: async (data: Record<string, unknown>) =>
+      apiRequest('/apps/kuaizhizao/outsource-inspections', { method: 'POST', data }),
+    get: async (id: string | number) =>
+      apiRequest(`/apps/kuaizhizao/outsource-inspections/${id}`, { method: 'GET' }),
+    update: async (id: string | number, data: Record<string, unknown>) =>
+      apiRequest(`/apps/kuaizhizao/outsource-inspections/${id}`, { method: 'PUT', data }),
+    delete: async (id: string | number) =>
+      apiRequest(`/apps/kuaizhizao/outsource-inspections/${id}`, { method: 'DELETE' }),
+    conduct: async (id: string | number, data: Record<string, unknown>) =>
+      apiRequest(`/apps/kuaizhizao/outsource-inspections/${id}/conduct`, { method: 'POST', data }),
+    approve: async (id: string | number, data?: { approve?: boolean; remarks?: string }) =>
+      apiRequest(`/apps/kuaizhizao/outsource-inspections/${id}/approve`, { method: 'POST', data }),
+    applyPlan: async (id: string | number, inspection_plan_id: number) =>
+      apiRequest(`/apps/kuaizhizao/outsource-inspections/${id}/apply-plan`, {
+        method: 'POST',
+        data: { inspection_plan_id },
+      }),
+    listReceiptPullCandidates: async (params?: Record<string, unknown>) =>
+      apiRequest('/apps/kuaizhizao/outsource-inspections/pull-candidates/outsource-receipts', {
+        method: 'GET',
+        params,
+      }),
+    createFromReceipt: async (receiptId: string | number) =>
+      apiRequest(`/apps/kuaizhizao/outsource-inspections/from-outsource-receipt/${receiptId}`, {
+        method: 'POST',
+      }),
+    revokeConduct: async (id: string | number) =>
+      apiRequest(`/apps/kuaizhizao/outsource-inspections/${id}/revoke-conduct`, { method: 'POST' }),
+  },
+  qualityPatrol: {
+    list: async (params?: Record<string, unknown>) =>
+      apiRequest('/apps/kuaizhizao/quality-patrols', { method: 'GET', params }),
+    create: async (data: Record<string, unknown>) =>
+      apiRequest('/apps/kuaizhizao/quality-patrols', { method: 'POST', data }),
+    get: async (id: string | number) =>
+      apiRequest(`/apps/kuaizhizao/quality-patrols/${id}`, { method: 'GET' }),
+    update: async (id: string | number, data: Record<string, unknown>) =>
+      apiRequest(`/apps/kuaizhizao/quality-patrols/${id}`, { method: 'PUT', data }),
+    delete: async (id: string | number) =>
+      apiRequest(`/apps/kuaizhizao/quality-patrols/${id}`, { method: 'DELETE' }),
+    conduct: async (id: string | number, data: Record<string, unknown>) =>
+      apiRequest(`/apps/kuaizhizao/quality-patrols/${id}/conduct`, { method: 'POST', data }),
+    approve: async (id: string | number, data?: { approve?: boolean; remarks?: string }) =>
+      apiRequest(`/apps/kuaizhizao/quality-patrols/${id}/approve`, { method: 'POST', data }),
+    applyPlan: async (id: string | number, inspection_plan_id: number) =>
+      apiRequest(`/apps/kuaizhizao/quality-patrols/${id}/apply-plan`, {
+        method: 'POST',
+        data: { inspection_plan_id },
+      }),
+    revokeConduct: async (id: string | number) =>
+      apiRequest(`/apps/kuaizhizao/quality-patrols/${id}/revoke-conduct`, { method: 'POST' }),
+  },
+  /** IQC/IPQC/FQC/OQC/OSQC 环节是否允许下推/创建对应质检单（关闭后服务端直接拒绝） */
   stageToggles: {
     get: async () =>
       apiRequest<QualityInspectionStageToggles>('/apps/kuaizhizao/quality-inspection-stage-toggles', {

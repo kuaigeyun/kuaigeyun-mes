@@ -190,6 +190,46 @@ interface UserPreferenceState {
 /** theme / i18n 并行 init 时共用同一次拉取，后来者 await 而非直接 return */
 let fetchPreferencesInFlight: Promise<void> | null = null;
 
+/** 与后端 merge_preferences_patch / core_jsonb_merge_preferences 对齐 */
+const PREFERENCE_REPLACE_KEYS = new Set([
+  'theme_config',
+  'uni_tabs_state',
+  'columns',
+  'columnsDetailTable',
+  'columnsWidth',
+]);
+
+export function mergePreferencesPatch(
+  existing: Record<string, any> | null | undefined,
+  patch: Record<string, any> | null | undefined,
+): Record<string, any> {
+  const out: Record<string, any> = {
+    ...(existing && typeof existing === 'object' ? existing : {}),
+  };
+  if (!patch || typeof patch !== 'object') return out;
+
+  Object.keys(patch).forEach((key) => {
+    const value = patch[key];
+    if (PREFERENCE_REPLACE_KEYS.has(key)) {
+      out[key] = value;
+      return;
+    }
+    if (
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      out[key] &&
+      typeof out[key] === 'object' &&
+      !Array.isArray(out[key])
+    ) {
+      out[key] = mergePreferencesPatch(out[key], value);
+      return;
+    }
+    out[key] = value;
+  });
+  return out;
+}
+
 /** 将 updatePreferences 入参展开为纯 patch（可含点号路径），禁止附带整包本地 preferences */
 function buildPreferencesPatch(newPrefs: Record<string, any>): Record<string, any> {
   const patch: Record<string, any> = {};
@@ -311,11 +351,13 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
             throw new Error('用户偏好更新响应缺少 preferences');
           }
 
+          // 只把本次 patch 合入本地，禁止用整包响应覆盖——并发主题/标签写返回乱序时会冲掉兄弟键
+          const nextPrefs = mergePreferencesPatch(get().preferences, patch);
           set({
-            preferences: saved.preferences,
+            preferences: nextPrefs,
             loading: false,
           });
-          syncTableColumnsToLocalStorage(saved.preferences);
+          syncTableColumnsToLocalStorage(nextPrefs);
         } catch (error) {
           console.error('Failed to update user preferences:', error);
           set({ loading: false });

@@ -67,6 +67,7 @@ function inferAuditNodeKey(apiPrefix?: string): string {
   if (prefix.includes('/demands')) return 'demand';
   if (prefix.includes('/quotation')) return 'quotation';
   if (prefix.includes('/shipment-notices')) return 'shipment_notice';
+  if (prefix.includes('/payment-applications')) return 'payment_application';
   return '';
 }
 
@@ -99,6 +100,7 @@ function inferResourcePrefix(apiPrefix?: string): string {
   if (prefix.includes('/apps/kuaicaiwu/finance/receivables')) return 'kuaicaiwu:receivable';
   if (prefix.includes('/apps/kuaicaiwu/finance/payables')) return 'kuaicaiwu:payable';
   if (prefix.includes('/apps/kuaicaiwu/finance/purchase-invoices')) return 'kuaicaiwu:purchase-invoice';
+  if (prefix.includes('/apps/kuaizhizao/payment-applications')) return 'kuaizhizao:payment-application';
   return '';
 }
 
@@ -130,6 +132,7 @@ function inferResourceByNodeKey(nodeKey?: string): string {
     receivable: 'kuaicaiwu:receivable',
     payable: 'kuaicaiwu:payable',
     purchase_invoice: 'kuaicaiwu:purchase-invoice',
+    payment_application: 'kuaizhizao:payment-application',
     bom_change: 'kuaiplm:change',
     process_route_change: 'kuaiplm:change',
   };

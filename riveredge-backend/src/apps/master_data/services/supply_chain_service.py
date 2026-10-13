@@ -18,6 +18,7 @@ from apps.master_data.schemas.supply_chain_schemas import (
     CustomerCreate,
     CustomerUpdate,
     CustomerResponse,
+    PartnerSettlementAccountItem,
     SupplierCreate,
     SupplierUpdate,
     SupplierResponse,
@@ -313,18 +314,82 @@ def _partner_contacts_for_response(entity: Customer | Supplier) -> List[Dict[str
     return [legacy] if legacy else []
 
 
+def _normalize_partner_settlement_account_row(row: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(row, dict):
+        return None
+    account_name = _pick_contact_field(row, "account_name", "accountName")
+    bank_name = _pick_contact_field(row, "bank_name", "bankName")
+    bank_account = _pick_contact_field(row, "bank_account", "bankAccount")
+    if not any([account_name, bank_name, bank_account]):
+        return None
+    raw_default = row.get("is_default")
+    if raw_default is None:
+        raw_default = row.get("isDefault")
+    is_default = bool(raw_default) if raw_default is not None else False
+    return {
+        "account_name": account_name,
+        "bank_name": bank_name,
+        "bank_account": bank_account,
+        "is_default": is_default,
+    }
+
+
+def _apply_partner_settlement_accounts_payload(data: Dict[str, Any]) -> None:
+    if "settlement_accounts" not in data:
+        return
+    raw_rows = data.get("settlement_accounts")
+    normalized: List[Dict[str, Any]] = []
+    if isinstance(raw_rows, list):
+        for row in raw_rows:
+            item = _normalize_partner_settlement_account_row(row)
+            if item:
+                normalized.append(item)
+    default_seen = False
+    for item in normalized:
+        if item.get("is_default"):
+            if default_seen:
+                item["is_default"] = False
+            else:
+                default_seen = True
+    if normalized and not default_seen:
+        normalized[0]["is_default"] = True
+    data["settlement_accounts"] = normalized
+
+
+def _partner_settlement_accounts_for_response(
+    entity: Customer | Supplier,
+) -> List[Dict[str, Any]]:
+    stored = entity.settlement_accounts
+    if not isinstance(stored, list) or not stored:
+        return []
+    rows: List[Dict[str, Any]] = []
+    for row in stored:
+        item = _normalize_partner_settlement_account_row(row)
+        if item:
+            rows.append(item)
+    return rows
+
+
 def _to_customer_response(customer: Customer) -> CustomerResponse:
     resp = CustomerResponse.model_validate(customer)
     contact_rows = _partner_contacts_for_response(customer)
     contact_items = [CustomerContactItem.model_validate(row) for row in contact_rows] if contact_rows else None
-    return resp.model_copy(update={"contacts": contact_items})
+    account_rows = _partner_settlement_accounts_for_response(customer)
+    account_items = (
+        [PartnerSettlementAccountItem.model_validate(row) for row in account_rows] if account_rows else None
+    )
+    return resp.model_copy(update={"contacts": contact_items, "settlement_accounts": account_items})
 
 
 def _to_supplier_response(supplier: Supplier) -> SupplierResponse:
     resp = SupplierResponse.model_validate(supplier)
     contact_rows = _partner_contacts_for_response(supplier)
     contact_items = [CustomerContactItem.model_validate(row) for row in contact_rows] if contact_rows else None
-    return resp.model_copy(update={"contacts": contact_items})
+    account_rows = _partner_settlement_accounts_for_response(supplier)
+    account_items = (
+        [PartnerSettlementAccountItem.model_validate(row) for row in account_rows] if account_rows else None
+    )
+    return resp.model_copy(update={"contacts": contact_items, "settlement_accounts": account_items})
 
 
 _CUSTOMER_PAGE_CODE = "master-data-supply-chain-customer"
@@ -418,6 +483,7 @@ class SupplyChainService:
             create_data["market_scope"] = "domestic"
 
         _apply_partner_contacts_payload(create_data)
+        _apply_partner_settlement_accounts_payload(create_data)
         if require_contact_channel:
             _assert_customer_phone_or_email(create_data)
 
@@ -634,6 +700,7 @@ class SupplyChainService:
         salesman_changed = salesman_field_present and salesman_change != customer.salesman_id
 
         _apply_partner_contacts_payload(update_data)
+        _apply_partner_settlement_accounts_payload(update_data)
         contact_keys = ("phone", "email", "contacts", "contact_person", "contact_title")
         if require_contact_channel and any(k in update_data for k in contact_keys):
             merged_contact = {
@@ -797,6 +864,7 @@ class SupplyChainService:
                 create_data["buyer_name"] = buyer.full_name or buyer.username
 
         _apply_partner_contacts_payload(create_data)
+        _apply_partner_settlement_accounts_payload(create_data)
 
         try:
             apply_create_audit(create_data, current_user)
@@ -1000,6 +1068,7 @@ class SupplyChainService:
                 )
 
         _apply_partner_contacts_payload(update_data)
+        _apply_partner_settlement_accounts_payload(update_data)
 
         for key, value in update_data.items():
             setattr(supplier, key, value)

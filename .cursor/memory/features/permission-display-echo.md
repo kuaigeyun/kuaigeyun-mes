@@ -58,6 +58,19 @@ updated: 2026-10-12
 
 权限同步后出现「回显」勾选；新 `:display` 码默认同步授予全部角色（非 baseline，可取消）。
 权限同步 / 加载预设还会对**预设角色**幂等补齐 `master-data:material:display`（不恢复非预设角色上已取消的勾选）。
+同步还回填「零授权孤儿」display（权限已入库但尚无任何角色勾选）——常见于切流前就存在的 `system:data-dictionary:display` 等系统级码：取消宿主隐式放行后若未补授，业务表单字典下拉会空。稀疏勾选（仅管理员有）靠迁移 `859_*_backfill_core_system_display_grants` 一次性补齐，之后取消不再强制恢复。
+
+**不是**「仓储全部权限勾满就等于能执行调拨」：调拨单「执行调拨」走 `:execute`，与 `:create`/`:update` 分开。矩阵缺码时后端仍按 execute 鉴权会 403；已在 manifest 补 `warehouse-management-inventory-transfer:execute`，同步时对已有 create/update 角色传播授予（同质检 execute 传播）。
+
+## 路由动作 vs manifest（2026-10-12）
+
+| 职责 | 真源 |
+|------|------|
+| 发现「路由解析 execute/submit/dispatch 但 manifest 无码」 | `riveredge-backend/scripts/scan_route_manifest_alignment.py`（已接入 `scan_permission_bypass.py`） |
+| 仓储确认/执行缺码补齐 | 前后端 kuaizhizao manifest 补 `:execute`（组装/拆卸/盘点/配料/借还料/其它出入库/采销退货等）；权限同步从 create/update 传播 |
+| 前端按钮 | `useResourcePermissions` + `canAction('execute')`；采销退货确认勿用 `submit` 门控 |
+
+交付后租户须跑**权限同步**，已有录入权的角色才会自动补上执行权并在矩阵出现「执行」。
 
 ## 关联 UI
 

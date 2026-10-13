@@ -454,7 +454,7 @@ const QualityComplaintsPage: React.FC = () => {
             dataIndex: 'supplier_response',
             span: 2,
           },
-          { title: t('common.remarks'), dataIndex: 'remarks', span: 2 },
+          { title: t('common.remark'), dataIndex: 'remarks', span: 2 },
         ],
         GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK,
       ),
@@ -693,7 +693,7 @@ const QualityComplaintsPage: React.FC = () => {
             label={t('app.kuaizhizao.qualityComplaint.colSupplierResponse')}
           />
         ) : null}
-        <ProFormTextArea name="remarks" label={t('common.remarks')} />
+        <ProFormTextArea name="remarks" label={t('common.remark')} />
       </FormModalTemplate>
 
       <DetailDrawerTemplate

@@ -69,6 +69,7 @@ import {
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 interface InventoryTransfer {
   id?: number;
   uuid?: string;
@@ -135,10 +136,14 @@ const defaultTransferItem = {
   batch_managed: false,
 };
 
+const INVENTORY_TRANSFER_RESOURCE = 'kuaizhizao:warehouse-management-inventory-transfer';
+
 const InventoryTransferPage: React.FC = () => {
   const { t } = useTranslation();
   const trackingFlags = useWarehouseTrackingFlags();
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
+  const transferPerms = useResourcePermissions(INVENTORY_TRANSFER_RESOURCE);
+  const canExecuteTransfer = transferPerms.canAction?.('execute') ?? false;
   const [searchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -995,15 +1000,17 @@ const InventoryTransferPage: React.FC = () => {
               <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleAddItem(record)}>
                 {t('app.kuaizhizao.inventoryTransfer.actionAddItem')}
               </Button>
-              <ActionConfirmPopconfirm title={t('app.kuaizhizao.inventoryTransfer.msgExecuteTitle')} description={t('app.kuaizhizao.inventoryTransfer.msgExecuteContent', { code: record.code })} onConfirm={() => executeExecute(record)}>
-              <Button
-                {...rowActionKind('execute')}
-                {...rowActionLabelKeep()}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {t('app.kuaizhizao.inventoryTransfer.actionExecute')}
-              </Button>
-            </ActionConfirmPopconfirm>
+              {canExecuteTransfer ? (
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.inventoryTransfer.msgExecuteTitle')} description={t('app.kuaizhizao.inventoryTransfer.msgExecuteContent', { code: record.code })} onConfirm={() => executeExecute(record)}>
+                <Button
+                  {...rowActionKind('execute')}
+                  {...rowActionLabelKeep()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('app.kuaizhizao.inventoryTransfer.actionExecute')}
+                </Button>
+              </ActionConfirmPopconfirm>
+              ) : null}
             </>
           )}
           {record.status === 'in_progress' && (
@@ -1014,7 +1021,7 @@ const InventoryTransferPage: React.FC = () => {
         </Space>
       ),
     },
-  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, workflowStatusValueEnum, transferModeValueEnum]);
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, workflowStatusValueEnum, transferModeValueEnum, canExecuteTransfer]);
 
   const getAreaOptions = (warehouseId?: number) =>
     storageAreaList

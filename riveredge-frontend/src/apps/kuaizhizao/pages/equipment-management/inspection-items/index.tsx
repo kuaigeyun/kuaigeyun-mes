@@ -36,6 +36,17 @@ import {
 } from '../shared/equipmentMasterDataDetail';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  createMasterCrudExportHandler,
+  createMasterCrudImportHandler,
+  parseImportActiveFlag,
+  parseImportNumber,
+  parseInspectionValueType,
+} from '../shared/equipmentMasterCrudImportExport';
+import {
+  buildInspectionItemImportTemplate,
+  inspectionItemExportColumns,
+} from '../shared/equipmentMasterImportTemplates';
 
 const P = 'app.kuaizhizao.equipmentOps.inspectionItem';
 const RESOURCE = 'kuaizhizao:equipment-inspection-item';
@@ -151,6 +162,60 @@ const InspectionItemsPage: React.FC = () => {
   };
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
+
+  const importTemplate = useMemo(() => buildInspectionItemImportTemplate(t), [t]);
+  const exportColumns = useMemo(() => inspectionItemExportColumns(t), [t]);
+  const handleImport = useMemo(
+    () =>
+      createMasterCrudImportHandler({
+        t,
+        messageApi,
+        actionRef,
+        api: inspectionItemsApi,
+        template: importTemplate,
+        importTitle: t(`${P}.title`),
+        importEmptyKey: `${P}.importEmpty`,
+        importNoRowsKey: `${P}.importNoRows`,
+        importHeaderMissingNameKey: `${P}.importHeaderMissingName`,
+        mapRow: (cellAt) => {
+          const code = cellAt('code');
+          const name = cellAt('name');
+          if (!code || !name) return null;
+          const valueType = parseInspectionValueType(cellAt('value_type') || 'boolean');
+          const isActive = parseImportActiveFlag(cellAt('is_active'));
+          const payload: Record<string, unknown> = {
+            code,
+            name,
+            value_type: valueType,
+            unit: cellAt('unit') || null,
+            numeric_min: parseImportNumber(cellAt('numeric_min')),
+            numeric_max: parseImportNumber(cellAt('numeric_max')),
+            method: cellAt('method') || null,
+            judgment_standard: cellAt('judgment_standard') || null,
+            requirement: cellAt('requirement') || null,
+          };
+          if (valueType !== 'numeric') {
+            payload.unit = null;
+            payload.numeric_min = null;
+            payload.numeric_max = null;
+          }
+          if (isActive !== undefined) payload.is_active = isActive;
+          return payload;
+        },
+      }),
+    [t, messageApi, importTemplate],
+  );
+  const handleExport = useMemo(
+    () =>
+      createMasterCrudExportHandler<InspectionItem>({
+        t,
+        messageApi,
+        api: inspectionItemsApi,
+        fileName: t(`${P}.exportFileName`),
+        columns: exportColumns,
+      }),
+    [t, messageApi, exportColumns],
+  );
 
   const detailBasicColumns = useMemo<ProDescriptionsItemProps<InspectionItem>[]>(
     () => [
@@ -320,12 +385,20 @@ const InspectionItemsPage: React.FC = () => {
           showCreateButton={perms.canCreate}
           createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
           onCreate={handleCreate}
+          showImportButton={perms.canImport}
+          onImport={handleImport}
+          importHeaders={importTemplate.importHeaders}
+          importExampleRow={importTemplate.importExampleRow}
+          importColumnOptions={importTemplate.importColumnOptions}
+          importFieldMap={importTemplate.importHeaderMap}
+          importTemplateName={t(`${P}.importTemplateName`)}
+          showExportButton={perms.canExport}
+          onExport={handleExport}
           showDeleteButton={perms.canDelete}
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
-          
           onDelete={handleDelete}
-          enableRowSelection={perms.canDelete}
+          enableRowSelection={perms.canDelete || perms.canExport}
         />
       </ListPageTemplate>
 

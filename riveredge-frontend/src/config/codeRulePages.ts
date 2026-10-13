@@ -484,6 +484,18 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     allowManualEdit: true,
   },
   {
+    pageCode: 'kuaizhizao-payment-application',
+    pageName: '付款申请',
+    pagePath: '/apps/kuaizhizao/purchase-management/payment-applications',
+    codeField: 'application_code',
+    codeFieldLabel: '申请单号',
+    module: '快格轻制造',
+    moduleIcon: 'tool',
+    autoGenerate: true,
+    ruleCode: 'PAYMENT_APPLICATION_CODE',
+    allowManualEdit: true,
+  },
+  {
     pageCode: 'kuaizhizao-purchase-inquiry',
     pageName: '采购询价单',
     pagePath: '/apps/kuaizhizao/purchase-management/purchase-inquiries',

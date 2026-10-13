@@ -1438,7 +1438,7 @@ async def update_stocktaking_item(
     "/stocktakings/{stocktaking_id}/items/{item_id}/execute",
     response_model=StocktakingItemResponse,
     summary="Execute stocktaking line",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:update"))],
+    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:execute"))],
 )
 async def execute_stocktaking_item(
     stocktaking_id: int,

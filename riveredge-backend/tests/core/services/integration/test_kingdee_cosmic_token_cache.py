@@ -37,6 +37,22 @@ def test_token_cache_ttl_subtracts_skew():
     assert cosmic.token_cache_ttl_seconds(10) == 60
 
 
+def test_is_kingdee_cosmic_access_token_rejected():
+    assert cosmic.is_kingdee_cosmic_access_token_rejected(None, http_status=401)
+    assert cosmic.is_kingdee_cosmic_access_token_rejected(
+        {
+            "data": None,
+            "errorCode": "401",
+            "message": "AccessToken认证不通过, token已过期,TraceId: abc",
+            "status": False,
+        }
+    )
+    assert not cosmic.is_kingdee_cosmic_access_token_rejected(
+        {"errorCode": "2530", "message": "Cannot found OpenAPI"},
+        http_status=200,
+    )
+
+
 def test_token_cache_key_stable_and_changes_with_secret():
     key1 = cosmic.build_kingdee_cosmic_token_cache_key(_sample_config())
     key2 = cosmic.build_kingdee_cosmic_token_cache_key(_sample_config())

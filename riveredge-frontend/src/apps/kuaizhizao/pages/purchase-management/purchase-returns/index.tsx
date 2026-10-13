@@ -1646,7 +1646,7 @@ const PurchaseReturnsPage: React.FC = () => {
               }}
             />,
           );
-          if (canShowPurchaseReturnConfirm(record, purchaseReturnPerms.canAction?.('submit') ?? false)) {
+          if (canShowPurchaseReturnConfirm(record, purchaseReturnPerms.canAction?.('execute') ?? false)) {
             parts.push(
               <ActionConfirmPopconfirm
                 key="c"
@@ -1657,7 +1657,7 @@ const PurchaseReturnsPage: React.FC = () => {
                 onConfirm={() => executeConfirm(record)}
               >
                 <Button
-                  {...rowActionKind('submit')}
+                  {...rowActionKind('execute')}
                   {...rowActionLabelKeep()}
                   type="link"
                   size="small"
@@ -2331,7 +2331,7 @@ const PurchaseReturnsPage: React.FC = () => {
               selectedRowKeys={selectedRowKeys}
               selectedRecords={selectedReturnsForBatch}
               capabilityKey="confirm"
-              permAllowed={purchaseReturnPerms.canAction?.('submit') ?? false}
+              permAllowed={purchaseReturnPerms.canAction?.('execute') ?? false}
               batchAllowed={purchaseReturnBatchConfirmAllowed}
               onRun={(id) => warehouseApi.purchaseReturn.confirm(String(id))}
               notAllowedMessage={t('app.kuaizhizao.purchaseReturn.batchConfirmPartial', { count: 1 })}
@@ -2720,12 +2720,12 @@ const PurchaseReturnsPage: React.FC = () => {
                     key: 'confirm',
                     visible: canShowPurchaseReturnConfirm(
                       returnDetail,
-                      purchaseReturnPerms.canAction?.('submit') ?? false,
+                      purchaseReturnPerms.canAction?.('execute') ?? false,
                     ),
                     render: () => (
                       <ActionConfirmPopconfirm title={t('app.kuaizhizao.purchaseReturn.confirmTitle')} description={t('app.kuaizhizao.purchaseReturn.confirmContent', { code: returnDetail.return_code })} onConfirm={() => executeConfirm(returnDetail)}>
               <Button
-                        {...rowActionKind('submit')}
+                        {...rowActionKind('execute')}
                         {...rowActionLabelKeep()}
                         icon={<CheckCircleOutlined />}
                         onClick={(e) => e.stopPropagation()}

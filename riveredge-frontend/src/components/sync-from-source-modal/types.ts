@@ -140,4 +140,21 @@ export interface SyncFromSourceConfig {
   skipBackendPrerequisites?: boolean;
   /** 主同步步骤标题（有 prerequisiteSteps 时在进度条中展示） */
   mainStepTitleKey?: string;
+  /** 拉取预览时优先展示的源列（单位同步等只关心编码/名称） */
+  previewPreferredSourceKeys?: string[];
+  /**
+   * 预览时按基础单位编码去重（仅单位同步）。
+   * 物料同步也会在 preferredKeys 里带 baseunit.*，绝不能据此推断去重。
+   */
+  collapsePreviewToUniqueUnits?: boolean;
+  /**
+   * 本页同步目标字段的源列别名（覆盖全局 KINGDEE_TARGET_ALIASES）。
+   * 单位/物料等同源接口必须各自声明，禁止共用一套 code←number 顺序。
+   */
+  targetAliases?: Record<string, string[]>;
+  /**
+   * 添加来源时优先排到前面的接口 code 后缀（如 query_measureunits / query_material）。
+   * 只排序不隐藏，避免误绑其它业务接口时仍可选手动项。
+   */
+  preferredApiCodeSuffixes?: string[];
 }

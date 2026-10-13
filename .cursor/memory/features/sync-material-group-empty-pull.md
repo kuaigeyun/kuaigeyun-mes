@@ -32,8 +32,9 @@ standard: MaterialGroupSyncService.sync_from_source + Cosmic prepare_kingdee_cos
 | 同步服务 | `MaterialGroupSyncService.sync_from_source` |
 | 拉源 | `fetch_mapped_rows_from_sources`（`source_errors` 不得被空拉文案盖住） |
 | 星空预置 | `build_material_group_query_preset_body`（FormId=`BD_MATERIALGROUP`，FieldKeys=`FID,FNumber,FName`，Filter=`FForbidStatus='A'`） |
-| 苍穹预置 | `query_material_group` → `kapi/v2/basedata/bd_materialgroup/batchQuery` |
-| 苍穹发出 | `prepare_kingdee_cosmic_outbound`：有组织编码时写入所有 basedata `batchQuery` 的 `data.createorg_number` |
+| 苍穹预置 | `query_material_group`（及 `query_goods_class`）→ `kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass`；旧 `bd_materialgroup` 由 `material_group_preset_needs_upgrade` 在「加载常用接口」时升级 |
+| 苍穹商品分类 | 顶层 `pageNo`/`pageSize`（pageSize 必填），父编码 `parent_parent_number`；`ensure_kingdee_v2_request_body` 勿包 `data` |
+| 苍穹发出 | `prepare_kingdee_cosmic_outbound`：有组织编码时写入 basedata `batchQuery` 的 `data.createorg_number` |
 
 ## 关键文件
 
@@ -56,4 +57,5 @@ standard: MaterialGroupSyncService.sync_from_source + Cosmic prepare_kingdee_cos
 - **名对体错**：接口名/code 为 `query_material_group`，但 `request_body` 仍是物料查询（`FormId=BD_MATERIAL`，FieldKeys 含 `FMaterialGroup.*`）；字段映射也常误成 `FMaterialGroup.FNumber/FName`。正确应为 `FormId=BD_MATERIALGROUP`，FieldKeys=`FID,FNumber,FName`，映射 `FNumber→code`、`FName→name`
 - 星空：分组常无 `FDocumentStatus`；Filter 带已审核会整页 0 行或查询失败
 - 苍穹：空 `data: {}` 在部分账套拉不到行；连接器须填组织编码；非仓库对象不要伪造默认 `WANG`
-- 已保存的旧预置：连接器「加载常用接口」升级 `query_material_group`（`material_group_preset_needs_upgrade` 须识别错误 FormId）
+- 已保存的旧预置：连接器「加载常用接口」升级 `query_material_group`（苍穹识别 `bd_materialgroup` 路径；星空识别错误 FormId）
+- 调测仍见 `Cannot found OpenAPI ... bd_materialgroup`：接口管理里尚未升级，须再点「加载常用接口」或手工改路径为 getMalGoodsClass

@@ -80,6 +80,7 @@ const OutsourceSettlementsPage = lazy(() => import('./pages/outsource-management
 // 采购管理页面
 const PurchaseDashboardPage = lazy(() => import('./pages/purchase-management/dashboard'));
 const PurchaseOrdersPage = lazy(() => import('./pages/purchase-management/purchase-orders'));
+const PaymentApplicationsPage = lazy(() => import('./pages/purchase-management/payment-applications'));
 const PurchaseOrderChangesPage = lazy(() => import('./pages/purchase-management/purchase-order-changes'));
 const PurchaseArrivalWarningsPage = lazy(() => import('./pages/purchase-management/arrival-warnings'));
 const PurchaseRequisitionsPage = lazy(() => import('./pages/purchase-management/purchase-requisitions'));
@@ -137,6 +138,8 @@ const EightDWorkbenchPage = lazy(() => import('./pages/quality-management/eight-
 const QualityComplaintsPage = lazy(() => import('./pages/quality-management/quality-complaints'));
 const SupplierEvaluationsPage = lazy(() => import('./pages/quality-management/supplier-evaluations'));
 const OQCInspectionPage = lazy(() => import('./pages/quality-management/oqc-inspection'));
+const OutsourceInspectionPage = lazy(() => import('./pages/quality-management/outsource-inspection'));
+const QualityPatrolPage = lazy(() => import('./pages/quality-management/quality-patrol'));
 const SPCMonitorPage = lazy(() => import('./pages/quality-management/spc-monitor'));
 const SystemDocumentsPage = lazy(() => import('./pages/quality-management/system-documents'));
 const QcSopPage = lazy(() => import('./pages/quality-management/qc-sop'));
@@ -144,7 +147,13 @@ const InternalAuditsPage = lazy(() => import('./pages/quality-management/interna
 const ManagementReviewsPage = lazy(() => import('./pages/quality-management/management-reviews'));
 const ClauseManagementPage = lazy(() => import('./pages/quality-management/clause-management'));
 const FaiOrdersPage = lazy(() => import('./pages/quality-management/fai-orders'));
-const FaiBalloonPage = lazy(() => import('./pages/quality-management/fai-orders/balloon'));
+const FaiBalloonLegacyRedirect = lazy(() => import('./pages/quality-management/fai-orders/balloon'));
+const DrawingBalloonSheetsPage = lazy(
+  () => import('./pages/quality-management/drawing-balloon-sheets'),
+);
+const DrawingBalloonSheetEditorPage = lazy(
+  () => import('./pages/quality-management/drawing-balloon-sheets/editor'),
+);
 
 // 设备管理页面
 const EquipmentDashboardPage = lazy(() => import('./pages/equipment-management/dashboard'));
@@ -351,8 +360,10 @@ const ProductionDailyTemplatesPage = lazy(() => import('./pages/production-execu
 
 // 质量管理报表
 const IncomingInspectionReportPage = lazy(() => import('./pages/quality-management/reports/IncomingInspectionReport'));
+const OutsourceInspectionReportPage = lazy(() => import('./pages/quality-management/reports/OutsourceInspectionReport'));
 const ProcessInspectionReportPage = lazy(() => import('./pages/quality-management/reports/ProcessInspectionReport'));
 const FinishedInspectionReportPage = lazy(() => import('./pages/quality-management/reports/FinishedInspectionReport'));
+const QualityPatrolReportPage = lazy(() => import('./pages/quality-management/reports/QualityPatrolReport'));
 const QualityExceptionTrackingPage = lazy(() => import('./pages/quality-management/reports/QualityExceptionTracking'));
 const NonconformingSummaryPage = lazy(() => import('./pages/quality-management/reports/NonconformingSummary'));
 const QualityRateTrendPage = lazy(() => import('./pages/quality-management/reports/QualityRateTrend'));
@@ -422,6 +433,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="purchase-management/purchase-orders/new" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-orders/:id/edit" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-orders" element={withPageSuspense(PurchaseOrdersPage)} />
+      <Route path="purchase-management/payment-applications" element={withPageSuspense(PaymentApplicationsPage)} />
       <Route path="purchase-management/purchase-order-changes" element={withPageSuspense(PurchaseOrderChangesPage)} />
       <Route path="purchase-management/arrival-warnings" element={withPageSuspense(PurchaseArrivalWarningsPage)} />
       <Route path="purchase-management/purchase-requisitions/new" element={withPageSuspense(PurchaseRequisitionsPage)} />
@@ -534,6 +546,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/quality-complaints" element={withPageSuspense(QualityComplaintsPage)} />
       <Route path="quality-management/supplier-evaluations" element={withPageSuspense(SupplierEvaluationsPage)} />
       <Route path="quality-management/oqc-inspection" element={withPageSuspense(OQCInspectionPage)} />
+      <Route path="quality-management/outsource-inspection" element={withPageSuspense(OutsourceInspectionPage)} />
+      <Route path="quality-management/quality-patrol" element={withPageSuspense(QualityPatrolPage)} />
       <Route path="quality-management/spc-monitor" element={withPageSuspense(SPCMonitorPage)} />
       <Route path="quality-management/clause-management" element={withPageSuspense(ClauseManagementPage)} />
       <Route path="quality-management/iso-clauses" element={<Navigate to="/apps/kuaizhizao/quality-management/clause-management" replace />} />
@@ -541,7 +555,18 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/qc-sop" element={withPageSuspense(QcSopPage)} />
       <Route path="quality-management/internal-audits" element={withPageSuspense(InternalAuditsPage)} />
       <Route path="quality-management/management-reviews" element={withPageSuspense(ManagementReviewsPage)} />
-      <Route path="quality-management/fai-orders/:id/balloon" element={withPageSuspense(FaiBalloonPage)} />
+      <Route
+        path="quality-management/fai-orders/:id/balloon"
+        element={withPageSuspense(FaiBalloonLegacyRedirect)}
+      />
+      <Route
+        path="quality-management/drawing-balloon-sheets/:id/editor"
+        element={withPageSuspense(DrawingBalloonSheetEditorPage)}
+      />
+      <Route
+        path="quality-management/drawing-balloon-sheets"
+        element={withPageSuspense(DrawingBalloonSheetsPage)}
+      />
       <Route path="quality-management/fai-orders" element={withPageSuspense(FaiOrdersPage)} />
 
       {/* 设备管理路由 */}
@@ -796,8 +821,10 @@ const KuaizhizaoApp: React.FC = () => {
 
       {/* 质量管理报表 */}
       <Route path="quality-management/reports/incoming-inspection-report" element={withPageSuspense(IncomingInspectionReportPage)} />
+      <Route path="quality-management/reports/outsource-inspection-report" element={withPageSuspense(OutsourceInspectionReportPage)} />
       <Route path="quality-management/reports/process-inspection-report" element={withPageSuspense(ProcessInspectionReportPage)} />
       <Route path="quality-management/reports/finished-inspection-report" element={withPageSuspense(FinishedInspectionReportPage)} />
+      <Route path="quality-management/reports/quality-patrol-report" element={withPageSuspense(QualityPatrolReportPage)} />
       <Route path="quality-management/reports/quality-exception-tracking" element={withPageSuspense(QualityExceptionTrackingPage)} />
       <Route path="quality-management/reports/nonconforming-summary" element={withPageSuspense(NonconformingSummaryPage)} />
       <Route path="quality-management/reports/quality-rate-trend" element={withPageSuspense(QualityRateTrendPage)} />

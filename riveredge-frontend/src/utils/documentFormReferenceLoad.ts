@@ -27,6 +27,9 @@ export const KUAIZHIZAO_DOC_HOST = {
   purchaseOrder: 'kuaizhizao:purchase-order',
   purchaseOrderChange: 'kuaizhizao:purchase-order-change',
   purchaseRequisition: 'kuaizhizao:purchase-requisition',
+  paymentApplication: 'kuaizhizao:payment-application',
+  otherIncome: 'kuaicaiwu:other-income',
+  otherExpense: 'kuaicaiwu:other-expense',
   purchaseReturn: 'kuaizhizao:purchase-return',
   receiptNotice: 'kuaizhizao:receipt-notice',
   purchaseInquiry: 'kuaizhizao:purchase-inquiry',
@@ -103,6 +106,24 @@ export function referenceDisplayItemsToCustomers(items: ReferenceDisplayItem[]):
           name: item.name ?? undefined,
         }) as Customer,
     );
+}
+
+export async function loadUserFormReferenceOptions(
+  hostResource: string,
+): Promise<DocumentFormSelectOption[]> {
+  try {
+    const items = await searchReferenceDisplayAll(
+      {
+        resource: 'system:user',
+        hostResource,
+        isActive: true,
+      },
+      500,
+    );
+    return referenceDisplayToIdOptions(items);
+  } catch {
+    return [];
+  }
 }
 
 export async function loadSupplierFormReferenceList(hostResource: string): Promise<Supplier[]> {

@@ -11,6 +11,7 @@ class QualityInspectionStageTogglesResponse(BaseSchema):
     """当前组织质检各环节的启用状态。"""
 
     iqc_enabled: bool = Field(..., description="来料检（IQC）环节是否启用")
+    osqc_enabled: bool = Field(True, description="委外检验环节是否启用")
     ipqc_enabled: bool = Field(..., description="过程检（IPQC）环节是否启用")
     fqc_enabled: bool = Field(..., description="成品检（FQC）环节是否启用")
     oqc_enabled: bool = Field(..., description="出货检（OQC）环节是否启用")
@@ -20,6 +21,7 @@ class QualityInspectionStageTogglesUpdate(BaseSchema):
     """部分更新；仅提交的字段会被覆盖，其余保持原配置。"""
 
     iqc_enabled: Optional[bool] = Field(None, description="来料检（IQC）")
+    osqc_enabled: Optional[bool] = Field(None, description="委外检验")
     ipqc_enabled: Optional[bool] = Field(None, description="过程检（IPQC）")
     fqc_enabled: Optional[bool] = Field(None, description="成品检（FQC）")
     oqc_enabled: Optional[bool] = Field(None, description="出货检（OQC）")
@@ -28,8 +30,10 @@ class QualityInspectionStageTogglesUpdate(BaseSchema):
 class QualityEffectiveConfigResponse(BaseSchema):
     """聚合的组织质检有效配置（环节开关 + 业务参数）。"""
 
-    stage_enabled: Dict[str, bool] = Field(..., description="环节总开关 iqc/ipqc/fqc/oqc")
-    module_enabled: Dict[str, bool] = Field(..., description="模块能力 incoming/process/finished/defect_handling")
+    stage_enabled: Dict[str, bool] = Field(..., description="环节总开关 iqc/osqc/ipqc/fqc/oqc")
+    module_enabled: Dict[str, bool] = Field(
+        ..., description="模块能力 incoming/outsource/process/finished/patrol/defect_handling"
+    )
     auto_create: Dict[str, bool] = Field(..., description="各节点自动建单开关")
     gate: Dict[str, bool] = Field(
         ...,

@@ -5,7 +5,9 @@
 - IQC/FQC/OQC：物料 inspection_stages[stage] 为唯一主数据源（legacy inspection_mode 仅读 shim）
 - 物料未配置 inspection_stages 时，继承物料分组 inspection_stages（与分组工艺路线同理）
 - IPQC：仅工序 inspection_stages.ipqc（物料不参与过程检）
-- 检验方案 plan_type 与 stage 映射：iqc→incoming, ipqc→process, fqc→finished, oqc→outbound
+- 检验方案 plan_type 与 stage 映射：
+  iqc→incoming, osqc→outsource, ipqc→process, fqc→finished, oqc→outbound；
+  patrol 为巡检方案类型（不进物料分场景硬闸门）
 """
 
 from __future__ import annotations
@@ -25,11 +27,15 @@ class QualityEffectiveConfig(TypedDict):
     fai: Dict[str, bool]
 
 
-MATERIAL_INSPECTION_STAGE_KEYS = ("iqc", "fqc", "oqc")
+MATERIAL_INSPECTION_STAGE_KEYS = ("iqc", "osqc", "fqc", "oqc")
 OPERATION_INSPECTION_STAGE_KEYS = ("ipqc",)
+# 与菜单/方案下拉一致：来料→委外→过程→成品→出货→巡检
+INSPECTION_PLAN_TYPES = ("incoming", "outsource", "process", "finished", "outbound", "patrol")
+INSPECTION_PLAN_TYPES_SET = frozenset(INSPECTION_PLAN_TYPES)
 
 STAGE_TO_PLAN_TYPE: Dict[str, str] = {
     "iqc": "incoming",
+    "osqc": "outsource",
     "ipqc": "process",
     "fqc": "finished",
     "oqc": "outbound",
@@ -37,6 +43,7 @@ STAGE_TO_PLAN_TYPE: Dict[str, str] = {
 
 STAGE_DISPLAY_LABELS: Dict[str, str] = {
     "iqc": "来料检验",
+    "osqc": "委外检验",
     "ipqc": "过程检验",
     "fqc": "成品检验",
     "oqc": "出货检验",
@@ -44,13 +51,16 @@ STAGE_DISPLAY_LABELS: Dict[str, str] = {
 
 PLAN_TYPE_DISPLAY_LABELS: Dict[str, str] = {
     "incoming": "来料检验",
+    "outsource": "委外检验",
     "process": "过程检验",
     "finished": "成品检验",
     "outbound": "出货检验",
+    "patrol": "质量巡检",
 }
 
 STAGE_MODULE_KEY: Dict[str, Optional[str]] = {
     "iqc": "incoming",
+    "osqc": "outsource",
     "ipqc": "process",
     "fqc": "finished",
     "oqc": None,
@@ -71,18 +81,22 @@ async def get_quality_effective_config(tenant_id: int) -> QualityEffectiveConfig
     return {
         "stage_enabled": {
             "iqc": bool(stages.get("iqc_enabled", True)),
+            "osqc": bool(stages.get("osqc_enabled", True)),
             "ipqc": bool(stages.get("ipqc_enabled", True)),
             "fqc": bool(stages.get("fqc_enabled", True)),
             "oqc": bool(stages.get("oqc_enabled", True)),
         },
         "module_enabled": {
             "incoming": bool(q.get("incoming_inspection", True)),
+            "outsource": bool(q.get("outsource_inspection", True)),
             "process": bool(q.get("process_inspection", True)),
             "finished": bool(q.get("finished_inspection", True)),
+            "patrol": bool(q.get("quality_patrol", True)),
             "defect_handling": bool(q.get("defect_handling", True)),
         },
         "auto_create": {
             "iqc_on_purchase_receipt": bool(q.get("auto_create_iqc_on_purchase_receipt", False)),
+            "osqc_on_outsource_receipt": bool(q.get("auto_create_osqc_on_outsource_receipt", False)),
             "ipqc_on_reporting": bool(q.get("auto_create_ipqc_on_reporting", True)),
             "fqc_on_last_reporting": bool(q.get("auto_create_fqc_on_last_reporting", False)),
             "oqc_on_shipment_notice_notify": bool(q.get("auto_create_oqc_on_shipment_notice_notify", False)),
@@ -92,6 +106,9 @@ async def get_quality_effective_config(tenant_id: int) -> QualityEffectiveConfig
             "require_iqc_before_receipt_confirm": bool(q.get("require_incoming_inspection_for_receipt", False)),
             "require_iqc_before_customer_material_confirm": bool(
                 q.get("require_incoming_inspection_for_customer_material", False)
+            ),
+            "require_osqc_before_outsource_receipt_confirm": bool(
+                q.get("require_outsource_inspection_for_receipt", False)
             ),
             "require_fqc_before_finished_goods_receipt": bool(
                 q.get("require_fqc_before_finished_goods_receipt", False)
@@ -113,6 +130,11 @@ def validate_quality_business_parameters(quality_params: Dict[str, Any]) -> None
     cm_iqc_gate = bool(quality_params.get("require_incoming_inspection_for_customer_material", False))
     if not incoming and (iqc_auto or iqc_gate or cm_iqc_gate):
         raise ValidationError("未启用来料检验时，不能开启来料自动建单或收货门禁")
+    outsource = bool(quality_params.get("outsource_inspection", True))
+    osqc_auto = bool(quality_params.get("auto_create_osqc_on_outsource_receipt", False))
+    osqc_gate = bool(quality_params.get("require_outsource_inspection_for_receipt", False))
+    if not outsource and (osqc_auto or osqc_gate):
+        raise ValidationError("未启用委外检验时，不能开启委外自动建单或收货门禁")
     process = bool(quality_params.get("process_inspection", True))
     if not process and bool(quality_params.get("auto_create_ipqc_on_reporting", True)):
         raise ValidationError("未启用过程检验时，不能开启报工自动创建过程检验单")
@@ -126,6 +148,7 @@ QUALITY_INSPECTION_STAGES_CONFIG_KEY = "quality_inspection_stages"
 
 DEFAULT_STAGE_TOGGLES: Dict[str, bool] = {
     "iqc_enabled": True,
+    "osqc_enabled": True,
     "ipqc_enabled": True,
     "fqc_enabled": True,
     "oqc_enabled": True,
@@ -133,12 +156,13 @@ DEFAULT_STAGE_TOGGLES: Dict[str, bool] = {
 
 _STAGE_FLAG: Dict[str, str] = {
     "iqc": "iqc_enabled",
+    "osqc": "osqc_enabled",
     "ipqc": "ipqc_enabled",
     "fqc": "fqc_enabled",
     "oqc": "oqc_enabled",
 }
 
-InspectionStage = Literal["iqc", "ipqc", "fqc", "oqc"]
+InspectionStage = Literal["iqc", "osqc", "ipqc", "fqc", "oqc"]
 
 
 def normalize_inspection_mode(raw: Any) -> str:
@@ -206,7 +230,7 @@ def material_stages_from_legacy(
     inspection_mode: Any,
     default_inspection_plan_id: Any,
 ) -> Dict[str, Dict[str, Any]]:
-    """legacy inspection_mode + default_inspection_plan_id → IQC/FQC/OQC 同值 shim。"""
+    """legacy inspection_mode + default_inspection_plan_id → IQC/FQC/OQC 同值 shim；osqc 默认 none。"""
     mode = normalize_inspection_mode(inspection_mode)
     plan_ids = _normalize_plan_id_list(default_inspection_plan_id) if mode == "plan" else []
     policy = {
@@ -214,7 +238,11 @@ def material_stages_from_legacy(
         "plan_id": plan_ids[0] if plan_ids else None,
         "plan_ids": plan_ids,
     }
-    return {k: dict(policy) for k in MATERIAL_INSPECTION_STAGE_KEYS}
+    none_policy = {"mode": "none", "plan_id": None, "plan_ids": []}
+    out: Dict[str, Dict[str, Any]] = {}
+    for k in MATERIAL_INSPECTION_STAGE_KEYS:
+        out[k] = dict(none_policy) if k == "osqc" else dict(policy)
+    return out
 
 
 def operation_stages_from_legacy(
@@ -564,6 +592,7 @@ async def assert_master_data_inspection_stages_allowed(
         norm = normalize_material_inspection_stages(material_stages)
         checks = (
             ("iqc", "来料检验", cfg["stage_enabled"]["iqc"] and cfg["module_enabled"]["incoming"]),
+            ("osqc", "委外检验", cfg["stage_enabled"]["osqc"] and cfg["module_enabled"]["outsource"]),
             ("fqc", "成品检验", cfg["stage_enabled"]["fqc"] and cfg["module_enabled"]["finished"]),
             ("oqc", "出货检验", cfg["stage_enabled"]["oqc"]),
         )
@@ -1284,6 +1313,56 @@ async def oqc_inspection_passed_for_outbound(tenant_id: int, inspection: Any) ->
     return (
         str(getattr(inspection, "status", "") or "").strip() == "已审核"
         and getattr(inspection, "review_status", None) in _IQC_PASSED_REVIEW_STATUSES
+    )
+
+
+async def osqc_inspection_passed_for_inbound(tenant_id: int, inspection: Any) -> bool:
+    """委外检验是否满足委外收货确认条件（合格 + 已检验；需审核时另须审核通过）。"""
+    if getattr(inspection, "quality_status", None) != "合格":
+        return False
+    from infra.services.business_config_service import BusinessConfigService
+
+    audit_required = await BusinessConfigService().check_audit_required(
+        tenant_id, "outsource_inspection"
+    )
+    if not audit_required:
+        return str(getattr(inspection, "status", "") or "").strip() in _IQC_CONDUCTED_STATUSES
+    return getattr(inspection, "review_status", None) in _IQC_PASSED_REVIEW_STATUSES
+
+
+async def assert_osqc_for_outsource_receipt(
+    tenant_id: int,
+    receipt_id: int,
+    *,
+    material_id: Optional[int],
+) -> None:
+    """委外收货确认：门禁开启且物料 osqc≠none 时，要求对应委外检验合格。"""
+    from apps.kuaizhizao.models.outsource_inspection import OutsourceInspection
+    from infra.exceptions.exceptions import BusinessLogicError
+
+    cfg = await get_quality_effective_config(tenant_id)
+    if not cfg["gate"]["require_osqc_before_outsource_receipt_confirm"]:
+        return
+    if not material_id:
+        return
+    mode, _, _ = await resolve_inspection_policy(tenant_id, "osqc", material_id=int(material_id))
+    if mode == "none":
+        return
+
+    inspections = await OutsourceInspection.filter(
+        tenant_id=tenant_id,
+        outsource_receipt_id=int(receipt_id),
+        deleted_at__isnull=True,
+    ).all()
+    if not inspections:
+        raise BusinessLogicError(
+            "已启用「收货前必须委外检验」，请先创建并完成委外检验，检验合格后再确认收货"
+        )
+    for insp in inspections:
+        if await osqc_inspection_passed_for_inbound(tenant_id, insp):
+            return
+    raise BusinessLogicError(
+        "已启用「收货前必须委外检验」，相关委外检验须审核通过且质量状态为合格后才能确认收货"
     )
 
 

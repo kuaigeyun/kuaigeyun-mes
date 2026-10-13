@@ -290,7 +290,10 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
   const loadOptions = useCallback(async () => {
     setLoadingOptions(true);
     try {
-      const apiOpts: { label: string; value: string }[] = [];
+      const preferredSuffixes = (config.preferredApiCodeSuffixes || [])
+        .map((item) => String(item || '').trim().toLowerCase())
+        .filter(Boolean);
+      const apiOpts: { label: string; value: string; code: string }[] = [];
       let apiPage = 1;
       while (apiPage <= 50) {
         const res = await getAPIList({ page: apiPage, page_size: 100, is_active: true });
@@ -298,12 +301,24 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
           ...res.items.map((item) => ({
             label: `${item.name} (${item.code})`,
             value: item.uuid,
+            code: String(item.code || ''),
           })),
         );
         if (res.items.length < 100 || apiOpts.length >= res.total) break;
         apiPage += 1;
       }
-      setApiOptions(apiOpts);
+      // 单位/物料等页各自优先展示本域预置接口，避免误选同源另一条
+      if (preferredSuffixes.length) {
+        apiOpts.sort((a, b) => {
+          const aCode = a.code.toLowerCase();
+          const bCode = b.code.toLowerCase();
+          const aHit = preferredSuffixes.some((suffix) => aCode.includes(suffix)) ? 0 : 1;
+          const bHit = preferredSuffixes.some((suffix) => bCode.includes(suffix)) ? 0 : 1;
+          if (aHit !== bHit) return aHit - bHit;
+          return a.label.localeCompare(b.label, 'zh-CN');
+        });
+      }
+      setApiOptions(apiOpts.map(({ label, value }) => ({ label, value })));
 
       const dsOpts: { label: string; value: string }[] = [];
       let dsPage = 1;
@@ -326,7 +341,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
     } finally {
       setLoadingOptions(false);
     }
-  }, [messageApi, t]);
+  }, [config.preferredApiCodeSuffixes, messageApi, t]);
 
   useEffect(() => {
     if (!open) return;
