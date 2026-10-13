@@ -11,12 +11,20 @@ export type AuditWorkflowMode = 'manual' | 'auto';
 
 export type AuditActionType = 'submit' | 'withdraw' | 'approve' | 'reject' | 'revoke';
 
+export interface AuditViewerActionsLike {
+  has_my_pending_task?: boolean;
+  approve?: boolean;
+  reject?: boolean;
+  block_reason?: string | null;
+}
+
 export interface AuditStateLike {
   phase?: string;
   enabled?: boolean;
   mode?: string;
   allowed_actions?: string[];
   entity_type?: string;
+  viewer_actions?: AuditViewerActionsLike;
 }
 
 export interface AuditActionVisibility {

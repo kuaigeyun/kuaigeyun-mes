@@ -197,8 +197,22 @@ export async function deletePurchaseRequisition(id: number): Promise<void> {
   return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${id}`, { method: 'DELETE' });
 }
 
+const PURCHASE_REQUEST_AUDIT_ENTITY = 'purchase_request';
+
+/** 采购申请审核动作（与行内 UniWorkflowActions / 审批状态门控同一入口） */
+export async function uniAuditPurchaseRequisition(
+  id: number,
+  action: 'submit' | 'withdraw' | 'approve' | 'reject' | 'revoke',
+  data: Record<string, unknown> = {},
+): Promise<unknown> {
+  return apiRequest(`/core/uni-audit/${PURCHASE_REQUEST_AUDIT_ENTITY}/${id}/${action}`, {
+    method: 'POST',
+    data,
+  });
+}
+
 export async function submitPurchaseRequisition(id: number): Promise<PurchaseRequisition> {
-  return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${id}/submit`, { method: 'POST' });
+  return uniAuditPurchaseRequisition(id, 'submit') as Promise<PurchaseRequisition>;
 }
 
 export async function approvePurchaseRequisition(

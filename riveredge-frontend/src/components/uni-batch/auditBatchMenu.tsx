@@ -17,6 +17,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { ResourcePermissionGates } from '../../hooks/useResourcePermissions';
 import { batchSomeCapabilityAllowed } from '../../hooks/useDocumentCapabilities';
+import { auditFlowCapabilityOverride } from '../../utils/auditFlowViewerGate';
 import { UniBatchMenuButton, type UniBatchMenuItem } from './index';
 
 type ActionCapability = { allowed: boolean; reason?: string | null };
@@ -83,10 +84,18 @@ export function resolveBatchRecordId(
 export function pickCapability(
   record: {
     capabilities?: CapabilitiesRecord | null;
-    audit?: { allowed_actions?: string[] } | null;
+    audit?: { allowed_actions?: string[]; phase?: string; enabled?: boolean; mode?: string; viewer_actions?: unknown } | null;
   },
   key: string,
 ): ActionCapability | undefined {
+  const flowOverride = auditFlowCapabilityOverride(record, key);
+  if (flowOverride !== undefined) {
+    return {
+      allowed: flowOverride.allowed,
+      reason: flowOverride.reason ?? undefined,
+    };
+  }
+
   const cap = record.capabilities?.[key];
   if (cap != null) return cap;
 
@@ -103,7 +112,7 @@ export function defaultAuditBatchAllowed<T>(
   capabilityKey: string,
   pickRecord: (r: T) => {
     capabilities?: CapabilitiesRecord | null;
-    audit?: { allowed_actions?: string[] } | null;
+    audit?: { allowed_actions?: string[]; phase?: string; enabled?: boolean; mode?: string; viewer_actions?: unknown } | null;
   },
 ): boolean {
   return batchSomeCapabilityAllowed(records, permAllowed, (r) =>

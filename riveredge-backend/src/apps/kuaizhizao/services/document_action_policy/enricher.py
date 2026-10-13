@@ -123,6 +123,9 @@ from apps.kuaizhizao.services.document_action_policy.types import (
 )
 
 from core.services.approval.audit_capability_gate import gate_audit_allowed_actions
+from core.services.approval.audit_flow_viewer_gate import (
+    apply_viewer_actions_to_audit_and_capabilities,
+)
 
 T = TypeVar("T")
 
@@ -133,6 +136,12 @@ def _attach_capabilities_to_response(response: T, caps: Any) -> T:
     if audit is None and isinstance(response, dict):
         audit = response.get("audit")
     gated_audit = gate_audit_allowed_actions(audit, caps)
+    if gated_audit is not None and isinstance(gated_audit, dict) and gated_audit.get("viewer_actions"):
+        gated_audit, caps = apply_viewer_actions_to_audit_and_capabilities(
+            gated_audit,
+            caps,
+            gated_audit.get("viewer_actions"),
+        )
     updates: dict = {"capabilities": caps}
     if gated_audit is not None:
         updates["audit"] = gated_audit

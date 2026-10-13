@@ -84,8 +84,7 @@ import {
   updatePurchaseRequisition,
   deletePurchaseRequisition,
   submitPurchaseRequisition,
-  approvePurchaseRequisition,
-  withdrawPurchaseRequisition,
+  uniAuditPurchaseRequisition,
   withdrawPurchaseRequisitionSubmit,
   fixPurchaseRequisitionStatus,
   convertToPurchaseOrder,
@@ -103,6 +102,7 @@ import {
   type DemandComputationPurchasePullLine,
 } from '../../../services/demand-computation';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { PURCHASE_REQUISITION_WORKFLOW_PROPS } from './components/PurchaseRequisitionDetailDrawer';
 import {
   buildPurchaseRequisitionLifecycleValueEnum,
   getPurchaseRequisitionLifecycle,
@@ -265,10 +265,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   const purchaseRequisitionAuditBatchHandlers = useMemo(
     () => ({
-      submit: (id: number) => submitPurchaseRequisition(id),
+      submit: (id: number) => uniAuditPurchaseRequisition(id, 'submit'),
       withdraw: (id: number) => withdrawPurchaseRequisitionSubmit(id),
-      approve: (id: number) => approvePurchaseRequisition(id, { approved: true, review_remarks: '' }),
-      revoke: (id: number) => withdrawPurchaseRequisition(id),
+      approve: (id: number) => uniAuditPurchaseRequisition(id, 'approve'),
+      revoke: (id: number) => uniAuditPurchaseRequisition(id, 'revoke'),
     }),
     [],
   );
@@ -1657,12 +1657,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             <UniWorkflowActions {...rowActionKind('skip')}
               record={record}
               entityName={t('app.kuaizhizao.purchaseRequisition.entityName')}
-              statusField="status"
-              reviewStatusField="review_status"
-              draftStatuses={['草稿', 'draft', 'DRAFT']}
-              pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW']}
-              approvedStatuses={['已通过', '已审核', '部分转单', '全部转单', 'audited', 'approved', 'AUDITED', 'PARTIAL_CONVERTED', 'FULL_CONVERTED']}
-              rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
+              {...PURCHASE_REQUISITION_WORKFLOW_PROPS}
               theme="link"
               size="small"
               confirmMessages={{ revoke: t('app.kuaizhizao.purchaseRequisition.workflowRevokeConfirm') }}

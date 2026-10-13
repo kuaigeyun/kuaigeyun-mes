@@ -688,19 +688,11 @@ class ApprovalInstanceService:
         """
         按 entity_type + entity_id 获取审批状态（统一入口，含流程图与节点概况）。
         """
-        instances = await ApprovalInstance.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).prefetch_related("process").order_by("-created_at").limit(100)
-
-        entity_instances: List[ApprovalInstance] = []
-        for inst in instances:
-            d = inst.data or {}
-            if d.get("entity_type") == entity_type and ApprovalInstanceService._entity_ids_equal(
-                d.get("entity_id"), entity_id
-            ):
-                entity_instances.append(inst)
-
+        entity_instances = await ApprovalInstanceService._list_instances_by_entity(
+            tenant_id,
+            entity_type,
+            entity_id,
+        )
         instance = await ApprovalInstanceService._resolve_active_instance(entity_instances)
 
         process = await ApprovalInstanceService._resolve_process_for_entity_display(
@@ -724,9 +716,17 @@ class ApprovalInstanceService:
         history: List[ApprovalHistory] = []
         if entity_instances:
             if instance and instance.status == "pending":
-                await ApprovalInstanceService.bootstrap_instance_workflow(
-                    tenant_id, instance
-                )
+                try:
+                    await ApprovalInstanceService.bootstrap_instance_workflow(
+                        tenant_id, instance
+                    )
+                except NotFoundError as exc:
+                    logger.warning(
+                        "bootstrap_instance_workflow skipped for {}:{} — {}",
+                        entity_type,
+                        entity_id,
+                        exc,
+                    )
             instance_ids = [inst.id for inst in entity_instances]
             tasks = await ApprovalTask.filter(
                 tenant_id=tenant_id,
@@ -894,6 +894,84 @@ class ApprovalInstanceService:
             "has_my_pending_task": bool(viewer_actions.get("has_my_pending_task")),
             "viewer_actions": viewer_actions,
         }
+
+    @staticmethod
+    async def batch_flow_viewer_actions_for_entities(
+        tenant_id: int,
+        entity_type: str,
+        entity_ids: list[int],
+        viewer_id: Optional[int],
+    ) -> Dict[int, Dict[str, Any]]:
+        """列表/详情批量填充与 get_approval_status 同源的 viewer_actions（只读，不写待办补齐）。"""
+        from core.services.approval.approval_viewer_actions import build_flow_viewer_actions
+
+        out: Dict[int, Dict[str, Any]] = {}
+        if viewer_id is None or not entity_ids:
+            return out
+
+        id_set = {int(x) for x in entity_ids if x is not None}
+        if not id_set:
+            return out
+
+        instances = await ApprovalInstance.filter(
+            tenant_id=tenant_id,
+            status="pending",
+            deleted_at__isnull=True,
+        ).prefetch_related("process").all()
+
+        instances_by_entity: Dict[int, list] = {}
+        for inst in instances:
+            data = inst.data or {}
+            if data.get("entity_type") != entity_type:
+                continue
+            try:
+                eid = int(data.get("entity_id"))
+            except (TypeError, ValueError):
+                continue
+            if eid not in id_set:
+                continue
+            instances_by_entity.setdefault(eid, []).append(inst)
+
+        if not instances_by_entity:
+            return out
+
+        active_by_entity: Dict[int, ApprovalInstance] = {}
+        for eid, entity_instances in instances_by_entity.items():
+            active = await ApprovalInstanceService._resolve_active_instance(entity_instances)
+            if active is not None and active.status == "pending":
+                active_by_entity[eid] = active
+
+        if not active_by_entity:
+            return out
+
+        inst_ids = [int(i.id) for i in active_by_entity.values()]
+        all_tasks = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id__in=inst_ids,
+        ).order_by("-created_at").all()
+        tasks_by_inst: Dict[int, list] = {}
+        for task in all_tasks:
+            tasks_by_inst.setdefault(int(task.approval_instance_id), []).append(task)
+
+        for eid, instance in active_by_entity.items():
+            process = await ApprovalInstanceService._resolve_process_for_entity_display(
+                tenant_id, entity_type, instance
+            )
+            tasks = tasks_by_inst.get(int(instance.id), [])
+            history: list = []
+            nodes_overview: list = []
+            if process:
+                nodes_overview = await ApprovalInstanceService._build_nodes_overview(
+                    tenant_id, process, instance, tasks, history
+                )
+            viewer_actions = build_flow_viewer_actions(
+                viewer_id=int(viewer_id),
+                instance=instance,
+                tasks=tasks,
+                nodes_overview=nodes_overview,
+            )
+            out[eid] = viewer_actions
+        return out
 
     @staticmethod
     async def execute_approval(

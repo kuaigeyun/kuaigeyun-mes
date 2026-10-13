@@ -51,6 +51,7 @@ import {
 } from '@ant-design/icons';
 
 import { getApprovalStatus, type ApprovalStatusResponse } from '../../services/approvalInstance';
+import { resolveAuditFlowExecutePermission } from '../../utils/auditFlowViewerGate';
 import ApprovalFlowPreview from './ApprovalFlowPreview';
 import UniAuditAdvancedActionModal, { type AdvancedActionState } from './UniAuditAdvancedActionModal';
 import type { UniAuditAction } from './types';
@@ -637,37 +638,45 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     const flowPending =
       flowStatus?.has_instance && flowStatus.status === 'pending';
     const viewerActions = flowStatus?.viewer_actions;
-    const flowAllowsApprove =
-      viewerActions?.approve ?? flowStatus?.has_my_pending_task ?? false;
     const hasMyPendingTask =
       viewerActions?.has_my_pending_task ?? flowStatus?.has_my_pending_task ?? false;
 
     if (flowPending) {
       const caps = flowStatus.node_capabilities ?? {};
-      if (!flowAllowsApprove && !adminOpen) {
-        assigneeBlockHint =
-          viewerActions?.block_reason
-          || (() => {
-              const currentNode = (flowStatus.nodes_overview ?? []).find((n) => n.is_current);
-              const names = (currentNode?.eligible_approvers ?? [])
-                .map((u) => String(u.name || '').trim())
-                .filter(Boolean);
-              return names.length
-                ? t('components.uniAudit.notNodeAssigneeWithNames', { names: names.join('、') })
-                : t('components.uniAudit.notNodeAssignee');
-            })();
-      }
       items = items.map((item) => {
         if (item.action !== 'approve' && item.action !== 'reject') {
           return item;
         }
-        const flowOk = adminOpen || flowAllowsApprove;
-        const canExecute = item.canExecute && flowOk;
+        const flowPerm = resolveAuditFlowExecutePermission(
+          item.action === 'approve' ? 'approve' : 'reject',
+          {
+            adminBypass: adminOpen,
+            rbacAllowed: item.canExecute,
+            liveViewerActions: viewerActions ?? null,
+            flowPending: true,
+          },
+        );
+        if (!flowPerm.canExecute && item.canExecute && !assigneeBlockHint) {
+          assigneeBlockHint =
+            flowPerm.blockReason
+            || viewerActions?.block_reason
+            || (() => {
+                const currentNode = (flowStatus.nodes_overview ?? []).find((n) => n.is_current);
+                const names = (currentNode?.eligible_approvers ?? [])
+                  .map((u) => String(u.name || '').trim())
+                  .filter(Boolean);
+                return names.length
+                  ? t('components.uniAudit.notNodeAssigneeWithNames', { names: names.join('、') })
+                  : t('components.uniAudit.notNodeAssignee');
+              })();
+        }
         return {
           ...item,
-          canExecute,
+          canExecute: flowPerm.canExecute,
           disabledReason:
-            item.canExecute && !flowOk ? assigneeBlockHint : item.disabledReason,
+            item.canExecute && !flowPerm.canExecute
+              ? flowPerm.blockReason || assigneeBlockHint
+              : item.disabledReason,
         };
       });
       if ((hasMyPendingTask || adminOpen) && caps.allow_transfer) {
