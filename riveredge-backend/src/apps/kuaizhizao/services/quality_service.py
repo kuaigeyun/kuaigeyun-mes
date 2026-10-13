@@ -3357,8 +3357,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             raise BusinessLogicError("当前组织未开启来料检验，禁止从采购入库单下推来料检验")
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
         from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+        from apps.kuaizhizao.utils.stock_posting import reuse_or_begin_transaction
 
-        async with in_transaction():
+        # reuse_or_begin：与 generate_code / create_relation 同事务复用，禁止 Nested 死锁
+        async with reuse_or_begin_transaction():
             receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
             if not receipt:
                 raise NotFoundError(f"采购入库单不存在: {purchase_receipt_id}")

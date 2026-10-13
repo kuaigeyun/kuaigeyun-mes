@@ -133,7 +133,14 @@ import {
   referenceDisplayToIdOptions,
   searchReferenceDisplay,
 } from '../../../../../utils/referenceDisplay';
+import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+
+function resolveSalesReturnSnapshotName(raw: unknown): string {
+  if (typeof raw === 'string') return raw.trim();
+  if (raw == null) return '';
+  return String(raw).trim();
+}
 
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 const SALES_RETURN_LIST_PERSISTENCE_ID =
@@ -1276,6 +1283,16 @@ const SalesReturnsPage: React.FC = () => {
         standardValues.return_time && typeof standardValues.return_time.format === 'function'
           ? standardValues.return_time.format('YYYY-MM-DD')
           : standardValues.return_time;
+      const customerName = resolveSalesReturnSnapshotName(standardValues.customer_name);
+      const warehouseName = resolveSalesReturnSnapshotName(standardValues.warehouse_name);
+      if (!standardValues.customer_id || !customerName) {
+        messageApi.warning(t('app.kuaizhizao.salesReturn.selectCustomer'));
+        return;
+      }
+      if (!standardValues.warehouse_id || !warehouseName) {
+        messageApi.warning(t('app.kuaizhizao.salesReturn.selectWarehouse'));
+        return;
+      }
       let recordId: number | undefined;
       if (editingId) {
         const detail = editingDetail;
@@ -1285,9 +1302,11 @@ const SalesReturnsPage: React.FC = () => {
         }
         await warehouseApi.salesReturn.update(editingId.toString(), {
           customer_id: standardValues.customer_id,
-          customer_name: standardValues.customer_name ?? detail.customer_name,
+          customer_name:
+            customerName || resolveSalesReturnSnapshotName(detail.customer_name),
           warehouse_id: standardValues.warehouse_id,
-          warehouse_name: standardValues.warehouse_name ?? detail.warehouse_name,
+          warehouse_name:
+            warehouseName || resolveSalesReturnSnapshotName(detail.warehouse_name),
           return_time: returnTime,
           return_reason: standardValues.return_reason ?? null,
           return_type: standardValues.return_type ?? detail.return_type ?? '质量问题',
@@ -1310,6 +1329,8 @@ const SalesReturnsPage: React.FC = () => {
       } else {
         const created = await warehouseApi.salesReturn.create({
           ...standardValues,
+          customer_name: customerName,
+          warehouse_name: warehouseName,
           return_time: returnTime,
           attachments: normalizeDocumentAttachments(standardValues.attachments),
           items: itemsPayload,
@@ -2083,30 +2104,26 @@ const SalesReturnsPage: React.FC = () => {
       >
         <Row gutter={16}>
           <Col span={8}>
-            <ProFormSelect
+            <ProForm.Item
               name="customer_id"
               label={t('app.kuaizhizao.salesReturn.customer')}
-              placeholder={t('app.kuaizhizao.salesReturn.selectCustomer')}
-              required
-              request={async ({ keyWords }) => {
-                const res = await searchReferenceDisplay({
-                  resource: 'master-data:supply-chain:customer',
-                  hostResource: SALES_RETURN_RESOURCE,
-                  keyword: typeof keyWords === 'string' ? keyWords.trim() : undefined,
-                  pageSize: 20,
-                });
-                return referenceDisplayToIdOptions(res.items);
-              }}
-              debounceTime={300}
-              fieldProps={{
-                showSearch: true,
-                filterOption: false,
-                onChange: (_, option) => {
-                  formRef.current?.setFieldsValue({ customer_name: (option as any)?.label ?? '' });
-                },
-              }}
               rules={[{ required: true, message: t('app.kuaizhizao.salesReturn.selectCustomer') }]}
-            />
+            >
+              <CustomerSelectDropdown
+                hostResource={SALES_RETURN_RESOURCE}
+                placeholder={t('app.kuaizhizao.salesReturn.selectCustomer')}
+                style={{ width: '100%' }}
+                onCustomerPick={(customer) => {
+                  const name = customer
+                    ? resolveSalesReturnSnapshotName(
+                        (customer as { name?: unknown; customer_name?: unknown }).name ??
+                          (customer as { customer_name?: unknown }).customer_name,
+                      )
+                    : '';
+                  formRef.current?.setFieldsValue({ customer_name: name });
+                }}
+              />
+            </ProForm.Item>
             <ProFormText name="customer_name" hidden />
           </Col>
           <Col span={8}>

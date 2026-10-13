@@ -28,6 +28,27 @@ export function createUnitSyncConfig(): SyncFromSourceConfig {
       'FName',
       'code',
     ],
+    // 与物料同步拆开：单位编码优先绑基础单位列，绝不能抢物料 number
+    targetAliases: {
+      code: [
+        'baseunit.number',
+        'baseunit_number',
+        'measureunitid_number',
+        'measureunitid.number',
+        'number',
+        'FNumber',
+        'code',
+      ],
+      name: [
+        'baseunit.name',
+        'baseunit_name',
+        'measureunitid_name',
+        'measureunitid.name',
+        'name',
+        'FName',
+      ],
+    },
+    preferredApiCodeSuffixes: ['query_measureunits'],
     collapsePreviewToUniqueUnits: true,
     getBinding: getMaterialUnitSyncBinding,
     syncFromSource: syncMaterialUnitsFromSource,

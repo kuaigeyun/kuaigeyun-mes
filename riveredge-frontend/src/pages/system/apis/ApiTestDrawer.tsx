@@ -41,14 +41,10 @@ const JSON_PRE_STYLE: React.CSSProperties = {
 
 const UNIT_SYNC_MATERIAL_SELECT = 'number,name,baseunit.number,baseunit.name';
 
+/** 仅单位同步预置 code（query_measureunits）；禁止用名称/baseunit 推断，以免误伤物料接口测试 */
 function isCosmicUnitSyncMaterialApi(api: API): boolean {
-  const path = String(api.path || '').toLowerCase().replace(/\\/g, '/');
-  const name = String(api.name || '');
   const code = String(api.code || '').toLowerCase();
-  const materialBatch = path.includes('bd_material') && path.includes('batchquery');
-  const unitNamed =
-    name.includes('单位') || code.includes('measureunit') || code.includes('query_measureunits');
-  return materialBatch && unitNamed;
+  return code.includes('query_measureunits');
 }
 
 function buildTestRequestPreview(api: API): APITestRequest {

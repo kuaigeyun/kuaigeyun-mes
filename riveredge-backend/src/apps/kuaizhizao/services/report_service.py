@@ -4042,8 +4042,10 @@ class ReportService:
     async def get_quality_report(self, tenant_id: int, report_type: str = "quality-rate-trend", date_start: Optional[datetime] = None, date_end: Optional[datetime] = None, material_id: Optional[int] = None, *, skip: int = 0, limit: int = 100, **kwargs) -> Dict[str, Any]:
         """质量报表汇总"""
         from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+        from apps.kuaizhizao.models.outsource_inspection import OutsourceInspection
         from apps.kuaizhizao.models.process_inspection import ProcessInspection
         from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+        from apps.kuaizhizao.models.quality_patrol import QualityPatrol
         from apps.kuaizhizao.models.defect_record import DefectRecord
         from apps.kuaizhizao.models.quality_exception import QualityException
         from tortoise.functions import Sum
@@ -4109,6 +4111,71 @@ class ReportService:
                 "id",
                 "inspection_code",
                 "supplier_name",
+                "material_code",
+                "material_name",
+                "material_spec",
+                "material_unit",
+                "inspection_quantity",
+                "qualified_quantity",
+                "unqualified_quantity",
+                "inspection_result",
+                "status",
+                "inspector_name",
+                "inspection_time",
+            )
+            enriched = _inspection_rows(items)
+            return self._wrap_report_payload({
+                "data": enriched,
+                "total": total,
+                "success": True,
+                "summary": await _inspection_query_summary(query),
+            })
+        elif report_type in ["outsource-inspection-report", "outsource", "outsource_pass_rate"]:
+            query = OutsourceInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if material_id:
+                query = query.filter(material_id=material_id)
+            query = self._apply_inspection_date_filter(query, date_start, date_end)
+            query = _apply_inspection_text_filters(
+                query, extra_fields=["supplier_name", "outsource_receipt_code"]
+            )
+            total = await query.count()
+            items = await query.order_by("-inspection_time").values(
+                "id",
+                "inspection_code",
+                "supplier_name",
+                "material_code",
+                "material_name",
+                "material_spec",
+                "material_unit",
+                "inspection_quantity",
+                "qualified_quantity",
+                "unqualified_quantity",
+                "inspection_result",
+                "status",
+                "inspector_name",
+                "inspection_time",
+            )
+            enriched = _inspection_rows(items)
+            return self._wrap_report_payload({
+                "data": enriched,
+                "total": total,
+                "success": True,
+                "summary": await _inspection_query_summary(query),
+            })
+        elif report_type in ["quality-patrol-report", "patrol", "patrol_pass_rate"]:
+            query = QualityPatrol.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if material_id:
+                query = query.filter(material_id=material_id)
+            query = self._apply_inspection_date_filter(query, date_start, date_end)
+            query = _apply_inspection_text_filters(
+                query, extra_fields=["workshop_name", "work_order_code"]
+            )
+            total = await query.count()
+            items = await query.order_by("-inspection_time").values(
+                "id",
+                "inspection_code",
+                "workshop_name",
+                "work_order_code",
                 "material_code",
                 "material_name",
                 "material_spec",
@@ -4288,43 +4355,67 @@ class ReportService:
             })
         elif report_type in ["quality-rate-trend", "quality_trend", "quality_rate_trend"]:
             iqc_query = IncomingInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            osqc_query = OutsourceInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             ipqc_query = ProcessInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             fqc_query = FinishedGoodsInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            patrol_query = QualityPatrol.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
                 iqc_query = iqc_query.filter(material_id=material_id)
+                osqc_query = osqc_query.filter(material_id=material_id)
                 ipqc_query = ipqc_query.filter(material_id=material_id)
                 fqc_query = fqc_query.filter(material_id=material_id)
+                patrol_query = patrol_query.filter(material_id=material_id)
             iqc_query = self._apply_inspection_date_filter(iqc_query, date_start, date_end)
+            osqc_query = self._apply_inspection_date_filter(osqc_query, date_start, date_end)
             ipqc_query = self._apply_inspection_date_filter(ipqc_query, date_start, date_end)
             fqc_query = self._apply_inspection_date_filter(fqc_query, date_start, date_end)
+            patrol_query = self._apply_inspection_date_filter(patrol_query, date_start, date_end)
 
             iqc_rows = await iqc_query.values("inspection_time", "inspection_quantity", "qualified_quantity")
+            osqc_rows = await osqc_query.values("inspection_time", "inspection_quantity", "qualified_quantity")
             ipqc_rows = await ipqc_query.values("inspection_time", "inspection_quantity", "qualified_quantity")
             fqc_rows = await fqc_query.values("inspection_time", "inspection_quantity", "qualified_quantity")
+            patrol_rows = await patrol_query.values(
+                "inspection_time", "inspection_quantity", "qualified_quantity"
+            )
 
             iqc_buckets = self._monthly_pass_rate_buckets(iqc_rows)
+            osqc_buckets = self._monthly_pass_rate_buckets(osqc_rows)
             ipqc_buckets = self._monthly_pass_rate_buckets(ipqc_rows)
             fqc_buckets = self._monthly_pass_rate_buckets(fqc_rows)
-            all_months = sorted(set(iqc_buckets) | set(ipqc_buckets) | set(fqc_buckets))
+            patrol_buckets = self._monthly_pass_rate_buckets(patrol_rows)
+            all_months = sorted(
+                set(iqc_buckets) | set(osqc_buckets) | set(ipqc_buckets) | set(fqc_buckets) | set(patrol_buckets)
+            )
 
             stats = []
             for month in all_months:
                 iqc_b = iqc_buckets.get(month) or {}
+                osqc_b = osqc_buckets.get(month) or {}
                 ipqc_b = ipqc_buckets.get(month) or {}
                 fqc_b = fqc_buckets.get(month) or {}
+                patrol_b = patrol_buckets.get(month) or {}
                 iqc_rate = self._pass_rate_from_bucket(iqc_buckets.get(month))
+                osqc_rate = self._pass_rate_from_bucket(osqc_buckets.get(month))
                 ipqc_rate = self._pass_rate_from_bucket(ipqc_buckets.get(month))
                 fqc_rate = self._pass_rate_from_bucket(fqc_buckets.get(month))
-                stage_rates = [r for r in (iqc_rate, ipqc_rate, fqc_rate) if r is not None]
+                patrol_rate = self._pass_rate_from_bucket(patrol_buckets.get(month))
+                stage_rates = [
+                    r for r in (iqc_rate, osqc_rate, ipqc_rate, fqc_rate, patrol_rate) if r is not None
+                ]
                 stats.append({
                     "id": month,
                     "month": month,
                     "iqc_qty": float(iqc_b.get("total") or 0),
                     "iqc_rate": iqc_rate,
+                    "osqc_qty": float(osqc_b.get("total") or 0),
+                    "osqc_rate": osqc_rate,
                     "ipqc_qty": float(ipqc_b.get("total") or 0),
                     "ipqc_rate": ipqc_rate,
                     "fqc_qty": float(fqc_b.get("total") or 0),
                     "fqc_rate": fqc_rate,
+                    "patrol_qty": float(patrol_b.get("total") or 0),
+                    "patrol_rate": patrol_rate,
                     "overall_rate": round(sum(stage_rates) / len(stage_rates), 2) if stage_rates else None,
                 })
             return self._wrap_report_payload({"data": stats, "total": len(stats), "success": True})

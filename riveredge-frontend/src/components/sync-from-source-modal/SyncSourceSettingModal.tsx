@@ -302,7 +302,12 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
       setPreviewRows(previewData);
       setPreviewColumns(columns);
 
-      const merged = mergeSuggestedMapping(columns, targetFieldValues, targetToSource);
+      const merged = mergeSuggestedMapping(
+        columns,
+        targetFieldValues,
+        targetToSource,
+        config.targetAliases,
+      );
       mergeAddedKeysFromMapping(merged);
       setTargetToSource(merged);
       messageApi.success(t('components.syncFromSource.previewOk', { count: rows.length }));
@@ -380,7 +385,11 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
     });
     if (previewColumns.length > 0) {
       setTargetToSource((prev) => ({
-        ...suggestTargetToSourceMapping(previewColumns, pendingAddTargetKeys),
+        ...suggestTargetToSourceMapping(
+          previewColumns,
+          pendingAddTargetKeys,
+          config.targetAliases,
+        ),
         ...prev,
       }));
     }

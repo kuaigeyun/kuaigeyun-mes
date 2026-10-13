@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { qualityApi } from '../../../services/quality-execution';
 
-type QualityStage = 'iqc' | 'fqc' | 'oqc' | 'ipqc';
+type QualityStage = 'iqc' | 'osqc' | 'fqc' | 'oqc' | 'ipqc';
 
 type QualityMasterDataHintProps = {
   scope: 'material' | 'operation';
@@ -15,6 +15,7 @@ type QualityMasterDataHintProps = {
 
 const STAGE_HINT_KEYS: Record<QualityStage, string> = {
   iqc: 'app.kuaizhizao.quality.masterDataHint.stageIqc',
+  osqc: 'app.kuaizhizao.quality.masterDataHint.stageOsqc',
   fqc: 'app.kuaizhizao.quality.masterDataHint.stageFqc',
   oqc: 'app.kuaizhizao.quality.masterDataHint.stageOqc',
   ipqc: 'app.kuaizhizao.quality.masterDataHint.stageIpqc',
@@ -28,6 +29,7 @@ export function isQualityStageCreateEnabled(
   if (!cfg) return true;
   const map: Record<QualityStage, boolean> = {
     iqc: !!(cfg.stage_enabled?.iqc && cfg.module_enabled?.incoming),
+    osqc: !!(cfg.stage_enabled?.osqc && cfg.module_enabled?.outsource),
     ipqc: !!(cfg.stage_enabled?.ipqc && cfg.module_enabled?.process),
     fqc: !!(cfg.stage_enabled?.fqc && cfg.module_enabled?.finished),
     oqc: !!cfg.stage_enabled?.oqc,
