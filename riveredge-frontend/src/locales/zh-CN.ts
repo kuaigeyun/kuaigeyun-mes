@@ -21956,7 +21956,9 @@ export default {
   'app.master-data.units.editTitle': '编辑单位',
   'app.master-data.units.codeRequired': '请输入单位编码',
   'app.master-data.units.nameRequired': '请输入单位名称',
-  'app.master-data.units.codeFollowsNameHint': '新建时编码与名称相同，可在列表中查看编码列',
+  'app.master-data.units.codeFollowsNameHint': '快速新建时编码与名称相同',
+  'app.master-data.units.codeEditableHint':
+    '业务单据存单位名称。修改名称会同步物料与换算引用；编码仅作目录识别',
   'app.master-data.units.loadPreset': '加载预设',
   'app.master-data.units.loadPresetSuccess':
     '已加载：预设单位 {units}，字典回填 {backfill}，物料补建 {fromMaterials}，换算 {conversions}',
@@ -38133,6 +38135,14 @@ export default {
     '工单列表数量列加宽并右对齐',
   'pages.dashboard.updateLog.entries.work-order-list-quantity-column-align-r01.description':
     '数量列加宽，表头和数字都靠右，避免「20,000 吨 (T)」挤在窄列里。',
+  'pages.dashboard.updateLog.entries.material-unit-display-name-everywhere-r01.title':
+    '业务单位改存并直出单位名称',
+  'pages.dashboard.updateLog.entries.material-unit-display-name-everywhere-r01.description':
+    '物料与单据上的单位字段改为存单位目录名称，界面直接展示该字段。禁止再用编码对照名称；历史仍存编码的数据由迁移回填为名称。',
+  'pages.dashboard.updateLog.entries.material-unit-code-editable-r01.title':
+    '单位管理支持编辑单位编码',
+  'pages.dashboard.updateLog.entries.material-unit-code-editable-r01.description':
+    '编辑单位时可改编码。保存后会同步物料基础单位与换算关系中的引用，便于纠正名称与编码不一致的历史数据。',
   'pages.dashboard.updateLog.entries.work-order-related-unit-snapshot-backfill-r01.title':
     '工单相关单位快照已按物料基础单位回填',
   'pages.dashboard.updateLog.entries.work-order-related-unit-snapshot-backfill-r01.description':

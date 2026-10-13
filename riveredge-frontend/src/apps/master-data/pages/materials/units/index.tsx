@@ -101,7 +101,12 @@ const UnitsPage: React.FC = () => {
 
   const loadUnitOptions = useCallback(async () => {
     const res = await materialUnitApi.list({ skip: 0, limit: 500, is_active: true });
-    setUnitOptions(res.items.map((u) => ({ label: `${u.name}（${u.code}）`, value: u.code })));
+    setUnitOptions(
+      res.items.map((u) => {
+        const name = String(u.name || u.code || '').trim();
+        return { label: name, value: name };
+      }),
+    );
   }, []);
 
   const handleLoadPreset = async () => {
@@ -1079,12 +1084,18 @@ const UnitsPage: React.FC = () => {
         onFinish={async (values) => {
           try {
             const name = String(values.name ?? '').trim();
+            const code = String(values.code ?? '').trim() || name;
             if (!name) {
               messageApi.error(t('app.master-data.units.nameRequired'));
               return false;
             }
+            if (!code) {
+              messageApi.error(t('app.master-data.units.codeRequired'));
+              return false;
+            }
             if (unitEditingUuid) {
               await materialUnitApi.update(unitEditingUuid, {
+                code,
                 name,
                 is_active: values.is_active,
                 sort_order: values.sort_order,
@@ -1092,7 +1103,7 @@ const UnitsPage: React.FC = () => {
               });
             } else {
               await materialUnitApi.create({
-                code: name,
+                code,
                 name,
                 is_active: values.is_active ?? true,
                 sort_order: values.sort_order ?? 0,
@@ -1112,16 +1123,20 @@ const UnitsPage: React.FC = () => {
         }}
       >
         <ProFormText
+          name="code"
+          label={t('app.master-data.units.code')}
+          rules={[{ required: true, message: t('app.master-data.units.codeRequired') }]}
+          fieldProps={{ maxLength: 50 }}
+          extra={t('app.master-data.units.codeEditableHint')}
+        />
+        <ProFormText
           name="name"
           label={t('app.master-data.units.name')}
           rules={[{ required: true, message: t('app.master-data.units.nameRequired') }]}
-          extra={
-            unitEditingUuid ? undefined : t('app.master-data.units.codeFollowsNameHint')
-          }
         />
         <ProFormDigit name="sort_order" label={t('app.master-data.units.sortOrder')} min={0} />
-        <ProFormSwitch name="is_active" label={t('common.status')} />
         <ProFormTextArea name="description" label={t('common.remark')} />
+        <ProFormSwitch name="is_active" label={t('common.status')} />
       </FormModalTemplate>
 
       <FormModalTemplate

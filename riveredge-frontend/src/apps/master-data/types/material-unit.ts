@@ -23,7 +23,7 @@ export interface MaterialUnitCreate {
   description?: string | null;
 }
 
-export type MaterialUnitUpdate = Partial<Omit<MaterialUnitCreate, 'code'>>;
+export type MaterialUnitUpdate = Partial<MaterialUnitCreate>;
 
 export interface MaterialUnitConversion {
   id: number;

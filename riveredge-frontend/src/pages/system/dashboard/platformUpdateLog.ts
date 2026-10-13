@@ -44,6 +44,20 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'material-unit-display-name-everywhere-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-unit-display-name-everywhere-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.material-unit-display-name-everywhere-r01.description',
+  },
+  {
+    id: 'material-unit-code-editable-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-unit-code-editable-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.material-unit-code-editable-r01.description',
+  },
+  {
     id: 'work-order-related-unit-snapshot-backfill-r01',
     date: '2026-10-13',
     type: 'fix',

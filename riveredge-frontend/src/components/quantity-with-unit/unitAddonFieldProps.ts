@@ -1,12 +1,9 @@
-import { resolveMaterialUnitLabel } from '../../utils/materialUnitDisplay';
-
-/** ProFormDigit / InputNumber 数量字段右侧单位展示 */
+/** ProFormDigit / InputNumber 数量字段右侧单位（业务字段直出名称） */
 export function unitAddonFieldProps(
-  unitCode: unknown,
-  unitLabelMap?: Record<string, string>,
+  unit: unknown,
+  _unitLabelMap?: Record<string, string>,
 ): { suffix?: string } {
-  const raw = String(unitCode ?? '').trim();
+  const raw = String(unit ?? '').trim();
   if (!raw) return {};
-  const label = unitLabelMap ? resolveMaterialUnitLabel(raw, unitLabelMap) : raw;
-  return { suffix: label || raw };
+  return { suffix: raw };
 }

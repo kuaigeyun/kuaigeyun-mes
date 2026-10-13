@@ -19,7 +19,6 @@ import { materialGroupApi } from '../../apps/master-data/services/material';
 import type { Material } from '../../apps/master-data/types/material';
 import { SecureImage } from '../secure-image';
 import { UniTableStackedPrimaryCell } from '../uni-table/stackedPrimaryColumn';
-import { getMaterialUnitDisplayMapShared } from '../../utils/materialUnitDisplay';
 import type { UniMaterialBatchPickerProps } from './types';
 import {
   fetchBatchMaterialHasBom,
@@ -84,7 +83,6 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   const [groupId, setGroupId] = useState<number | undefined>(undefined);
   const [sourceType, setSourceType] = useState<string | undefined>(undefined);
   const [groupTree, setGroupTree] = useState<MaterialGroupTreeNode[]>([]);
-  const [unitsMap, setUnitsMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<Material[]>([]);
   const [page, setPage] = useState(1);
@@ -100,15 +98,6 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
     const n = Number(warehouseId);
     return Number.isFinite(n) && n > 0 ? n : undefined;
   }, [warehouseId]);
-
-  const loadUnits = useCallback(async () => {
-    try {
-      const map = await getMaterialUnitDisplayMapShared();
-      setUnitsMap(map);
-    } catch (error) {
-      console.error('Failed to load material unit catalog:', error);
-    }
-  }, []);
 
   const loadTree = useCallback(async () => {
     try {
@@ -229,8 +218,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   useEffect(() => {
     if (!open) return;
     void loadTree();
-    void loadUnits();
-  }, [open, loadTree, loadUnits]);
+  }, [open, loadTree]);
 
   /** 打开弹窗：重置筛选与选中；关闭时取消在途请求 */
   useEffect(() => {
@@ -415,7 +403,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         width: 64,
         render: (_, r) => {
           const val = String(getMaterialField(r as Record<string, unknown>, 'baseUnit') ?? '');
-          return unitsMap[val] || val || '-';
+          return val || '-';
         },
       },
       {
@@ -495,7 +483,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         },
       },
     ],
-    [t, unitsMap, bomMap, inventoryMap, indicatorsLoading],
+    [t, bomMap, inventoryMap, indicatorsLoading],
   );
 
   const handleOk = () => {

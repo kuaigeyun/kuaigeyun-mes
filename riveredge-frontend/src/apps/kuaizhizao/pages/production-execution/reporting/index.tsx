@@ -946,7 +946,9 @@ const ReportingPage: React.FC = () => {
         if (rq > rem + 1e-9) {
           messageApi.warning(
             t('apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit', {
-              max: reportSelectedWorkOrder?.product_unit ? `${rem} ${reportSelectedWorkOrder.product_unit}` : rem,
+              max: reportSelectedWorkOrder?.product_unit
+                ? `${rem} ${reportSelectedWorkOrder.product_unit}`
+                : rem,
             }),
           )
           return

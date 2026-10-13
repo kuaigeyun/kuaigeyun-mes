@@ -1,9 +1,4 @@
-import React, { useEffect, useState } from 'react';
-
-import {
-  getMaterialUnitDisplayMapShared,
-  resolveMaterialUnitLabel,
-} from '../../utils/materialUnitDisplay';
+import React from 'react';
 
 export interface MaterialUnitLabelProps {
   value?: string | null;
@@ -15,34 +10,20 @@ function coerceUnitRaw(value: unknown): string {
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return String(value).trim();
   }
-  // ProTable 误把已渲染 dom 传入时勿 String(ReactNode) → [object Object]
   return '';
 }
 
-/** 单位 code → 主数据名称（替代 DictionaryLabel MATERIAL_UNIT） */
+/**
+ * 展示业务字段中的单位文案。
+ * 真源：写入时即为单位目录 name；禁止在此做 code→name 映射。
+ */
 export const MaterialUnitLabel: React.FC<MaterialUnitLabelProps> = ({
   value,
   emptyText = '-',
 }) => {
-  const [map, setMap] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    getMaterialUnitDisplayMapShared()
-      .then((m) => {
-        if (!cancelled) setMap(m);
-      })
-      .catch(() => {
-        if (!cancelled) setMap({});
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const raw = coerceUnitRaw(value);
   if (!raw) return <>{emptyText}</>;
-  return <>{resolveMaterialUnitLabel(raw, map) || emptyText}</>;
+  return <>{raw}</>;
 };
 
 export default MaterialUnitLabel;

@@ -6,6 +6,7 @@ import math
 from typing import Any, Optional
 
 from tortoise.expressions import Q
+from tortoise.transactions import in_transaction
 
 from apps.master_data.constants.unit_presets import SYSTEM_CONVERSION_PRESETS, SYSTEM_UNIT_PRESETS
 from apps.master_data.models.material import Material
@@ -36,6 +37,62 @@ def _actor_fields(user: Optional[User], *, creating: bool) -> dict[str, Any]:
 
 def _normalize_code(code: str) -> str:
     return str(code or "").strip()
+
+
+def _rewrite_units_json_token(units: Any, old_code: str, new_code: str) -> Optional[dict[str, Any]]:
+    """物料 units JSON 内旧编码替换为新编码；无变更返回 None。"""
+    if not isinstance(units, dict):
+        return None
+    old = _normalize_code(old_code)
+    new = _normalize_code(new_code)
+    if not old or old == new:
+        return None
+
+    changed = False
+    out: dict[str, Any] = dict(units)
+
+    arr = units.get("units")
+    if isinstance(arr, list):
+        new_arr: list[Any] = []
+        for elem in arr:
+            if isinstance(elem, dict):
+                item = dict(elem)
+                if _normalize_code(item.get("unit")) == old:
+                    item["unit"] = new
+                    changed = True
+                new_arr.append(item)
+            elif isinstance(elem, str) and _normalize_code(elem) == old:
+                new_arr.append(new)
+                changed = True
+            else:
+                new_arr.append(elem)
+        out["units"] = new_arr
+
+    scenarios = units.get("scenarios")
+    if isinstance(scenarios, dict):
+        new_scenarios: dict[str, Any] = {}
+        for key, value in scenarios.items():
+            if _normalize_code(value) == old:
+                new_scenarios[key] = new
+                changed = True
+            else:
+                new_scenarios[key] = value
+        out["scenarios"] = new_scenarios
+
+    for key in (
+        "unit",
+        "baseUnit",
+        "base_unit",
+        "purchaseUnit",
+        "purchase_unit",
+        "stockUnit",
+        "stock_unit",
+    ):
+        if _normalize_code(units.get(key)) == old:
+            out[key] = new
+            changed = True
+
+    return out if changed else None
 
 
 def _collect_unit_tokens_from_material(*, base_unit: Any, units: Any) -> list[str]:
@@ -171,6 +228,65 @@ class MaterialUnitService:
         )
 
     @staticmethod
+    async def _cascade_unit_code_rename(
+        tenant_id: int,
+        old_code: str,
+        new_code: str,
+    ) -> None:
+        """编码变更后同步换算与物料引用（单据快照不改写）。"""
+        old = _normalize_code(old_code)
+        new = _normalize_code(new_code)
+        if not old or old == new:
+            return
+
+        # 换算唯一键冲突：新编码已有同向换算对则拒绝
+        from_rows = await MaterialUnitConversion.filter(
+            tenant_id=tenant_id, from_unit_code=old, deleted_at=None
+        ).all()
+        for conv in from_rows:
+            clash = await MaterialUnitConversion.filter(
+                tenant_id=tenant_id,
+                from_unit_code=new,
+                to_unit_code=conv.to_unit_code,
+                deleted_at=None,
+            ).exists()
+            if clash:
+                raise ValidationError(
+                    f"无法改编码：已存在换算 {new} → {conv.to_unit_code}"
+                )
+        to_rows = await MaterialUnitConversion.filter(
+            tenant_id=tenant_id, to_unit_code=old, deleted_at=None
+        ).all()
+        for conv in to_rows:
+            clash = await MaterialUnitConversion.filter(
+                tenant_id=tenant_id,
+                from_unit_code=conv.from_unit_code,
+                to_unit_code=new,
+                deleted_at=None,
+            ).exists()
+            if clash:
+                raise ValidationError(
+                    f"无法改编码：已存在换算 {conv.from_unit_code} → {new}"
+                )
+
+        for conv in from_rows:
+            await conv.update_from_dict({"from_unit_code": new}).save()
+        for conv in to_rows:
+            await conv.update_from_dict({"to_unit_code": new}).save()
+
+        await Material.filter(
+            tenant_id=tenant_id, base_unit=old, deleted_at=None
+        ).update(base_unit=new)
+
+        materials = await Material.filter(
+            tenant_id=tenant_id, deleted_at=None
+        ).exclude(units=None).all()
+        for material in materials:
+            rewritten = _rewrite_units_json_token(material.units, old, new)
+            if rewritten is not None:
+                await material.update_from_dict({"units": rewritten}).save()
+
+    @staticmethod
     async def update_unit(
         tenant_id: int,
         unit_uuid: str,
@@ -180,17 +296,51 @@ class MaterialUnitService:
     ) -> MaterialUnit:
         row = await MaterialUnitService.get_by_uuid(tenant_id, unit_uuid)
         patch: dict[str, Any] = {}
+        old_code = row.code
+        old_name = row.name
+        new_code: Optional[str] = None
+        new_name: Optional[str] = None
+
+        if "code" in data and data["code"] is not None:
+            new_code = _normalize_code(data["code"])
+            if not new_code:
+                raise ValidationError("单位编码不能为空")
+            if len(new_code) > 50:
+                raise ValidationError("单位编码不能超过 50 个字符")
+            if new_code != old_code:
+                exists = await MaterialUnit.filter(
+                    tenant_id=tenant_id, code=new_code, deleted_at=None
+                ).exclude(id=row.id).exists()
+                if exists:
+                    raise ValidationError(f"单位编码已存在: {new_code}")
+                patch["code"] = new_code
+
         if "name" in data and data["name"] is not None:
-            patch["name"] = _normalize_code(data["name"]) or row.name
+            new_name = _normalize_code(data["name"]) or row.name
+            patch["name"] = new_name
         if "is_active" in data and data["is_active"] is not None:
             patch["is_active"] = bool(data["is_active"])
         if "sort_order" in data and data["sort_order"] is not None:
             patch["sort_order"] = int(data["sort_order"])
         if "description" in data:
             patch["description"] = data["description"]
-        if patch:
-            patch.update(_actor_fields(user, creating=False))
+
+        if not patch:
+            return row
+
+        patch.update(_actor_fields(user, creating=False))
+        async with in_transaction():
             await row.update_from_dict(patch).save()
+            # 业务字段以名称为真源；名称变更须同步物料/换算/快照
+            if new_name and new_name != old_name:
+                await MaterialUnitService._cascade_unit_code_rename(
+                    tenant_id, old_name, new_name
+                )
+            # 编码变更：清理仍引用旧编码的遗留行（迁移后应极少）
+            if new_code and new_code != old_code:
+                await MaterialUnitService._cascade_unit_code_rename(
+                    tenant_id, old_code, new_code
+                )
         return await MaterialUnitService.get_by_uuid(tenant_id, unit_uuid)
 
     @staticmethod

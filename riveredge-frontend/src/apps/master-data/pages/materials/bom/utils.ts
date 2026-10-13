@@ -615,7 +615,6 @@ function approvalStatusLabel(
 }
 
 type BomExportFlatOptions = {
-  unitValueToLabel?: Record<string, string>;
   approvalStatusLabels?: Record<string, string>;
   issueMethodLabels?: Record<string, string>;
   yesLabel?: string;
@@ -671,11 +670,10 @@ function buildBomExportFlatRow(
     String(item.componentCode ?? item.component_code ?? '').trim() || materialCodeOf(component);
   const componentName = String(component?.name ?? '').trim();
   const componentSpec = String(component?.specification ?? '').trim();
-  const unitMap = options.unitValueToLabel ?? {};
   const yes = options.yesLabel ?? '是';
   const no = options.noLabel ?? '否';
   const unitRaw = String(item.unit ?? '').trim();
-  const unit = unitRaw ? unitMap[unitRaw] || unitRaw : '';
+  const unit = unitRaw;
   const wasteRaw = item.wasteRate ?? item.waste_rate;
   const wasteRate = wasteRaw == null || wasteRaw === '' ? 0 : Number(wasteRaw);
   const isRequired = item.isRequired ?? item.is_required;
@@ -701,7 +699,7 @@ function buildBomExportFlatRow(
     remark: String(item.remark ?? item.description ?? '').trim(),
     materialName: parentName,
     specification: parentSpec,
-    baseUnit: parentBaseUnit ? unitMap[parentBaseUnit] || parentBaseUnit : '',
+    baseUnit: parentBaseUnit,
     processRouteCode: parentRouteCode,
     processRouteName: parentRouteName,
   };

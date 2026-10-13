@@ -4,9 +4,10 @@
  * 单据 status 由协作区生命周期展示，基本信息只保留质量结果类徽章。
  */
 
+import React from 'react';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
-import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
+import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import {
   renderQualityQualityStatusTag,
   renderQualityResultTag,
@@ -33,8 +34,12 @@ export function buildQualityInspectionDetailMaterialColumns<T extends Record<str
 export function buildQualityInspectionDetailQuantityStatusColumns<T extends Record<string, unknown>>(
   t: TFunction,
 ): ProDescriptionsItemProps<T>[] {
-  const renderQtyWithUnit = (qty: unknown, record: T) =>
-    formatQuantityWithUnit(qty, (record as { material_unit?: string }).material_unit);
+  const renderQtyWithUnit = (qty: unknown, record: T) => (
+    <QuantityWithUnitDisplay
+      quantity={qty}
+      unit={(record as { material_unit?: string }).material_unit}
+    />
+  );
 
   return [
     {

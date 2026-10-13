@@ -369,7 +369,6 @@ import {
 } from '../../../../../utils/materialScenarioUnit'
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay'
 import type { Material } from '../../../../master-data/types/material'
-import { useMaterialUnitOptions } from '../../../../master-data/hooks/useMaterialUnitOptions'
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate'
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar'
@@ -1959,8 +1958,6 @@ const WorkOrdersPage: React.FC = () => {
   } | null>(null)
   const [formProductMaterial, setFormProductMaterial] = useState<Material | null>(null)
   // 与物料档案基础单位下拉同一套：展示单位名称，不把单位编码原样拼进标题
-  const { valueToLabel: materialUnitLabelByCode, isFetched: materialUnitCatalogFetched } =
-    useMaterialUnitOptions()
   const [completeTrackingModalOpen, setCompleteTrackingModalOpen] = useState(false)
   const [completeTrackingLoading, setCompleteTrackingLoading] = useState(false)
   const [completeTrackingWorkOrder, setCompleteTrackingWorkOrder] = useState<WorkOrder | null>(null)
@@ -9757,11 +9754,6 @@ const WorkOrdersPage: React.FC = () => {
           label={(() => {
             const code = String(formProductMaterial?.baseUnit ?? '').trim()
             if (!code) return t('app.kuaizhizao.workOrder.colPlannedQty')
-            const name = materialUnitLabelByCode[code]
-            if (name) {
-              return `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${name}）`
-            }
-            if (!materialUnitCatalogFetched) return t('app.kuaizhizao.workOrder.colPlannedQty')
             return `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${code}）`
           })()}
           placeholder={t('app.kuaizhizao.workOrder.formEnter')}

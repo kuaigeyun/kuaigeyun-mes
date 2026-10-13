@@ -22,7 +22,6 @@ import {
   KUAICAIWU_PURCHASE_INVOICE_FIELD_RESOURCE as PI,
   KUAICAIWU_PAYMENT_FIELD_RESOURCE as PAY,
 } from '../../constants/fieldPermissionResources';
-import { getMaterialUnitDisplayMapShared, resolveMaterialUnitLabel } from '../../utils/materialUnitDisplay';
 import { getStatusLabel } from '../../apps/kuaizhizao/constants/documentStatus';
 import { getDemandBusinessModeLabel } from '../../apps/kuaizhizao/utils/businessMode';
 import { getDemandTypeLabel } from '../../apps/kuaizhizao/utils/demandType';
@@ -177,9 +176,8 @@ function briefAmount(resource: string, fieldName: string, value: unknown): React
 }
 
 async function loadBrief(documentType: string, documentId: number, t: TFunction): Promise<BriefModel> {
-  const unitMap = await getMaterialUnitDisplayMapShared();
-  const unitCell = (code: unknown) => {
-    const s = resolveMaterialUnitLabel(code, unitMap);
+  const unitCell = (unit: unknown) => {
+    const s = String(unit ?? '').trim();
     return s === '' ? '—' : s;
   };
 
