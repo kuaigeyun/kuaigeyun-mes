@@ -88,7 +88,7 @@ function inferResourcePrefix(apiPrefix?: string): string {
   }
   if (prefix.includes('/apps/kuaizhizao/sales/order-changes')) return 'kuaizhizao:sales-order-change';
   if (prefix.includes('/apps/kuaizhizao/purchase/orders')) return 'kuaizhizao:purchase-order';
-  if (prefix.includes('/apps/kuaizhizao/purchase/requisitions')) return 'kuaizhizao:purchase-request';
+  if (prefix.includes('/apps/kuaizhizao/purchase/requisitions')) return 'kuaizhizao:purchase-requisition';
   if (prefix.includes('/apps/kuaizhizao/purchase/inquiries')) return 'kuaizhizao:purchase-inquiry';
   if (prefix.includes('/apps/kuaizhizao/purchase/order-changes')) return 'kuaizhizao:purchase-order-change';
   if (prefix.includes('/apps/kuaizhizao/plan/demands')) return 'kuaizhizao:demand';
@@ -117,7 +117,7 @@ function inferResourceByNodeKey(nodeKey?: string): string {
     sales_forecast: 'kuaizhizao:sales-forecast',
     sales_order_change: 'kuaizhizao:sales-order-change',
     purchase_order: 'kuaizhizao:purchase-order',
-    purchase_request: 'kuaizhizao:purchase-request',
+    purchase_request: 'kuaizhizao:purchase-requisition',
     purchase_inquiry: 'kuaizhizao:purchase-inquiry',
     purchase_order_change: 'kuaizhizao:purchase-order-change',
     demand: 'kuaizhizao:demand',

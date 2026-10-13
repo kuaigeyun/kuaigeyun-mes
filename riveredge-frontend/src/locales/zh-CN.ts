@@ -38110,6 +38110,10 @@ export default {
     '修复销项发票切换含税金额分币价差',
   'pages.dashboard.updateLog.entries.sales-invoice-tax-amount-cents-math.description':
     '开票金额互算改为分位整数（与后端价税拆分一致），避免 JS 浮点把 1769911.50×1.13 算成 1999999.99；切换含税后与可开票合计对齐，含税录入仍以价税合计为真源。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-uni-audit-resource-fix-r01.title':
+    '修复采购申请审核误报权限不足',
+  'pages.dashboard.updateLog.entries.purchase-requisition-uni-audit-resource-fix-r01.description':
+    'manifest.audit 中采购申请 resource 与模块权限 kuaizhizao:purchase-requisition 对齐，uni-audit 不再校验错误的 purchase-request 前缀导致 403。',
   'pages.dashboard.updateLog.entries.approval-status-viewer-import-fix-r01.title':
     '修复打开审核弹窗审批状态 500',
   'pages.dashboard.updateLog.entries.approval-status-viewer-import-fix-r01.description':

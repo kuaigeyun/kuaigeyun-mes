@@ -4384,7 +4384,7 @@
     {
       "node_key": "purchase_request",
       "entity_type": "purchase_request",
-      "resource": "kuaizhizao:purchase-request",
+      "resource": "kuaizhizao:purchase-requisition",
       "name": "采购申请审核",
       "template": "simple",
       "config_category": "procurement",
