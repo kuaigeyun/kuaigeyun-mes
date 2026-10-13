@@ -2890,7 +2890,7 @@ export default {
   'app.kuaiems.menu.group.tool-docs': '工装单据',
   'app.kuaiems.menu.group.tool-reports': '工装报表',
   'app.kuaiems.menu.group.measuring-instrument': '计量器具',
-  'app.kuaiems.menu.group.measuring-instrument-basic-data': '基础资料',
+  'app.kuaiems.menu.group.measuring-instrument-basic-data': '计量资料',
   'app.kuaiems.menu.group.measuring-instrument-docs': '计量单据',
   'app.kuaiems.menu.group.measuring-instrument-reports': '计量报表',
   'app.kuaizhizao.menu.measuring-instruments.ledger': '计量器具台账',
@@ -6189,7 +6189,7 @@ export default {
   'app.kuaiai.hub.cap.knowDesc': 'SOP 与知识语料 RAG',
   'app.kuaiai.hub.cap.actDesc': '人审后 Agent 执行',
   'app.kuaiai.hub.cap.bridge': 'KU-Bridge 外部 Agent',
-  'app.kuaiai.hub.cap.bridgeDesc': '实验室：WorkBuddy 等外部 Agent 经 MCP 只读访问生产数据',
+  'app.kuaiai.hub.cap.bridgeDesc': '实验室外部 Agent 只读访问生产数据',
   'app.kuaiai.hub.labBadge': '实验室',
   'app.kuaiai.hub.tryIt': '去体验',
   'app.kuaiai.catalog.status.ready': '已就绪',
@@ -38169,6 +38169,54 @@ export default {
     '工单列表数量列加宽并右对齐',
   'pages.dashboard.updateLog.entries.work-order-list-quantity-column-align-r01.description':
     '数量列加宽，表头和数字都靠右，避免「20,000 吨 (T)」挤在窄列里。',
+  'pages.dashboard.updateLog.entries.kuaiai-hub-load-perf-r01.title':
+    '能力矩阵加载更快',
+  'pages.dashboard.updateLog.entries.kuaiai-hub-load-perf-r01.description':
+    '能力矩阵改为能力卡与调用统计分路加载；去掉重复统计与首屏图表大包；Pulse 异常建议数改为后台补齐，进入页面可更快看到内容。',
+  'pages.dashboard.updateLog.entries.kuaiai-agents-mascot-1x1-r01.title':
+    '智能体库形象图改为正方形',
+  'pages.dashboard.updateLog.entries.kuaiai-agents-mascot-1x1-r01.description':
+    '智能体库卡片左侧小人形象统一为 1:1 比例，不再随卡片高度被拉成竖长条。',
+  'pages.dashboard.updateLog.entries.kuaiai-hub-act-card-offline-r01.title':
+    'KU-AI 能力矩阵去掉可信执行卡片',
+  'pages.dashboard.updateLog.entries.kuaiai-hub-act-card-offline-r01.description':
+    '能力矩阵不再展示「可信执行」卡片；人审后执行仍由助手提案与权限门控完成，不单独占矩阵位。',
+  'pages.dashboard.updateLog.entries.kuaiai-hub-mascot-avatar-r01.title':
+    'KU-AI 能力矩阵机器人改为头像位',
+  'pages.dashboard.updateLog.entries.kuaiai-hub-mascot-avatar-r01.description':
+    '能力矩阵将大图机器人改为圆形头像，与四个指标卡同一行展示；能力卡片区改为通栏网格。',
+  'pages.dashboard.updateLog.entries.kuaiai-governance-menu-order-r01.title':
+    'KU-AI 智能治理菜单调整顺序',
+  'pages.dashboard.updateLog.entries.kuaiai-governance-menu-order-r01.description':
+    '智能治理侧栏将「模型设置」调整到「知识语料」之前。',
+  'pages.dashboard.updateLog.entries.kuaiai-hub-charts-layout-r01.title':
+    'KU-AI 能力矩阵调用图表并排与配色',
+  'pages.dashboard.updateLog.entries.kuaiai-hub-charts-layout-r01.description':
+    '能力矩阵调用分析：每日趋势与能力分布改为一行两图；折线改为平滑曲线，柱状图按能力分色。',
+  'pages.dashboard.updateLog.entries.kuaiai-trust-offline-r01.title':
+    'KU-AI 信任中心功能下线',
+  'pages.dashboard.updateLog.entries.kuaiai-trust-offline-r01.description':
+    '智能治理侧栏与能力矩阵不再提供「信任中心」；相关页面与路由已移除。人审执行权限与助手提案能力仍保留。',
+  'pages.dashboard.updateLog.entries.kuaiai-pulse-offline-r01.title':
+    'KU-AI 异常感知功能下线',
+  'pages.dashboard.updateLog.entries.kuaiai-pulse-offline-r01.description':
+    '智能运营侧栏与能力矩阵不再提供「异常感知」；相关页面与路由已移除。助手侧异常摘要工具仍保留。',
+  'pages.dashboard.updateLog.entries.kuaiems-measuring-basic-data-label-r01.title':
+    '计量器具分组改为计量资料',
+  'pages.dashboard.updateLog.entries.kuaiems-measuring-basic-data-label-r01.description':
+    '快设备侧栏「计量器具」下分组文案由「基础资料」改为「计量资料」，与设备资料、模具资料、工装资料命名一致。',
+  'pages.dashboard.updateLog.entries.kuaiai-insights-merge-hub-r01.title':
+    'KU-AI 调用分析并入能力矩阵',
+  'pages.dashboard.updateLog.entries.kuaiai-insights-merge-hub-r01.description':
+    '调用趋势、能力分布与最近动态改在「能力矩阵」页内查看；智能治理下不再单独显示「调用分析」菜单。',
+  'pages.dashboard.updateLog.entries.prod-exec-reporting-stats-menu-order-r01.title':
+    '生产执行菜单报工统计与异常管理对调',
+  'pages.dashboard.updateLog.entries.prod-exec-reporting-stats-menu-order-r01.description':
+    '生产执行侧栏将「报工统计」调整到「异常管理」之前，便于从报工管理进入统计查看。',
+  'pages.dashboard.updateLog.entries.inventory-qty-unit-column-align-r01.title':
+    '即时库存数量与单位列对齐',
+  'pages.dashboard.updateLog.entries.inventory-qty-unit-column-align-r01.description':
+    '即时库存列表：单位只在「单位」列展示并左对齐；「库存数量」只显示数字并右对齐，不再在数量旁重复拼接单位，避免长短单位把数字列顶得参差不齐。',
   'pages.dashboard.updateLog.entries.material-unit-display-name-everywhere-r01.title':
     '业务单位改存并直出单位名称',
   'pages.dashboard.updateLog.entries.material-unit-display-name-everywhere-r01.description':

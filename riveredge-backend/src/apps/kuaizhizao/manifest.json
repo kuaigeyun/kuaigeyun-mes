@@ -543,9 +543,19 @@
             "permission": "kuaizhizao:production-execution-packing-binding:read"
           },
           {
+            "title": "app.kuaizhizao.menu.production-execution.reporting.statistics",
+            "path": "/apps/kuaizhizao/production-execution/reporting/statistics",
+            "icon": "chartBar",
+            "sort_order": 9,
+            "meta": {
+              "module": "production"
+            },
+            "permission": "kuaizhizao:production-execution-reporting-statistics:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.production-execution.exception-management",
             "icon": "alert-circle",
-            "sort_order": 9,
+            "sort_order": 10,
             "meta": {
               "module": "production"
             },
@@ -601,16 +611,6 @@
                 "permission": "kuaizhizao:production-execution-exception-statistics:read"
               }
             ]
-          },
-          {
-            "title": "app.kuaizhizao.menu.production-execution.reporting.statistics",
-            "path": "/apps/kuaizhizao/production-execution/reporting/statistics",
-            "icon": "chartBar",
-            "sort_order": 10,
-            "meta": {
-              "module": "production"
-            },
-            "permission": "kuaizhizao:production-execution-reporting-statistics:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.reports",
