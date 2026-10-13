@@ -3585,7 +3585,7 @@ export default {
   'app.ind-relay.autoReport.processOpName': '工序名称',
   'app.ind-relay.autoReport.autoClear': '自动清零',
   'app.ind-relay.autoReport.autoClearTip':
-    '开启后，自动报工成功会按设备连接里的发送/回调 MQTT 自动下发清零，无需在此再配主题',
+    '开启后，自动报工成功且工单已结束时，才按设备连接里的发送/回调 MQTT 自动下发清零；手动清零不受影响',
   'app.ind-relay.autoReport.dispatchType': '下发类型',
   'app.ind-relay.autoReport.dispatchTypeAuto': '自动',
   'app.ind-relay.autoReport.dispatchTypeManual': '手动',
@@ -31598,6 +31598,10 @@ export default {
     '设备状态 MQTT 无感刷新：设备连接与台账联动',
   'pages.dashboard.updateLog.entries.kuaiiot-device-status-realtime-r01.description':
     '快数采入站后实时推送：设备连接「最后上报/在线」与设备台账「设备状态」无需手动刷新即可更新。绑定仍在设备连接新建/编辑中选择外部设备 ID（可改）并关联台账。',
+  'pages.dashboard.updateLog.entries.iot-auto-clear-after-work-order-end-r01.title':
+    '自动报工清零改为工单结束后才下发',
+  'pages.dashboard.updateLog.entries.iot-auto-clear-after-work-order-end-r01.description':
+    '开启自动清零后，须报工成功且对应工单状态为已完成才会下发 MQTT 清零；工单未结束会记「清零跳过」。设备页手动清零不受影响。',
   'pages.dashboard.updateLog.entries.iot-connection-direction-advanced-search-r01.title':
     '接入配置方向筛选改到高级搜索',
   'pages.dashboard.updateLog.entries.iot-connection-direction-advanced-search-r01.description':

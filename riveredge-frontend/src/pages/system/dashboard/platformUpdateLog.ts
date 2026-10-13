@@ -44,6 +44,15 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'iot-auto-clear-after-work-order-end-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.iot-auto-clear-after-work-order-end-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.iot-auto-clear-after-work-order-end-r01.description',
+  },
+  {
     id: 'iot-connection-direction-advanced-search-r01',
     date: '2026-10-13',
     type: 'improvement',
