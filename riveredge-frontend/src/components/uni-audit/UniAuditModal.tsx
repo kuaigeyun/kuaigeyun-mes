@@ -54,7 +54,8 @@ import { getApprovalStatus, type ApprovalStatusResponse } from '../../services/a
 import ApprovalFlowPreview from './ApprovalFlowPreview';
 import UniAuditAdvancedActionModal, { type AdvancedActionState } from './UniAuditAdvancedActionModal';
 import type { UniAuditAction } from './types';
-import { useGlobalStore } from '../../stores';
+import { getSessionCurrentUser } from '../../utils/sessionCurrentUser';
+import { isAdminBypass, resolveUserForMenuPermission } from '../../utils/permission';
 import { formatDateTimeBySiteSetting } from '../../utils/format';
 import { useTranslation } from 'react-i18next';
 
@@ -626,51 +627,56 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
   const [advancedAction, setAdvancedAction] = useState<AdvancedActionState | null>(null);
 
-  const currentUserId = useGlobalStore((s) => {
-    const u = s.currentUser as { id?: number; user_id?: number } | null;
-    return u?.id ?? u?.user_id ?? null;
-  });
+  const sessionUser = resolveUserForMenuPermission(getSessionCurrentUser());
+  const adminOpen = isAdminBypass(sessionUser);
+  const currentUserId = sessionUser?.id ?? null;
 
   const { effectiveHubActions, flowAssigneeBlockHint } = useMemo(() => {
     let items = [...hubActions];
     let assigneeBlockHint: string | undefined;
-    if (
-      flowStatus?.has_instance
-      && flowStatus.status === 'pending'
-      && currentUserId
-    ) {
+    const flowPending =
+      flowStatus?.has_instance && flowStatus.status === 'pending';
+    const viewerActions = flowStatus?.viewer_actions;
+    const flowAllowsApprove =
+      viewerActions?.approve ?? flowStatus?.has_my_pending_task ?? false;
+    const hasMyPendingTask =
+      viewerActions?.has_my_pending_task ?? flowStatus?.has_my_pending_task ?? false;
+
+    if (flowPending) {
       const caps = flowStatus.node_capabilities ?? {};
-      const hasMyPendingTask = (flowStatus.tasks ?? []).some(
-        (t) => t.status === 'pending' && t.approver_id === currentUserId,
-      );
-      if (!hasMyPendingTask) {
-        const currentNode = (flowStatus.nodes_overview ?? []).find((n) => n.is_current);
-        const names = (currentNode?.eligible_approvers ?? [])
-          .map((u) => String(u.name || '').trim())
-          .filter(Boolean);
-        assigneeBlockHint = names.length
-          ? t('components.uniAudit.notNodeAssigneeWithNames', { names: names.join('、') })
-          : t('components.uniAudit.notNodeAssignee');
+      if (!flowAllowsApprove && !adminOpen) {
+        assigneeBlockHint =
+          viewerActions?.block_reason
+          || (() => {
+              const currentNode = (flowStatus.nodes_overview ?? []).find((n) => n.is_current);
+              const names = (currentNode?.eligible_approvers ?? [])
+                .map((u) => String(u.name || '').trim())
+                .filter(Boolean);
+              return names.length
+                ? t('components.uniAudit.notNodeAssigneeWithNames', { names: names.join('、') })
+                : t('components.uniAudit.notNodeAssignee');
+            })();
       }
       items = items.map((item) => {
         if (item.action !== 'approve' && item.action !== 'reject') {
           return item;
         }
-        const canExecute = item.canExecute && hasMyPendingTask;
+        const flowOk = adminOpen || flowAllowsApprove;
+        const canExecute = item.canExecute && flowOk;
         return {
           ...item,
           canExecute,
           disabledReason:
-            item.canExecute && !hasMyPendingTask ? assigneeBlockHint : item.disabledReason,
+            item.canExecute && !flowOk ? assigneeBlockHint : item.disabledReason,
         };
       });
-      if (hasMyPendingTask && caps.allow_transfer) {
+      if ((hasMyPendingTask || adminOpen) && caps.allow_transfer) {
         items.push({ action: 'transfer', title: t('components.uniAudit.transfer'), canExecute: true });
       }
-      if (hasMyPendingTask && caps.allow_add_sign) {
+      if ((hasMyPendingTask || adminOpen) && caps.allow_add_sign) {
         items.push({ action: 'add_sign', title: t('components.uniAudit.addSign'), canExecute: true });
       }
-      if (hasMyPendingTask) {
+      if (hasMyPendingTask || adminOpen) {
         items.push({ action: 'delegate', title: t('components.uniAudit.delegate'), canExecute: true });
       }
       const isSubmitter = flowStatus.instance?.submitter_id === currentUserId;
@@ -679,7 +685,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
       }
     }
     return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
-  }, [hubActions, flowStatus, currentUserId, t]);
+  }, [hubActions, flowStatus, currentUserId, adminOpen, t]);
 
 
 

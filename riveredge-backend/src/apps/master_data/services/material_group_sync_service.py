@@ -136,8 +136,8 @@ class MaterialGroupSyncService:
                 raise ValidationError(
                     "物料分组源端未返回任何行。"
                     "星空请确认 FormId=BD_MATERIALGROUP；"
-                    "苍穹请使用 getMalGoodsClass（勿再调已禁用的 bd_materialgroup），"
-                    "并在连接器重新「加载常用接口」升级「苍穹查询物料分组」后重试"
+                    "苍穹请使用 bd_materialgroup/batchQuery（POST，默认空 data 分页，同物料 batchQuery），"
+                    "并在连接器重新「加载常用接口」升级「苍穹查询物料分类」后重试"
                 )
             if result.created == 0 and result.updated == 0 and (result.skipped or result.failed):
                 raise ValidationError(

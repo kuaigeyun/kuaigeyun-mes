@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from infra.exceptions.exceptions import ValidationError
@@ -21,6 +21,7 @@ from core.services.integration.kingdee_bill_query_page import (
 from core.services.integration.kingdee_cosmic_since_filter import (
     apply_cosmic_since_filter,
     apply_cosmic_since_to_params,
+    cosmic_paged_response_is_last_page,
     filter_rows_by_since,
     is_cosmic_paged_query,
     resolve_cosmic_page_size,
@@ -39,7 +40,7 @@ async def _execute_api_once(
     request_body: Dict[str, Any],
     request_params: Optional[Dict[str, Any]] = None,
     timeout: float,
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], Any]:
     from core.schemas.api import APITestRequest
 
     result = await api_service.test_api(
@@ -74,7 +75,7 @@ async def _execute_api_once(
     column_names = extract_kingdee_field_keys(
         request_body if isinstance(request_body, dict) else None
     )
-    return normalize_api_body_to_rows(body, column_names=column_names)
+    return normalize_api_body_to_rows(body, column_names=column_names), body
 
 
 def _overlay_json_object(
@@ -135,7 +136,7 @@ async def _fetch_paged_rows(
                 f"正在从源端拉取第 {page_no} 页（每页最多 {page_size} 条，已累计 {len(all_rows)} 条）…"
             )
             page_body = with_bill_query_page(request_body, start_row=start_row, limit=page_size)
-            chunk = await _execute_api_once(
+            chunk, _raw = await _execute_api_once(
                 api_service=api_service,
                 tenant_id=tenant_id,
                 api_uuid=api_uuid,
@@ -158,7 +159,7 @@ async def _fetch_paged_rows(
                 f"正在从苍穹拉取第 {page_no} 页（每页最多 {page_size} 条，已累计 {len(all_rows)} 条）…"
             )
             page_body = with_cosmic_page(request_body, page_no=page_no, page_size=page_size)
-            chunk = await _execute_api_once(
+            chunk, raw_body = await _execute_api_once(
                 api_service=api_service,
                 tenant_id=tenant_id,
                 api_uuid=api_uuid,
@@ -169,11 +170,13 @@ async def _fetch_paged_rows(
             if not chunk:
                 break
             all_rows.extend(chunk)
-            if len(chunk) < page_size:
+            if cosmic_paged_response_is_last_page(
+                raw_body, chunk_len=len(chunk), page_size=page_size
+            ):
                 break
         return all_rows
     await emit_sync_progress("正在从数据接口拉取…")
-    return await _execute_api_once(
+    rows, _raw = await _execute_api_once(
         api_service=api_service,
         tenant_id=tenant_id,
         api_uuid=api_uuid,
@@ -181,6 +184,7 @@ async def _fetch_paged_rows(
         request_params=request_params or None,
         timeout=timeout,
     )
+    return rows
 
 
 async def fetch_rows_from_api(

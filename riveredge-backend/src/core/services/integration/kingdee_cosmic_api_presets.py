@@ -19,6 +19,7 @@ OAUTH_GET_TOKEN_PATH = "kapi/oauth2/getToken"
 
 # 标品业务对象标识（与 OpenAPI 初始化后的 sys 路径一致）
 BIZ_BD_MATERIAL = "bd_material"
+BIZ_BD_MATERIALGROUP = "bd_materialgroup"
 # 多数租户 OpenAPI 未发布独立 bd_measureunits（调测 404）；单位同步用多计量单位
 BIZ_BD_MEASUREUNITS = "bd_measureunits"
 BIZ_BD_MULTIMEASUREUNIT = "bd_multimeasureunit"
@@ -43,6 +44,9 @@ class KingdeeCosmicApiPreset(TypedDict, total=False):
 
 
 WAREHOUSE_PRESET_CODE_SUFFIX = "query_warehouse"
+SUPPLIER_PRESET_CODE_SUFFIX = "query_supplier"
+# 历史双预置遗留 code，加载常用接口时会合并为与物料一致的 batchQuery
+LEGACY_SUPPLIER_LIST_PRESET_CODE_SUFFIX = "query_supplier_list"
 MEASUREUNITS_PRESET_CODE_SUFFIX = "query_measureunits"
 MATERIAL_PRESET_CODE_SUFFIX = "query_material"
 MATERIAL_GROUP_PRESET_CODE_SUFFIX = "query_material_group"
@@ -61,6 +65,101 @@ def build_warehouse_batch_query_preset_body() -> Dict[str, Any]:
         "data": {"createorg_number": "WANG"},
         "pageNo": 1,
         "pageSize": 1000,
+    }
+
+
+def build_supplier_query_preset_body(
+    *,
+    createorg_numbers: Optional[List[str]] = None,
+    status_codes: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    开放平台「查询供应商信息」POST：默认与物料 batchQuery 一样仅分页（data 空对象）；
+    需按组织/状态筛时在 data 内传 createorg_number、status 等字符串数组。
+    """
+    body: Dict[str, Any] = {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 500,
+    }
+    data: Dict[str, Any] = {}
+    if createorg_numbers:
+        orgs = [str(x).strip() for x in createorg_numbers if str(x).strip()]
+        if orgs:
+            data["createorg_number"] = orgs
+    if status_codes:
+        codes = [str(x).strip() for x in status_codes if str(x).strip()]
+        if codes:
+            data["status"] = codes
+    if data:
+        body["data"] = data
+    return body
+
+
+def _supplier_query_body_shape_valid(request_body: Any, request_params: Any = None) -> bool:
+    if not isinstance(request_body, dict):
+        return False
+    if request_body.get("select") or (request_params or {}).get("select"):
+        return False
+    if request_body.get("pageNo") in (None, "") or request_body.get("pageSize") in (None, ""):
+        return False
+    data = request_body.get("data")
+    if not isinstance(data, dict):
+        return False
+    co = data.get("createorg_number")
+    if co is not None and not (
+        isinstance(co, list) and all(isinstance(x, str) for x in co)
+    ):
+        return False
+    st = data.get("status")
+    if st is not None and not (isinstance(st, list) and all(isinstance(x, str) for x in st)):
+        return False
+    return True
+
+
+def _is_supplier_wang_placeholder_body(request_body: Any) -> bool:
+    """联调占位 createorg WANG + status C 易在本环境筛成 0 条，加载/测试时升级为默认空 data。"""
+    if not isinstance(request_body, dict):
+        return False
+    data = request_body.get("data")
+    if not isinstance(data, dict):
+        return False
+    return data.get("createorg_number") == ["WANG"] and data.get("status") == ["C"]
+
+
+def supplier_preset_needs_upgrade(
+    path: Any,
+    method: Any = None,
+    request_body: Any = None,
+    request_params: Any = None,
+) -> bool:
+    """POST …/bd_supplier/query；合法空 data 分页不升级，占位 WANG 模板须清掉。"""
+    if str(method or "").upper() not in ("", "POST"):
+        return True
+    lower = str(path or "").lower().replace("\\", "/")
+    if not lower or lower.endswith("/basedata/b") or lower.endswith("/basedata/bd"):
+        return True
+    if f"/{BIZ_BD_SUPPLIER}/batchquery" in lower:
+        return True
+    if not lower.endswith("/bd_supplier/query") and not lower.endswith("/bd_supplier/query/"):
+        return True
+    if not _supplier_query_body_shape_valid(request_body, request_params):
+        return True
+    if _is_supplier_wang_placeholder_body(request_body):
+        return True
+    return False
+
+
+def kingdee_supplier_api_upgrade_fields() -> Dict[str, Any]:
+    """供接口库升级写入，与 build_supplier_query_preset 一致。"""
+    preset = build_supplier_query_preset()
+    return {
+        "path": preset["path"],
+        "method": preset["method"],
+        "name": preset["name"],
+        "description": preset["description"],
+        "request_params": preset.get("request_params"),
+        "request_body": preset.get("request_body") or {},
     }
 
 
@@ -122,6 +221,28 @@ def material_preset_needs_upgrade(
     return "baseunit.number" not in select or "baseunit.name" not in select
 
 
+def build_supplier_query_preset() -> KingdeeCosmicApiPreset:
+    """
+    开放平台「查询供应商信息」：POST kapi/v2/basedata/bd_supplier/query。
+    返回 number/name/status/enable 等；同步映射编码←number、名称←name。
+    """
+    return {
+        "code_suffix": SUPPLIER_PRESET_CODE_SUFFIX,
+        "name": "苍穹查询供应商",
+        "description": (
+            "开放平台已发布：查询供应商信息，接口编码 query，"
+            "POST /v2/basedata/bd_supplier/query。"
+            "请求体 data 内 createorg_number、number、status 等为数组（均可选）；"
+            "pageNo、pageSize 与 data 同级。"
+            "默认与物料一致：data 为空仅分页；需筛组织/状态再在 data 内加数组。"
+            "按编码查可在 data.number 传 [\"编码\"]。勿使用未发布的 …/batchQuery。"
+        ),
+        "path": f"kapi/v2/basedata/{BIZ_BD_SUPPLIER}/query",
+        "method": "POST",
+        "request_body": build_supplier_query_preset_body(),
+    }
+
+
 def build_material_batch_query_preset() -> KingdeeCosmicApiPreset:
     """物料同步：batchQuery + select，返回列可自动映射主编码/名称/单位/分组。"""
     return {
@@ -148,26 +269,123 @@ def build_material_batch_query_preset() -> KingdeeCosmicApiPreset:
     }
 
 
-def material_group_preset_needs_upgrade(path: Any) -> bool:
-    """旧预置指向未发布的 bd_materialgroup 时，升级为 getMalGoodsClass。"""
+def build_material_group_batch_query_preset_body(
+    *,
+    createorg_numbers: Optional[List[str]] = None,
+    status_codes: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    与供应商/物料一致：默认 data 空对象 + 分页；
+    需筛组织/状态时在 data 内传 createorg_number、status 等字符串数组。
+    """
+    body: Dict[str, Any] = {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 500,
+    }
+    data: Dict[str, Any] = {}
+    if createorg_numbers:
+        orgs = [str(x).strip() for x in createorg_numbers if str(x).strip()]
+        if orgs:
+            data["createorg_number"] = orgs
+    if status_codes:
+        codes = [str(x).strip() for x in status_codes if str(x).strip()]
+        if codes:
+            data["status"] = codes
+    if data:
+        body["data"] = data
+    return body
+
+
+def _material_group_query_body_shape_valid(request_body: Any) -> bool:
+    if not isinstance(request_body, dict):
+        return False
+    if request_body.get("pageNo") in (None, "") or request_body.get("pageSize") in (None, ""):
+        return False
+    data = request_body.get("data")
+    if not isinstance(data, dict):
+        return False
+    co = data.get("createorg_number")
+    if co is not None and not (
+        isinstance(co, list) and all(isinstance(x, str) for x in co)
+    ):
+        return False
+    st = data.get("status")
+    if st is not None and not (isinstance(st, list) and all(isinstance(x, str) for x in st)):
+        return False
+    return True
+
+
+def _is_material_group_wang_placeholder_body(request_body: Any) -> bool:
+    if not isinstance(request_body, dict):
+        return False
+    data = request_body.get("data")
+    if not isinstance(data, dict):
+        return False
+    return data.get("createorg_number") == ["WANG"] and data.get("status") == ["C"]
+
+
+def material_group_preset_needs_upgrade(
+    path: Any,
+    method: Any = None,
+    request_body: Any = None,
+) -> bool:
+    """POST …/bd_materialgroup/batchQuery；合法空 data 不升级，占位 WANG 模板须清掉。"""
     lower = str(path or "").lower().replace("\\", "/")
     if not lower:
         return True
     if "getmalgoodsclass" in lower or "mdr_goodsclass" in lower:
-        return False
-    return "bd_materialgroup" in lower or "materialgroup" in lower
+        return True
+    if f"/{BIZ_BD_MATERIALGROUP}/batchquery" not in lower:
+        return True
+    if str(method or "").upper() not in ("", "POST"):
+        return True
+    if not _material_group_query_body_shape_valid(request_body):
+        return True
+    if _is_material_group_wang_placeholder_body(request_body):
+        return True
+    return False
+
+
+def kingdee_material_group_api_upgrade_fields() -> Dict[str, Any]:
+    preset = build_material_group_batch_query_preset()
+    return {
+        "path": preset["path"],
+        "method": preset["method"],
+        "name": preset["name"],
+        "description": preset["description"],
+        "request_body": preset.get("request_body") or {},
+    }
+
+
+def build_material_group_batch_query_preset() -> KingdeeCosmicApiPreset:
+    """开放平台已发布：物料分类批量查询 POST …/bd_materialgroup/batchQuery。"""
+    return {
+        "code_suffix": MATERIAL_GROUP_PRESET_CODE_SUFFIX,
+        "name": "苍穹查询物料分类",
+        "description": (
+            "开放平台已发布：物料分类批量查询，接口编码 batchQuery，"
+            "POST /v2/basedata/bd_materialgroup/batchQuery。"
+            "默认与「苍穹查询物料/供应商」一致：data 为空对象，仅 pageNo/pageSize 分页；"
+            "可选筛选（createorg_number、status 等数组）请在接口库 data 内按需添加。"
+            "加载常用接口或接口测试会自动去掉占位 WANG 模板。"
+            "同步映射：编码←number，名称←name；启用/状态可在同步时勾选仅有效数据。"
+        ),
+        "path": f"kapi/v2/basedata/{BIZ_BD_MATERIALGROUP}/batchQuery",
+        "method": "POST",
+        "request_body": build_material_group_batch_query_preset_body(),
+    }
 
 
 def build_material_group_goods_class_preset() -> KingdeeCosmicApiPreset:
-    """无独立 bd_materialgroup 时，用 GMC 商品分类拉分组树。"""
+    """GMC 商品分类（与基础资料物料分类 batchQuery 不同对象）。"""
     return {
-        "code_suffix": MATERIAL_GROUP_PRESET_CODE_SUFFIX,
-        "name": "苍穹查询物料分组",
+        "code_suffix": "query_goods_class",
+        "name": "苍穹查询商品分类（GMC）",
         "description": (
-            "本环境常无 bd_materialgroup（OpenAPI 404）。"
-            f"改用 GMC 商品分类 {GOODS_CLASS_QUERY_PATH}；"
+            f"GMC 商品分类 {GOODS_CLASS_QUERY_PATH}；"
+            "与基础资料「物料分类 batchQuery」不是同一路径。"
             "pageSize 必填，筛选项与分页同级（勿包 data）。"
-            "同步映射：编码←number，名称←name，父编码←parent_parent_number。"
         ),
         "path": GOODS_CLASS_QUERY_PATH,
         "method": "POST",
@@ -302,29 +520,9 @@ def list_kingdee_cosmic_api_presets() -> List[KingdeeCosmicApiPreset]:
         },
         build_material_batch_query_preset(),
         build_measureunits_batch_query_preset(),
+        build_material_group_batch_query_preset(),
         build_material_group_goods_class_preset(),
-        {
-            # 与 query_material_group 同路径，便于在接口库按「商品分类」搜索
-            **build_material_group_goods_class_preset(),
-            "code_suffix": "query_goods_class",
-            "name": "苍穹查询物料分类（商品分类）",
-        },
-        {
-            "code_suffix": "query_supplier",
-            "name": "苍穹查询供应商",
-            "description": (
-                "基础资料API服务里的查询供应商信息。"
-                "请求方式 GET，地址 /v2/basedata/bd_supplier/query。"
-                "Query 参数 number、createorg_number 为必填，示例值来自该 API 详情。"
-            ),
-            "path": "kapi/v2/basedata/bd_supplier/query",
-            "method": "GET",
-            "request_params": {
-                "number": "9chu",
-                "createorg_number": "WANG",
-            },
-            "request_body": {},
-        },
+        build_supplier_query_preset(),
         _basedata_batch_query_preset(
             code_suffix="query_customer",
             name="苍穹查询客户",

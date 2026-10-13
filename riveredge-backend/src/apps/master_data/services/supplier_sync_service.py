@@ -31,6 +31,7 @@ from apps.master_data.services.master_data_sync_common import (
     upsert_sync_binding,
 )
 from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
+from core.services.data.sync_progress import emit_sync_progress
 
 SUPPLIER_CUSTOM_FIELD_TABLE = "master_data_suppliers"
 SUPPLIER_SYNC_STRING_FIELDS = frozenset({
@@ -159,7 +160,12 @@ class SupplierSyncService:
         custom_fields_by_code = await load_custom_fields_by_code(
             tenant_id, SUPPLIER_CUSTOM_FIELD_TABLE
         )
-        for row in rows:
+        total = len(rows)
+        if total:
+            await emit_sync_progress(f"开始写入供应商，共 {total} 条…")
+        for index, row in enumerate(rows, start=1):
+            if total and (index == 1 or index % 50 == 0 or index == total):
+                await emit_sync_progress(f"正在写入供应商 {index}/{total}…")
             code = cell_str(row.get(match_key if match_key == "code" else "code") or row.get(match_key))
             name = cell_str(row.get("name"))
             if not code:

@@ -5,38 +5,13 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
+from core.services.integration.kingdee_cosmic_paths import (
+    normalize_cosmic_openapi_endpoint,
+    strip_invalid_kingdee_cosmic_base_url_suffix,
+)
 from infra.exceptions.exceptions import ValidationError
 
 _DUPLICATE_IERP_BEFORE_KAPI = re.compile(r"(?i)(?:/ierp)+(?=/kapi(?:/|$))")
-
-_BASEDATA_SYS_QUERY_OBJECTS = {
-    "bd_material",
-    "bd_measureunits",
-    "bd_multimeasureunit",
-    "bd_materialgroup",
-    "bd_supplier",
-    "bd_customer",
-    "bd_warehouse",
-}
-
-
-def _rewrite_basedata_sys_query_path(endpoint: str) -> str:
-    ep = str(endpoint or "").strip().lstrip("/")
-    if ep.lower().startswith("ierp/"):
-        ep = ep[5:]
-    lower = ep.lower()
-    if lower == "kapi/v2/basedata/bd_supplier/batchquery":
-        return "kapi/v2/basedata/bd_supplier/query"
-    prefix = "kapi/sys/"
-    suffix = "/query"
-    if not lower.startswith(prefix) or not lower.endswith(suffix):
-        return ep
-    biz = lower[len(prefix) : -len(suffix)]
-    if biz == "bd_supplier":
-        return "kapi/v2/basedata/bd_supplier/query"
-    if biz not in _BASEDATA_SYS_QUERY_OBJECTS:
-        return ep
-    return f"kapi/v2/basedata/{biz}/batchQuery"
 
 if TYPE_CHECKING:
     from core.models.integration_config import IntegrationConfig
@@ -64,8 +39,9 @@ def resolve_connector_request(
     base_url = (cfg.get("base_url") or cfg.get("url") or "").strip().rstrip("/")
     if not base_url:
         raise ValidationError("应用连接器配置缺少 base_url 或 url")
+    base_url = strip_invalid_kingdee_cosmic_base_url_suffix(base_url)
 
-    endpoint_str = _rewrite_basedata_sys_query_path((endpoint or "").strip().lstrip("/"))
+    endpoint_str = normalize_cosmic_openapi_endpoint((endpoint or "").strip().lstrip("/"))
     # 金蝶 AI 完整服务地址是「门户域名/kapi/请求地址」，请求地址以 /v2/ 开头，不含 /ierp。
     if base_url.lower().endswith("/ierp") and (
         endpoint_str.lower().startswith("kapi/") or endpoint_str.lower().startswith("ierp/")

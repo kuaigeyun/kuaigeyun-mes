@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
 
 from apps.kuaizhizao.schemas.drawing_balloon_sheet import FaiImportFromBalloonSheetRequest
 from apps.kuaizhizao.schemas.quality_fai import (

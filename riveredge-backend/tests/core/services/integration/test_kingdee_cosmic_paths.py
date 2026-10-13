@@ -31,9 +31,23 @@ def test_normalize_sys_query_adds_ierp_prefix():
 def test_rewrite_saved_supplier_sys_query_to_batch_query():
     rewrite = _mod.rewrite_basedata_sys_query_path
     assert rewrite("kapi/sys/bd_supplier/query") == "kapi/v2/basedata/bd_supplier/query"
-    assert rewrite("kapi/v2/basedata/bd_supplier/batchQuery") == "kapi/v2/basedata/bd_supplier/query"
+    assert rewrite("kapi/v2/basedata/bd_supplier/batchQuery") == "kapi/v2/basedata/bd_supplier/batchQuery"
     assert rewrite("kapi/sys/bd_customer/query") == "kapi/v2/basedata/bd_customer/batchQuery"
     assert rewrite("kapi/sys/bd_warehouse/query") == "kapi/v2/basedata/bd_warehouse/batchQuery"
+
+
+def test_normalize_cosmic_openapi_endpoint_fixes_v2_prefix():
+    norm = _mod.normalize_cosmic_openapi_endpoint
+    assert norm("v2/basedata/bd_supplier/query") == "kapi/v2/basedata/bd_supplier/query"
+    assert norm("kapi/v2/basedata/b") == "kapi/v2/basedata/bd_supplier/query"
+
+
+def test_strip_invalid_base_url_suffix():
+    strip = _mod.strip_invalid_kingdee_cosmic_base_url_suffix
+    assert (
+        strip("https://lzhtech.test.kdgalaxy.com/kapi/v2/basedata/b")
+        == "https://lzhtech.test.kdgalaxy.com"
+    )
 
 
 def test_normalize_oauth_path_unchanged():

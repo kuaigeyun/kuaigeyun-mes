@@ -75,6 +75,26 @@ def resolve_cosmic_page_size(request_body: Dict[str, Any], *, default: int = 100
     return min(size, 500)
 
 
+def cosmic_paged_response_is_last_page(
+    response_body: Any,
+    *,
+    chunk_len: int,
+    page_size: int,
+) -> bool:
+    """苍穹 v2 分页：优先认 data.lastPage，避免末页仍满 pageSize 时多打无效请求。"""
+    if chunk_len <= 0:
+        return True
+    if chunk_len < page_size:
+        return True
+    if not isinstance(response_body, dict):
+        return False
+    data = response_body.get("data")
+    if isinstance(data, dict):
+        if data.get("lastPage") is True or data.get("last_page") is True:
+            return True
+    return False
+
+
 def with_cosmic_page(
     request_body: Dict[str, Any],
     *,

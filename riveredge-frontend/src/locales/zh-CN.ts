@@ -9033,11 +9033,11 @@ export default {
   'pages.system.configCenter.param.finance_require_payment_application_desc':
     '开启后采购订单不可直达预付付款单，须先下推付款申请并由财务审核后再付款',
   'app.kuaizhizao.menu.purchase-management.purchase-order-changes': '采购变更单',
-  'app.kuaizhizao.menu.purchase-management.arrival-warnings': '采购到货预警',
+  'app.kuaizhizao.menu.purchase-management.arrival-warnings': '到货预警',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions': '采购申请',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions.new': '新建采购申请',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions.edit': '编辑采购申请',
-  'app.kuaizhizao.menu.purchase-management.purchase-inquiries': '询价单',
+  'app.kuaizhizao.menu.purchase-management.purchase-inquiries': '采购询价',
   'app.kuaizhizao.menu.purchase-management.receipt-notices': '收货通知单',
   'app.kuaizhizao.menu.purchase-management.purchase-returns': '采购退货单',
   'app.kuaizhizao.menu.purchase-management.inbound': '采购入库单',
@@ -38110,6 +38110,34 @@ export default {
     '修复销项发票切换含税金额分币价差',
   'pages.dashboard.updateLog.entries.sales-invoice-tax-amount-cents-math.description':
     '开票金额互算改为分位整数（与后端价税拆分一致），避免 JS 浮点把 1769911.50×1.13 算成 1999999.99；切换含税后与可开票合计对齐，含税录入仍以价税合计为真源。',
+  'pages.dashboard.updateLog.entries.uni-audit-flow-viewer-actions-r01.title':
+    '审核按钮与流程待办统一门控',
+  'pages.dashboard.updateLog.entries.uni-audit-flow-viewer-actions-r01.description':
+    '有模块审核权限但非当前节点待办人时，审核/驳回按钮置灰且提示待办人姓名；可审名单内缺任务时打开审核弹窗会自动补齐待办。门控以服务端 viewer_actions 为准，与 execute_approval 一致。',
+  'pages.dashboard.updateLog.entries.supplier-sync-performance-r01.title':
+    '供应商同步进度与苍穹分页优化',
+  'pages.dashboard.updateLog.entries.supplier-sync-performance-r01.description':
+    '供应商同步改为与客户/物料一致的 NDJSON 进度流，弹窗可看到逐页拉取与写入进度；苍穹分页识别 lastPage 并默认每页 500 条，减少无效请求。',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-materialgroup-api-r01.title':
+    '完善苍穹物料分类 OpenAPI 预置',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-materialgroup-api-r01.description':
+    '苍穹物料分类预置与供应商一致：POST batchQuery，默认空 data 分页，接口测试/加载常用接口会自动去掉 WANG 占位并修正 GMC 旧路径；自定义组织/状态数组筛选不会被覆盖。',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-supplier-api-r01.title':
+    '完善苍穹供应商 OpenAPI 预置与路径',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-supplier-api-r01.description':
+    '苍穹供应商预置对齐 POST …/bd_supplier/query；默认请求体与物料一致（空 data、分页），不再强制 WANG/status。加载常用接口或接口测试会自动去掉占位 WANG 模板并修正路径。',
+  'pages.dashboard.updateLog.entries.purchase-menu-labels-r01.title':
+    '采购管理菜单文案调整',
+  'pages.dashboard.updateLog.entries.purchase-menu-labels-r01.description':
+    '侧栏「询价单」改为「采购询价」，「采购到货预警」改为「到货预警」。',
+  'pages.dashboard.updateLog.entries.payment-application-pull-payables-api-r01.title':
+    '修复付款申请选供应商加载应付单 404',
+  'pages.dashboard.updateLog.entries.payment-application-pull-payables-api-r01.description':
+    '补全 FAI API 缺失 Body 导入以免快制造路由无法加载；应付拉取接口注册在详情路由之前。',
+  'pages.dashboard.updateLog.entries.payment-application-status-badge-r01.title':
+    '修复付款申请状态徽章颜色',
+  'pages.dashboard.updateLog.entries.payment-application-status-badge-r01.description':
+    '「已批准」等付款申请状态纳入全局状态色板，已批准与已付款为绿色，部分付款为进行中色。',
   'pages.dashboard.updateLog.entries.master-data-units-sync-i18n-r01.title':
     '修复单位同步完成提示文案',
   'pages.dashboard.updateLog.entries.master-data-units-sync-i18n-r01.description':

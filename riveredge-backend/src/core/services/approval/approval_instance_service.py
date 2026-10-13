@@ -775,6 +775,60 @@ class ApprovalInstanceService:
         }
         editable_fields: List[Any] = []
         can_edit_during_approval = False
+        if instance and instance.status == "pending" and process:
+            from core.services.approval.approval_viewer_actions import (
+                build_flow_viewer_actions,
+                current_node_eligible_user_ids,
+                viewer_has_pending_task_on_instance,
+            )
+
+            graph_nodes = ApprovalInstanceService._normalize_process_graph(process.nodes)
+            node_list = graph_nodes.get("nodes") or []
+            current_node_obj = next(
+                (
+                    n
+                    for n in node_list
+                    if isinstance(n, dict) and n.get("id") == instance.current_node
+                ),
+                None,
+            )
+            if viewer_id and current_node_obj:
+                eligible_ids = current_node_eligible_user_ids(nodes_overview)
+                if not eligible_ids:
+                    try:
+                        eligible_ids = await ApprovalInstanceService._resolve_node_approvers(
+                            current_node_obj, instance
+                        )
+                    except Exception:
+                        eligible_ids = []
+                if int(viewer_id) in {int(x) for x in eligible_ids}:
+                    if not viewer_has_pending_task_on_instance(
+                        viewer_id=int(viewer_id),
+                        instance=instance,
+                        tasks=tasks,
+                    ):
+                        await ApprovalInstanceService._sync_node_approver_tasks(
+                            tenant_id, instance, current_node_obj
+                        )
+                        tasks = await ApprovalTask.filter(
+                            tenant_id=tenant_id,
+                            approval_instance_id__in=[inst.id for inst in entity_instances],
+                        ).order_by("-created_at").all()
+
+        viewer_actions: Dict[str, Any] = {
+            "has_my_pending_task": False,
+            "approve": False,
+            "reject": False,
+            "block_reason": None,
+        }
+        if viewer_id is not None:
+            viewer_actions = build_flow_viewer_actions(
+                viewer_id=viewer_id,
+                instance=instance,
+                tasks=tasks,
+                nodes_overview=nodes_overview,
+            )
+
         if instance and instance.status == "pending" and process and viewer_id:
             from core.schemas.approval_flow_schema import get_node_config, normalize_flow_graph
             from core.services.approval.approval_edit_guard import ApprovalEditGuard
@@ -837,6 +891,8 @@ class ApprovalInstanceService:
             "node_capabilities": node_capabilities,
             "can_edit_during_approval": can_edit_during_approval,
             "editable_fields": editable_fields,
+            "has_my_pending_task": bool(viewer_actions.get("has_my_pending_task")),
+            "viewer_actions": viewer_actions,
         }
 
     @staticmethod

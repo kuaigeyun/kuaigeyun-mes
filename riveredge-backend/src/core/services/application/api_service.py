@@ -383,15 +383,21 @@ class APIService:
     ) -> Dict[str, Any]:
         """加载金蝶云苍穹 OpenAPI 常用 / 制造链路接口预设。"""
         from core.services.integration.kingdee_cosmic_api_presets import (
+            LEGACY_SUPPLIER_LIST_PRESET_CODE_SUFFIX,
             MATERIAL_GROUP_PRESET_CODE_SUFFIX,
             MATERIAL_PRESET_CODE_SUFFIX,
             MEASUREUNITS_PRESET_CODE_SUFFIX,
+            SUPPLIER_PRESET_CODE_SUFFIX,
             WAREHOUSE_PRESET_CODE_SUFFIX,
+            build_material_group_goods_class_preset,
+            kingdee_material_group_api_upgrade_fields,
+            kingdee_supplier_api_upgrade_fields,
             list_kingdee_cosmic_api_presets,
             material_group_preset_needs_upgrade,
             material_preset_needs_upgrade,
             measureunits_preset_needs_upgrade,
             resolve_preset_api_code,
+            supplier_preset_needs_upgrade,
             warehouse_batch_query_preset_needs_upgrade,
         )
         from core.services.integration.kingdee_cosmic_mfg_api_presets import (
@@ -476,15 +482,42 @@ class APIService:
                     )
                     upgraded.append(code)
                 elif (
-                    code_suffix in (MATERIAL_GROUP_PRESET_CODE_SUFFIX, "query_goods_class")
-                    and material_group_preset_needs_upgrade(existing.path)
+                    code_suffix == MATERIAL_GROUP_PRESET_CODE_SUFFIX
+                    and material_group_preset_needs_upgrade(
+                        existing.path,
+                        existing.method,
+                        existing.request_body,
+                    )
                 ):
-                    existing.path = preset["path"]
-                    existing.name = preset["name"]
-                    existing.description = preset["description"]
-                    existing.method = preset.get("method") or "POST"
-                    existing.request_params = preset.get("request_params")
-                    existing.request_body = preset.get("request_body") or {
+                    fields = kingdee_material_group_api_upgrade_fields()
+                    existing.path = fields["path"]
+                    existing.name = fields["name"]
+                    existing.description = fields["description"]
+                    existing.method = fields["method"]
+                    existing.request_params = None
+                    existing.request_body = fields["request_body"]
+                    await existing.save(
+                        update_fields=[
+                            "path",
+                            "name",
+                            "description",
+                            "method",
+                            "request_params",
+                            "request_body",
+                            "updated_at",
+                        ]
+                    )
+                    upgraded.append(code)
+                elif (
+                    code_suffix == "query_goods_class"
+                    and "getmalgoodsclass" not in str(existing.path or "").lower()
+                ):
+                    gmc = build_material_group_goods_class_preset()
+                    existing.path = gmc["path"]
+                    existing.name = gmc["name"]
+                    existing.description = gmc["description"]
+                    existing.method = gmc.get("method") or "POST"
+                    existing.request_body = gmc.get("request_body") or {
                         "pageNo": 1,
                         "pageSize": 100,
                     }
@@ -494,7 +527,6 @@ class APIService:
                             "name",
                             "description",
                             "method",
-                            "request_params",
                             "request_body",
                             "updated_at",
                         ]
@@ -516,6 +548,31 @@ class APIService:
                         "pageSize": 100,
                         "select": "number,name,modelnum,baseunit.number,baseunit.name,group.number,group.name",
                     }
+                    await existing.save(
+                        update_fields=[
+                            "path",
+                            "name",
+                            "description",
+                            "method",
+                            "request_params",
+                            "request_body",
+                            "updated_at",
+                        ]
+                    )
+                    upgraded.append(code)
+                elif code_suffix == SUPPLIER_PRESET_CODE_SUFFIX and supplier_preset_needs_upgrade(
+                    existing.path,
+                    existing.method,
+                    existing.request_body,
+                    existing.request_params,
+                ):
+                    fields = kingdee_supplier_api_upgrade_fields()
+                    existing.path = fields["path"]
+                    existing.name = fields["name"]
+                    existing.description = fields["description"]
+                    existing.method = fields["method"]
+                    existing.request_params = fields["request_params"]
+                    existing.request_body = fields["request_body"]
                     await existing.save(
                         update_fields=[
                             "path",
@@ -553,6 +610,43 @@ class APIService:
                 category_id=category_id,
             )
             created.append(api.code)
+
+        legacy_code = resolve_preset_api_code(
+            integration.code,
+            LEGACY_SUPPLIER_LIST_PRESET_CODE_SUFFIX,
+        )
+        legacy_row = await API.filter(
+            tenant_id=tenant_id,
+            code=legacy_code,
+            deleted_at__isnull=True,
+        ).first()
+        if legacy_row and supplier_preset_needs_upgrade(
+            legacy_row.path,
+            legacy_row.method,
+            legacy_row.request_body,
+            legacy_row.request_params,
+        ):
+            fields = kingdee_supplier_api_upgrade_fields()
+            legacy_row.path = fields["path"]
+            legacy_row.name = fields["name"]
+            legacy_row.description = (
+                f"{fields['description']}（原「同步供应商列表」已合并为与制造链路 basedata_query_2 相同的 query 预置。）"
+            )
+            legacy_row.method = fields["method"]
+            legacy_row.request_params = fields["request_params"]
+            legacy_row.request_body = fields["request_body"]
+            await legacy_row.save(
+                update_fields=[
+                    "path",
+                    "name",
+                    "description",
+                    "method",
+                    "request_params",
+                    "request_body",
+                    "updated_at",
+                ]
+            )
+            upgraded.append(legacy_code)
 
         return {
             "connection_uuid": str(integration.uuid),
@@ -1150,6 +1244,104 @@ class APIService:
                 f"应用连接器「{api.integration_config.name}」已停用，无法调用"
             )
         api_path = str(api.path or "").strip()
+        from core.services.integration.kingdee_cosmic_paths import (
+            normalize_cosmic_openapi_endpoint,
+        )
+
+        api_path = normalize_cosmic_openapi_endpoint(api_path)
+        conn_type = str(api.integration_config.type or "").strip() if api.integration_config else ""
+        if conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
+            "query_supplier" in str(api.code or "")
+            or "bd_supplier" in api_path.lower()
+        ):
+            from core.services.integration.kingdee_cosmic_api_presets import (
+                kingdee_supplier_api_upgrade_fields,
+                supplier_preset_needs_upgrade,
+            )
+
+            if supplier_preset_needs_upgrade(
+                api_path,
+                api.method,
+                api.request_body,
+                api.request_params,
+            ):
+                fields = kingdee_supplier_api_upgrade_fields()
+                api.path = fields["path"]
+                api.method = fields["method"]
+                api.request_params = fields["request_params"]
+                api.request_body = fields["request_body"]
+                api.description = fields["description"]
+                await api.save(
+                    update_fields=[
+                        "path",
+                        "method",
+                        "request_params",
+                        "request_body",
+                        "description",
+                        "updated_at",
+                    ]
+                )
+                api_path = str(api.path or "").strip()
+        elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
+            "query_material_group" in str(api.code or "")
+            or "bd_materialgroup" in api_path.lower()
+        ):
+            from core.services.integration.kingdee_cosmic_api_presets import (
+                kingdee_material_group_api_upgrade_fields,
+                material_group_preset_needs_upgrade,
+            )
+
+            if material_group_preset_needs_upgrade(
+                api_path,
+                api.method,
+                api.request_body,
+            ):
+                fields = kingdee_material_group_api_upgrade_fields()
+                api.path = fields["path"]
+                api.method = fields["method"]
+                api.request_body = fields["request_body"]
+                api.description = fields["description"]
+                await api.save(
+                    update_fields=[
+                        "path",
+                        "method",
+                        "request_body",
+                        "description",
+                        "updated_at",
+                    ]
+                )
+                api_path = str(api.path or "").strip()
+        elif api_path != str(api.path or "").strip():
+            api.path = api_path
+            await api.save(update_fields=["path", "updated_at"])
+        path_lower = api_path.lower().replace("\\", "/")
+        if "bd_supplier" in path_lower and "/batchquery" in path_lower:
+            return {
+                "status_code": 0,
+                "headers": {},
+                "body": {
+                    "error": (
+                        "本环境网关未发布 bd_supplier/batchQuery（会 2530）。"
+                        "请加载常用接口升级「苍穹查询供应商」：路径为 "
+                        "kapi/v2/basedata/bd_supplier/query，与制造链路 basedata_query_2 一致；"
+                        "物料 batchQuery 在本环境可用，供应商勿沿用物料路径。"
+                    ),
+                },
+                "elapsed_time": 0,
+            }
+        if path_lower.endswith("/basedata/b") or path_lower.endswith("/basedata/bd"):
+            return {
+                "status_code": 0,
+                "headers": {},
+                "body": {
+                    "error": (
+                        "接口路径不完整（…/basedata/b），网关会 404。"
+                        "请加载常用接口升级，路径应为 "
+                        "kapi/v2/basedata/bd_supplier/query。"
+                    ),
+                },
+                "elapsed_time": 0,
+            }
         if "__API_NUMBER__" in api_path:
             return {
                 "status_code": 0,
@@ -1186,7 +1378,7 @@ class APIService:
             if api.integration_config_id and api.integration_config:
                 url, connector_headers = resolve_connector_request(
                     api.integration_config,
-                    endpoint=api.path,
+                    endpoint=api_path,
                     headers=request_headers,
                 )
                 request_headers = connector_headers
@@ -1395,11 +1587,22 @@ class APIService:
                 isinstance(response_body, dict)
                 and str(response_body.get("errorCode") or "") == "2530"
             ):
+                extra = ""
+                url_lower = str(url or "").lower()
+                if "bd_supplier/batchquery" in url_lower:
+                    extra = (
+                        "本环境供应商未挂 batchQuery（制造链路探活为 "
+                        "/v2/basedata/bd_supplier/query）。"
+                        "请加载常用接口升级「苍穹查询供应商」，勿使用 …/batchQuery。"
+                    )
+                elif "bd_supplier" in url_lower:
+                    extra = "请以开放平台「查询供应商信息」API 详情中的完整服务地址与请求方式为准。"
                 response_body = {
                     **response_body,
                     "说明": (
                         f"网关没有这条路由。本次实际请求：{url}。"
-                        "该地址未在开放平台发布。请打开这条基础资料 API 的详情，使用页面上的请求地址，不要沿用物料的 batchQuery。"
+                        "该地址未在开放平台发布或未对第三方应用授权。"
+                        f"{extra}"
                     ),
                 }
 

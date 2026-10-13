@@ -44,6 +44,61 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'uni-audit-flow-viewer-actions-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-audit-flow-viewer-actions-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-audit-flow-viewer-actions-r01.description',
+  },
+  {
+    id: 'supplier-sync-performance-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.supplier-sync-performance-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.supplier-sync-performance-r01.description',
+  },
+  {
+    id: 'kingdee-cosmic-materialgroup-api-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-materialgroup-api-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-cosmic-materialgroup-api-r01.description',
+  },
+  {
+    id: 'kingdee-cosmic-supplier-api-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-supplier-api-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-cosmic-supplier-api-r01.description',
+  },
+  {
+    id: 'purchase-menu-labels-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-menu-labels-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-menu-labels-r01.description',
+  },
+  {
+    id: 'payment-application-pull-payables-api-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-pull-payables-api-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-pull-payables-api-r01.description',
+  },
+  {
+    id: 'payment-application-status-badge-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-status-badge-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-status-badge-r01.description',
+  },
+  {
     id: 'equip-ops-scheme-bind-clients-r01',
     date: '2026-10-13',
     type: 'improvement',
