@@ -60,13 +60,13 @@
             "permission": "kuaizhizao:quality-management-incoming-inspection:read"
           },
           {
-            "title": "app.kuaizhizao.menu.quality-management.fai-orders",
-            "path": "/apps/kuaizhizao/quality-management/fai-orders",
+            "title": "app.kuaizhizao.menu.quality-management.outsource-inspection",
+            "path": "/apps/kuaizhizao/quality-management/outsource-inspection",
             "sort_order": 2,
             "meta": {
               "module": "quality"
             },
-            "permission": "kuaizhizao:quality-management-fai-orders:read"
+            "permission": "kuaizhizao:quality-management-outsource-inspection:read"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.process-inspection",
@@ -96,9 +96,27 @@
             "permission": "kuaizhizao:quality-management-oqc-inspection:read"
           },
           {
+            "title": "app.kuaizhizao.menu.quality-management.fai-orders",
+            "path": "/apps/kuaizhizao/quality-management/fai-orders",
+            "sort_order": 6,
+            "meta": {
+              "module": "quality"
+            },
+            "permission": "kuaizhizao:quality-management-fai-orders:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.quality-management.quality-patrol",
+            "path": "/apps/kuaizhizao/quality-management/quality-patrol",
+            "sort_order": 7,
+            "meta": {
+              "module": "quality"
+            },
+            "permission": "kuaizhizao:quality-management-quality-patrol:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.quality-management.nonconforming-ledger",
             "path": "/apps/kuaizhizao/quality-management/nonconforming-ledger",
-            "sort_order": 6,
+            "sort_order": 8,
             "meta": {
               "module": "quality"
             },
@@ -207,39 +225,51 @@
             "permission": "kuaizhizao:quality-management-reports-incoming-inspection-report:read"
           },
           {
+            "title": "app.kuaizhizao.menu.reports.outsource-inspection-report",
+            "path": "/apps/kuaizhizao/quality-management/reports/outsource-inspection-report",
+            "sort_order": 1,
+            "permission": "kuaizhizao:quality-management-reports-outsource-inspection-report:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.reports.process-inspection-report",
             "path": "/apps/kuaizhizao/quality-management/reports/process-inspection-report",
-            "sort_order": 1,
+            "sort_order": 2,
             "permission": "kuaizhizao:quality-management-reports-process-inspection-report:read"
           },
           {
             "title": "app.kuaizhizao.menu.reports.finished-inspection-report",
             "path": "/apps/kuaizhizao/quality-management/reports/finished-inspection-report",
-            "sort_order": 2,
+            "sort_order": 3,
             "permission": "kuaizhizao:quality-management-reports-finished-inspection-report:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.reports.quality-patrol-report",
+            "path": "/apps/kuaizhizao/quality-management/reports/quality-patrol-report",
+            "sort_order": 4,
+            "permission": "kuaizhizao:quality-management-reports-quality-patrol-report:read"
           },
           {
             "title": "app.kuaizhizao.menu.reports.quality-exception-tracking",
             "path": "/apps/kuaizhizao/quality-management/reports/quality-exception-tracking",
-            "sort_order": 3,
+            "sort_order": 5,
             "permission": "kuaizhizao:quality-management-reports-quality-exception-tracking:read"
           },
           {
             "title": "app.kuaizhizao.menu.reports.nonconforming-summary",
             "path": "/apps/kuaizhizao/quality-management/reports/nonconforming-summary",
-            "sort_order": 4,
+            "sort_order": 6,
             "permission": "kuaizhizao:quality-management-reports-nonconforming-summary:read"
           },
           {
             "title": "app.kuaizhizao.menu.reports.quality-rate-trend",
             "path": "/apps/kuaizhizao/quality-management/reports/quality-rate-trend",
-            "sort_order": 5,
+            "sort_order": 7,
             "permission": "kuaizhizao:quality-management-reports-quality-rate-trend:read"
           },
           {
             "title": "app.kuaizhizao.menu.reports.quality-complaint-analysis",
             "path": "/apps/kuaizhizao/quality-management/reports/quality-complaint-analysis",
-            "sort_order": 6,
+            "sort_order": 8,
             "permission": "kuaizhizao:quality-analysis:read"
           }
         ]

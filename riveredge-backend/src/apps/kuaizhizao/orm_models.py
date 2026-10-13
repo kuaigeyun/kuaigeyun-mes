@@ -76,6 +76,8 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaizhizao.models.mrp_result",
     "apps.kuaizhizao.models.operator_skill",
     "apps.kuaizhizao.models.oqc_inspection",
+    "apps.kuaizhizao.models.outsource_inspection",
+    "apps.kuaizhizao.models.quality_patrol",
     "apps.kuaizhizao.models.other_inbound",
     "apps.kuaizhizao.models.other_inbound_item",
     "apps.kuaizhizao.models.other_outbound",

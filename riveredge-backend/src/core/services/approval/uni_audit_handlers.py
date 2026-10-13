@@ -669,6 +669,30 @@ async def _dispatch_oqc_inspection(
     _unsupported("oqc_inspection", action)
 
 
+async def _dispatch_quality_patrol(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.quality_patrol_service import QualityPatrolService
+
+    svc = QualityPatrolService()
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user_id, approve=True)
+    if action == "reject":
+        return await svc.approve(
+            tenant_id, entity_id, user_id, approve=False, remarks=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_approval(tenant_id, entity_id, user_id)
+    if action in ("submit", "withdraw"):
+        _unsupported("quality_patrol", action)
+    _unsupported("quality_patrol", action)
+
+
 async def _dispatch_receivable(
     action: str,
     *,
@@ -1581,6 +1605,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "process_inspection": _dispatch_process_inspection,
     "finished_goods_inspection": _dispatch_finished_goods_inspection,
     "oqc_inspection": _dispatch_oqc_inspection,
+    "quality_patrol": _dispatch_quality_patrol,
     "receivable": _dispatch_receivable,
     "payable": _dispatch_payable,
     "purchase_invoice": _dispatch_purchase_invoice,

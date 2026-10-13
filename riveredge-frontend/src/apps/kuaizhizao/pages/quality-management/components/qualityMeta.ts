@@ -63,16 +63,30 @@ export const QUALITY_QUALITY_STATUS_I18N: Record<string, string> = {
 
 export const QUALITY_TYPE_I18N: Record<string, string> = {
   incoming: 'app.kuaizhizao.quality.common.type.incoming',
+  outsource: 'app.kuaizhizao.quality.common.type.outsource',
   process: 'app.kuaizhizao.quality.common.type.process',
   finished: 'app.kuaizhizao.quality.common.type.finished',
   outbound: 'app.kuaizhizao.quality.common.type.outbound',
+  patrol: 'app.kuaizhizao.quality.common.type.patrol',
 };
+
+/** 与菜单一致：来料→委外→过程→成品→出货→巡检 */
+export const QUALITY_PLAN_TYPE_ORDER = [
+  'incoming',
+  'outsource',
+  'process',
+  'finished',
+  'outbound',
+  'patrol',
+] as const;
 
 export const QUALITY_PLAN_TYPE_I18N: Record<string, string> = {
   incoming: 'app.kuaizhizao.quality.common.type.incoming',
+  outsource: 'app.kuaizhizao.quality.common.type.outsource',
   process: 'app.kuaizhizao.quality.common.type.process',
   finished: 'app.kuaizhizao.quality.common.type.finished',
   outbound: 'app.kuaizhizao.quality.common.type.outbound',
+  patrol: 'app.kuaizhizao.quality.common.type.patrol',
 };
 
 export const QUALITY_DEFECT_TYPE_I18N: Record<string, string> = {
@@ -153,7 +167,7 @@ export function mergeQualityDisposalOptions(
 }
 
 export function getQualityPlanTypeFallback(t: TFunction) {
-  return (['incoming', 'process', 'finished', 'outbound'] as const).map((value) => ({
+  return QUALITY_PLAN_TYPE_ORDER.map((value) => ({
     value,
     label: t(QUALITY_PLAN_TYPE_I18N[value]),
   }));
@@ -881,6 +895,22 @@ export function buildQualityReportRateTrendColumns(t: TFunction): ProColumns[] {
       render: (_, row) => reportPercent(row.iqc_rate),
     },
     {
+      title: t('app.kuaizhizao.quality.reports.columns.outsourceQty'),
+      dataIndex: 'osqc_qty',
+      valueType: 'digit',
+      width: 100,
+      hideInSearch: true,
+      align: 'right',
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.outsourceRate'),
+      dataIndex: 'osqc_rate',
+      width: 110,
+      hideInSearch: true,
+      align: 'right',
+      render: (_, row) => reportPercent(row.osqc_rate),
+    },
+    {
       title: t('app.kuaizhizao.quality.reports.columns.processQty'),
       dataIndex: 'ipqc_qty',
       valueType: 'digit',
@@ -911,6 +941,22 @@ export function buildQualityReportRateTrendColumns(t: TFunction): ProColumns[] {
       hideInSearch: true,
       align: 'right',
       render: (_, row) => reportPercent(row.fqc_rate),
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.patrolQty'),
+      dataIndex: 'patrol_qty',
+      valueType: 'digit',
+      width: 100,
+      hideInSearch: true,
+      align: 'right',
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.patrolRate'),
+      dataIndex: 'patrol_rate',
+      width: 110,
+      hideInSearch: true,
+      align: 'right',
+      render: (_, row) => reportPercent(row.patrol_rate),
     },
     {
       title: t('app.kuaizhizao.quality.reports.columns.overallRate'),

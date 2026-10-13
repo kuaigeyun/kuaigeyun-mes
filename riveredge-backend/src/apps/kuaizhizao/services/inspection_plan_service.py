@@ -93,6 +93,19 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
             if existing:
                 raise ValidationError(f"质检方案编码 '{plan_code}' 已存在")
 
+            from apps.kuaizhizao.services.inspection_policy_service import (
+                INSPECTION_PLAN_TYPES_SET,
+                plan_type_display_label,
+            )
+
+            plan_type = str(plan_data.plan_type or "").strip()
+            if plan_type not in INSPECTION_PLAN_TYPES_SET:
+                allowed = "、".join(
+                    plan_type_display_label(x)
+                    for x in ("incoming", "outsource", "process", "finished", "outbound", "patrol")
+                )
+                raise ValidationError(f"非法质检方案类型: {plan_type}（允许：{allowed}）")
+
             plan_dict = plan_data.model_dump(exclude_unset=True, exclude={"steps"})
             plan_dict.update({
                 "tenant_id": tenant_id,

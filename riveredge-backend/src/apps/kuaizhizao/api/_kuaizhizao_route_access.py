@@ -290,6 +290,8 @@ def require_kuaizhizao_sales_order_access(
 
 _QUALITY_EXECUTION_PATH_MODULES: tuple[tuple[str, str], ...] = (
     ("/incoming-inspections", "quality-management-incoming-inspection"),
+    ("/outsource-inspections", "quality-management-outsource-inspection"),
+    ("/quality-patrols", "quality-management-quality-patrol"),
     ("/process-inspections", "quality-management-process-inspection"),
     ("/finished-goods-inspections", "quality-management-finished-goods-inspection"),
     ("/quality-inspection-stage-toggles", "quality-management-inspection-plans"),

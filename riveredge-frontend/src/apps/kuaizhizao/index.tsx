@@ -138,6 +138,8 @@ const EightDWorkbenchPage = lazy(() => import('./pages/quality-management/eight-
 const QualityComplaintsPage = lazy(() => import('./pages/quality-management/quality-complaints'));
 const SupplierEvaluationsPage = lazy(() => import('./pages/quality-management/supplier-evaluations'));
 const OQCInspectionPage = lazy(() => import('./pages/quality-management/oqc-inspection'));
+const OutsourceInspectionPage = lazy(() => import('./pages/quality-management/outsource-inspection'));
+const QualityPatrolPage = lazy(() => import('./pages/quality-management/quality-patrol'));
 const SPCMonitorPage = lazy(() => import('./pages/quality-management/spc-monitor'));
 const SystemDocumentsPage = lazy(() => import('./pages/quality-management/system-documents'));
 const QcSopPage = lazy(() => import('./pages/quality-management/qc-sop'));
@@ -348,8 +350,10 @@ const ProductionDailyTemplatesPage = lazy(() => import('./pages/production-execu
 
 // 质量管理报表
 const IncomingInspectionReportPage = lazy(() => import('./pages/quality-management/reports/IncomingInspectionReport'));
+const OutsourceInspectionReportPage = lazy(() => import('./pages/quality-management/reports/OutsourceInspectionReport'));
 const ProcessInspectionReportPage = lazy(() => import('./pages/quality-management/reports/ProcessInspectionReport'));
 const FinishedInspectionReportPage = lazy(() => import('./pages/quality-management/reports/FinishedInspectionReport'));
+const QualityPatrolReportPage = lazy(() => import('./pages/quality-management/reports/QualityPatrolReport'));
 const QualityExceptionTrackingPage = lazy(() => import('./pages/quality-management/reports/QualityExceptionTracking'));
 const NonconformingSummaryPage = lazy(() => import('./pages/quality-management/reports/NonconformingSummary'));
 const QualityRateTrendPage = lazy(() => import('./pages/quality-management/reports/QualityRateTrend'));
@@ -532,6 +536,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/quality-complaints" element={withPageSuspense(QualityComplaintsPage)} />
       <Route path="quality-management/supplier-evaluations" element={withPageSuspense(SupplierEvaluationsPage)} />
       <Route path="quality-management/oqc-inspection" element={withPageSuspense(OQCInspectionPage)} />
+      <Route path="quality-management/outsource-inspection" element={withPageSuspense(OutsourceInspectionPage)} />
+      <Route path="quality-management/quality-patrol" element={withPageSuspense(QualityPatrolPage)} />
       <Route path="quality-management/spc-monitor" element={withPageSuspense(SPCMonitorPage)} />
       <Route path="quality-management/clause-management" element={withPageSuspense(ClauseManagementPage)} />
       <Route path="quality-management/iso-clauses" element={<Navigate to="/apps/kuaizhizao/quality-management/clause-management" replace />} />
@@ -789,8 +795,10 @@ const KuaizhizaoApp: React.FC = () => {
 
       {/* 质量管理报表 */}
       <Route path="quality-management/reports/incoming-inspection-report" element={withPageSuspense(IncomingInspectionReportPage)} />
+      <Route path="quality-management/reports/outsource-inspection-report" element={withPageSuspense(OutsourceInspectionReportPage)} />
       <Route path="quality-management/reports/process-inspection-report" element={withPageSuspense(ProcessInspectionReportPage)} />
       <Route path="quality-management/reports/finished-inspection-report" element={withPageSuspense(FinishedInspectionReportPage)} />
+      <Route path="quality-management/reports/quality-patrol-report" element={withPageSuspense(QualityPatrolReportPage)} />
       <Route path="quality-management/reports/quality-exception-tracking" element={withPageSuspense(QualityExceptionTrackingPage)} />
       <Route path="quality-management/reports/nonconforming-summary" element={withPageSuspense(NonconformingSummaryPage)} />
       <Route path="quality-management/reports/quality-rate-trend" element={withPageSuspense(QualityRateTrendPage)} />

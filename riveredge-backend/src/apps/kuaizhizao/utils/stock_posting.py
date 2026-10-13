@@ -1,38 +1,17 @@
 """库存过账的事务去重，以及单据确认/撤回的串行边界。"""
 import hashlib
 import inspect
-from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from functools import wraps
 from uuid import uuid4
 
-from tortoise.transactions import in_transaction
-from tortoise import connections
-from tortoise.backends.base.client import BaseTransactionWrapper
 from tortoise.queryset import Q
+
+from core.utils.db_transaction import reuse_or_begin_transaction
 
 _posting_scope: ContextVar[str | None] = ContextVar("stock_posting_scope", default=None)
 
-
-@asynccontextmanager
-async def reuse_or_begin_transaction():
-    """
-    复用外层事务，否则开启新事务。
-
-    Tortoise 0.21 嵌套 in_transaction 走 NestedTransactionPooledContext：
-    - `_trxlock` 不可重入，嵌套调用会死锁；
-    - 内层主动 rollback 会连带回滚外层未提交写入（P2-18）。
-    因此复用分支只 yield，异常交由外层事务处理；独立新建分支仍用 in_transaction。
-    """
-    conn = connections.get("default")
-    if isinstance(conn, BaseTransactionWrapper):
-        yield conn
-    else:
-        async with in_transaction() as conn:
-            yield conn
-
-
-# 兼容旧名：库存原子装饰器内部仍用此别名
+# 兼容旧名：库存原子装饰器内部仍用此别名；实现见 core.utils.db_transaction
 _stock_transaction = reuse_or_begin_transaction
 
 

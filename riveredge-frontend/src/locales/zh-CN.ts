@@ -10142,10 +10142,24 @@ export default {
   'app.kuaizhizao.menu.quality-management.dashboard': '质检中心',
   'app.kuaizhizao.menu.quality-management.inspection-center': '质检中心',
   'app.kuaizhizao.menu.quality-management.incoming-inspection': '来料检验 (IQC)',
+  'app.kuaizhizao.menu.quality-management.outsource-inspection': '委外检验',
   'app.kuaizhizao.menu.quality-management.traceability': '追溯管理',
   'app.kuaizhizao.menu.quality-management.inspection-plans': '质检方案',
   'app.kuaizhizao.menu.quality-management.process-inspection': '过程检验 (IPQC)',
   'app.kuaizhizao.menu.quality-management.finished-goods-inspection': '成品检验 (FQC)',
+  'app.kuaizhizao.menu.quality-management.quality-patrol': '质量巡检',
+  'app.kuaizhizao.quality.patrol.createButton': '新建质量巡检',
+  'app.kuaizhizao.quality.patrol.workshop': '车间',
+  'app.kuaizhizao.quality.patrol.productionLine': '产线',
+  'app.kuaizhizao.quality.patrol.workstation': '工位',
+  'app.kuaizhizao.quality.patrol.form.inspectionPlan': '质检方案',
+  'app.kuaizhizao.quality.patrol.form.operation': '工序',
+  'app.kuaizhizao.quality.patrol.form.selectOperation': '请选择工序',
+  'app.kuaizhizao.quality.patrol.form.selectWorkOrder': '搜索工单编号',
+  'app.kuaizhizao.quality.patrol.messages.deleteConfirm': '确认删除选中的 {{count}} 条质量巡检单？',
+  'app.kuaizhizao.quality.outsource.pullFromReceipt': '从委外收货取单',
+  'app.kuaizhizao.quality.outsource.messages.deleteConfirm':
+    '确定要删除选中的 {{count}} 条委外检验单吗？',
   'app.kuaizhizao.menu.quality-management.nonconforming-ledger': '不良处理',
   'app.kuaizhizao.menu.quality-management.eight-d-reports': '8D报告',
   'app.kuaizhizao.menu.quality-management.quality-complaints': '质量投诉',
@@ -26092,6 +26106,7 @@ export default {
   'app.master-data.materialForm.inspectionStagesHint': '按业务场景分别配置质检模式（无/简易/方案）及检验方案；过程检验（IPQC）请在工序资料中配置。',
   'app.master-data.materialForm.inspectionStageColumn': '场景',
   'app.master-data.materialForm.inspectionStageIqc': '来料 IQC',
+  'app.master-data.materialForm.inspectionStageOsqc': '委外检验',
   'app.master-data.materialForm.inspectionStageFqc': '成品 FQC',
   'app.master-data.materialForm.inspectionStageOqc': '出货 OQC',
   'app.master-data.materialForm.inspectionStageIpqc': '过程 IPQC',
@@ -26227,6 +26242,7 @@ export default {
   'app.kuaizhizao.quality.masterDataHint.material': '组织未启用来料/成品/出货检验环节，物料质检模式（简易/方案）仅在开启对应环节后才会生效。',
   'app.kuaizhizao.quality.masterDataHint.operation': '组织未启用过程检验环节，工序质检模式（简易/方案）仅在开启 IPQC 后才会生效。',
   'app.kuaizhizao.quality.masterDataHint.stageIqc': '组织未启用来料检验（IQC）环节，该场景配置保存后不会生效。',
+  'app.kuaizhizao.quality.masterDataHint.stageOsqc': '组织未启用委外检验环节，该场景配置保存后不会生效。',
   'app.kuaizhizao.quality.masterDataHint.stageFqc': '组织未启用成品检验（FQC）环节，该场景配置保存后不会生效。',
   'app.kuaizhizao.quality.masterDataHint.stageOqc': '组织未启用出货检验（OQC）环节，该场景配置保存后不会生效。',
   'app.kuaizhizao.quality.masterDataHint.stageIpqc': '组织未启用过程检验（IPQC）环节，该场景配置保存后不会生效。',
@@ -26268,9 +26284,11 @@ export default {
   'app.kuaizhizao.quality.common.qualityStatus.unqualified': '不合格',
   'app.kuaizhizao.quality.common.qualityStatus.pending': '待判定',
   'app.kuaizhizao.quality.common.type.incoming': '来料检验 (IQC)',
+  'app.kuaizhizao.quality.common.type.outsource': '委外检验',
   'app.kuaizhizao.quality.common.type.process': '过程检验 (IPQC)',
   'app.kuaizhizao.quality.common.type.finished': '成品检验 (FQC)',
   'app.kuaizhizao.quality.common.type.outbound': '出货检验 (OQC)',
+  'app.kuaizhizao.quality.common.type.patrol': '质量巡检',
   'app.kuaizhizao.quality.common.defectType.dimension': '尺寸偏差',
   'app.kuaizhizao.quality.common.defectType.appearance': '外观缺陷',
   'app.kuaizhizao.quality.common.defectType.function': '功能异常',
@@ -30715,6 +30733,30 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.notify-warehouse-nested-tx-deadlock-r01.title':
+    '收货/发货通知仓库不再拖死后端',
+  'pages.dashboard.updateLog.entries.notify-warehouse-nested-tx-deadlock-r01.description':
+    '通知仓库生成采购入库或销售出库时，编码取号与单据关联改为复用外层事务，并缩短入库建单持锁；避免 Tortoise 嵌套事务死锁导致整站长时间无响应并弹出「服务器暂时不可用」。',
+  'pages.dashboard.updateLog.entries.sales-return-customer-name-string-r01.title':
+    '销售退货单新建客户名称必填校验修复',
+  'pages.dashboard.updateLog.entries.sales-return-customer-name-string-r01.description':
+    '销售退货单客户选择改用与销售订单一致的客户下拉，选中时正确回填客户名称字符串，避免提交时报 customer_name 类型错误。',
+  'pages.dashboard.updateLog.entries.unit-material-sync-decouple-r01.title':
+    '单位同步与物料同步配置拆开',
+  'pages.dashboard.updateLog.entries.unit-material-sync-decouple-r01.description':
+    '单位管理与物料管理同步按钮各自使用独立字段别名与优先接口；单位正式同步在写入前按基础单位去重，不再把物料编码误写成单位编码；接口测试仅对单位预置接口做单位去重。',
+  'pages.dashboard.updateLog.entries.quality-patrol-form-list-r01.title':
+    '质量巡检建单与列表能力完善',
+  'pages.dashboard.updateLog.entries.quality-patrol-form-list-r01.description':
+    '新建弹窗改为双栏布局并支持质检方案、车间产线工位、工序与工单关联；列表对齐委外检验的批量删除、撤回检验与审核操作，并补充方案与产线工位列。',
+  'pages.dashboard.updateLog.entries.quality-outsource-list-align-r01.title':
+    '委外检验列表对齐同级检验单据',
+  'pages.dashboard.updateLog.entries.quality-outsource-list-align-r01.description':
+    '去掉高级搜索上方页标题；工具栏补齐批量删除、撤回检验与审核批量操作，交互与来料/出货检验一致。',
+  'pages.dashboard.updateLog.entries.quality-plan-types-osqc-patrol-r01.title':
+    '质检方案扩展委外与巡检类型并上线委外检验与质量巡检',
+  'pages.dashboard.updateLog.entries.quality-plan-types-osqc-patrol-r01.description':
+    '检验业务菜单按来料、委外、过程、成品、出货、首件、巡检重排；质检方案新增委外检验与质量巡检类型；新增委外检验（委外收货取单）与质量巡检（无强制来源任意抽检）单据。',
   'pages.dashboard.updateLog.entries.finance-other-voucher-line-audit-columns-r01.title':
     '其他费用单保存明细行不再缺列',
   'pages.dashboard.updateLog.entries.finance-other-voucher-line-audit-columns-r01.description':
@@ -41852,6 +41894,12 @@ export default {
   'app.kuaizhizao.quality.reports.columns.finishedRate': '已完成费率',
   'app.kuaizhizao.quality.reports.columns.incomingQty': '来料数量',
   'app.kuaizhizao.quality.reports.columns.incomingRate': '来料合格率',
+  'app.kuaizhizao.quality.reports.columns.outsourceQty': '委外数量',
+  'app.kuaizhizao.quality.reports.columns.outsourceRate': '委外合格率',
+  'app.kuaizhizao.quality.reports.columns.patrolQty': '巡检数量',
+  'app.kuaizhizao.quality.reports.columns.patrolRate': '巡检合格率',
+  'app.kuaizhizao.menu.reports.outsource-inspection-report': '委外检验报表',
+  'app.kuaizhizao.menu.reports.quality-patrol-report': '质量巡检报表',
   'app.kuaizhizao.quality.reports.columns.passRate': '合格费率',
   'app.kuaizhizao.quality.reports.columns.processQty': '工序数量',
   'app.kuaizhizao.quality.reports.columns.processRate': '工序费率',

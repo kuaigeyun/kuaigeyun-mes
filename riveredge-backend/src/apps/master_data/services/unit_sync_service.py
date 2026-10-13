@@ -35,6 +35,7 @@ from apps.master_data.services.master_data_sync_common import (
     upsert_sync_binding,
 )
 from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
+from core.services.integration.kingdee_cosmic_paths import collapse_material_rows_to_unique_units
 from core.utils.timezone_utils import resolve_business_datetime
 
 UNIT_SYNC_STRING_FIELDS = frozenset({"description"})
@@ -124,11 +125,14 @@ class MaterialUnitSyncService:
             request_incremental=req.incremental,
         )
         try:
+            # 单位源常走物料 batchQuery：先按基础单位去重再映射，避免把物料编码写成单位编码。
+            # 去重不得在接口分页阶段做（否则会误判翻页结束）；仅在本服务写入前执行。
             rows, source_errors, _fetched = await fetch_mapped_rows_from_sources(
                 tenant_id,
                 sources,
                 since=since,
                 active_only=req.active_only,
+                transform_raw_rows=collapse_material_rows_to_unique_units,
             )
             result = await self._upsert_units(tenant_id, current_user, rows, match_key)
             if source_errors:

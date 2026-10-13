@@ -412,7 +412,7 @@ export interface MaterialBulkDefaultsPatchPayload {
 export interface MaterialBulkInspectionPatchItem {
   materialUuid: string;
   inspectionStages?: Partial<
-    Record<'iqc' | 'fqc' | 'oqc', { mode: 'none' | 'simple' | 'plan'; planId?: number | null }>
+    Record<'iqc' | 'osqc' | 'fqc' | 'oqc', { mode: 'none' | 'simple' | 'plan'; planId?: number | null }>
   >;
   overReportMode?: 'none' | 'fixed' | 'percent';
   overReportValue?: number;

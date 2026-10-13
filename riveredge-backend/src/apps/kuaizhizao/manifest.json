@@ -1715,6 +1715,28 @@
       ],
       "data_scope_key": null
     },
+    "quality-management-outsource-inspection": {
+      "permission_prefix": "kuaizhizao:quality-management-outsource-inspection",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
+    },
+    "quality-management-quality-patrol": {
+      "permission_prefix": "kuaizhizao:quality-management-quality-patrol",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
+    },
     "quality-management-iso-clauses": {
       "permission_prefix": "kuaizhizao:quality-management-iso-clauses",
       "display_fields": [
@@ -3499,6 +3521,32 @@
     "kuaizhizao:quality-management-oqc-inspection:reject",
     "kuaizhizao:quality-management-oqc-inspection:print",
     "kuaizhizao:quality-management-oqc-inspection:execute",
+    "kuaizhizao:quality-management-outsource-inspection:read",
+    "kuaizhizao:quality-management-outsource-inspection:create",
+    "kuaizhizao:quality-management-outsource-inspection:delete",
+    "kuaizhizao:quality-management-outsource-inspection:update",
+    "kuaizhizao:quality-management-outsource-inspection:import",
+    "kuaizhizao:quality-management-outsource-inspection:export",
+    "kuaizhizao:quality-management-outsource-inspection:submit",
+    "kuaizhizao:quality-management-outsource-inspection:revoke",
+    "kuaizhizao:quality-management-outsource-inspection:approve",
+    "kuaizhizao:quality-management-outsource-inspection:audit",
+    "kuaizhizao:quality-management-outsource-inspection:reject",
+    "kuaizhizao:quality-management-outsource-inspection:print",
+    "kuaizhizao:quality-management-outsource-inspection:execute",
+    "kuaizhizao:quality-management-quality-patrol:read",
+    "kuaizhizao:quality-management-quality-patrol:create",
+    "kuaizhizao:quality-management-quality-patrol:delete",
+    "kuaizhizao:quality-management-quality-patrol:update",
+    "kuaizhizao:quality-management-quality-patrol:import",
+    "kuaizhizao:quality-management-quality-patrol:export",
+    "kuaizhizao:quality-management-quality-patrol:submit",
+    "kuaizhizao:quality-management-quality-patrol:revoke",
+    "kuaizhizao:quality-management-quality-patrol:approve",
+    "kuaizhizao:quality-management-quality-patrol:audit",
+    "kuaizhizao:quality-management-quality-patrol:reject",
+    "kuaizhizao:quality-management-quality-patrol:print",
+    "kuaizhizao:quality-management-quality-patrol:execute",
     "kuaizhizao:quality-management-process-inspection:read",
     "kuaizhizao:quality-management-process-inspection:create",
     "kuaizhizao:quality-management-process-inspection:delete",
@@ -3521,6 +3569,12 @@
     "kuaizhizao:quality-management-reports-incoming-inspection-report:read",
     "kuaizhizao:quality-management-reports-incoming-inspection-report:export",
     "kuaizhizao:quality-management-reports-incoming-inspection-report:print",
+    "kuaizhizao:quality-management-reports-outsource-inspection-report:read",
+    "kuaizhizao:quality-management-reports-outsource-inspection-report:export",
+    "kuaizhizao:quality-management-reports-outsource-inspection-report:print",
+    "kuaizhizao:quality-management-reports-quality-patrol-report:read",
+    "kuaizhizao:quality-management-reports-quality-patrol-report:export",
+    "kuaizhizao:quality-management-reports-quality-patrol-report:print",
     "kuaizhizao:quality-management-reports-nonconforming-summary:read",
     "kuaizhizao:quality-management-reports-nonconforming-summary:export",
     "kuaizhizao:quality-management-reports-nonconforming-summary:print",
@@ -4388,6 +4442,15 @@
       "config_section": "quality_inspection"
     },
     {
+      "node_key": "quality_patrol",
+      "entity_type": "quality_patrol",
+      "resource": "kuaizhizao:quality-management-quality-patrol",
+      "name": "质量巡检审核",
+      "template": "simple",
+      "config_category": "quality",
+      "config_section": "quality_inspection"
+    },
+    {
       "node_key": "rework_order_inventory_verify",
       "entity_type": "rework_order",
       "resource": "kuaizhizao:rework-order",
@@ -5150,6 +5213,30 @@
       "module_icon": "tool",
       "auto_generate": true,
       "rule_code": "OQC_INSPECTION_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-quality-outsource-inspection",
+      "page_name": "委外检验",
+      "page_path": "/apps/kuaizhizao/quality-management/outsource-inspection",
+      "code_field": "inspection_code",
+      "code_field_label": "委外检验单编码",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "OUTSOURCE_INSPECTION_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-quality-quality-patrol",
+      "page_name": "质量巡检",
+      "page_path": "/apps/kuaizhizao/quality-management/quality-patrol",
+      "code_field": "inspection_code",
+      "code_field_label": "质量巡检单编码",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "QUALITY_PATROL_CODE",
       "allow_manual_edit": true
     },
     {
@@ -5919,6 +6006,24 @@
       "page_path": "/apps/kuaizhizao/quality-management/oqc-inspection",
       "table_name": "apps_kuaizhizao_oqc_inspections",
       "table_name_label": "出货检验表",
+      "module": "快制造",
+      "module_icon": "tool"
+    },
+    {
+      "page_code": "kuaizhizao-quality-outsource-inspection",
+      "page_name": "委外检验",
+      "page_path": "/apps/kuaizhizao/quality-management/outsource-inspection",
+      "table_name": "apps_kuaizhizao_outsource_inspections",
+      "table_name_label": "委外检验表",
+      "module": "快制造",
+      "module_icon": "tool"
+    },
+    {
+      "page_code": "kuaizhizao-quality-quality-patrol",
+      "page_name": "质量巡检",
+      "page_path": "/apps/kuaizhizao/quality-management/quality-patrol",
+      "table_name": "apps_kuaizhizao_quality_patrols",
+      "table_name_label": "质量巡检表",
       "module": "快制造",
       "module_icon": "tool"
     },

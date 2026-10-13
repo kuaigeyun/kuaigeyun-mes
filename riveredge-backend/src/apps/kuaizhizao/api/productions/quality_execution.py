@@ -2364,7 +2364,7 @@ async def api_put_quality_inspection_stage_toggles(
 ) -> QualityInspectionStageTogglesResponse:
     """部分更新：仅对请求体中出现的字段覆盖，其余保持原值。"""
     current = await get_quality_inspection_stage_toggles(tenant_id)
-    for key in ("iqc_enabled", "ipqc_enabled", "fqc_enabled", "oqc_enabled"):
+    for key in ("iqc_enabled", "osqc_enabled", "ipqc_enabled", "fqc_enabled", "oqc_enabled"):
         v = getattr(body, key, None)
         if v is not None:
             current[key] = bool(v)
@@ -2388,3 +2388,389 @@ async def api_get_quality_effective_config(
     """返回环节开关、模块能力、自动建单与门禁的聚合配置。"""
     data = await get_quality_effective_config(tenant_id)
     return QualityEffectiveConfigResponse.model_validate(data)
+
+
+# —— 委外检验（OSQC）——
+
+from apps.kuaizhizao.schemas.outsource_inspection import (
+    OutsourceInspectionConduct,
+    OutsourceInspectionCreate,
+    OutsourceInspectionResponse,
+    OutsourceInspectionUpdate,
+)
+from apps.kuaizhizao.services.outsource_inspection_service import OutsourceInspectionService
+
+_outsource_inspection_service = OutsourceInspectionService()
+_OSQC_READ = Depends(require_permission_codes("kuaizhizao:quality-management-outsource-inspection:read"))
+_OSQC_CREATE = Depends(require_permission_codes("kuaizhizao:quality-management-outsource-inspection:create"))
+_OSQC_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-outsource-inspection:update"))
+_OSQC_DELETE = Depends(require_permission_codes("kuaizhizao:quality-management-outsource-inspection:delete"))
+_OSQC_EXECUTE = Depends(require_permission_codes("kuaizhizao:quality-management-outsource-inspection:execute"))
+_OSQC_APPROVE = Depends(require_permission_codes("kuaizhizao:quality-management-outsource-inspection:approve"))
+
+
+@router.get("/outsource-inspections", summary="List outsource inspections")
+async def list_outsource_inspections(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    status: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None),
+    order_by: Optional[str] = Query(None),
+    inspection_start_date: Optional[str] = Query(None),
+    inspection_end_date: Optional[str] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    _auth=_OSQC_READ,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await _outsource_inspection_service.list(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        keyword=keyword,
+        order_by=order_by,
+        inspection_start_date=inspection_start_date,
+        inspection_end_date=inspection_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+    )
+
+
+@router.post(
+    "/outsource-inspections",
+    response_model=OutsourceInspectionResponse,
+    summary="Create outsource inspection",
+)
+async def create_outsource_inspection(
+    payload: OutsourceInspectionCreate,
+    _auth=_OSQC_CREATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceInspectionResponse:
+    return await _outsource_inspection_service.create(
+        tenant_id=tenant_id, user_id=current_user.id, payload=payload
+    )
+
+
+@router.get(
+    "/outsource-inspections/pull-candidates/outsource-receipts",
+    summary="List outsource receipt pull candidates",
+)
+async def list_outsource_receipt_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    receipt_code: Optional[str] = Query(None),
+    _auth=_OSQC_READ,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await _outsource_inspection_service.list_receipt_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        receipt_code=receipt_code,
+    )
+
+
+@router.post(
+    "/outsource-inspections/from-outsource-receipt/{receipt_id}",
+    response_model=List[OutsourceInspectionResponse],
+    summary="Create outsource inspection from receipt",
+)
+async def create_outsource_inspection_from_receipt(
+    receipt_id: int = Path(..., description="委外收货单ID"),
+    _auth=_OSQC_CREATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[OutsourceInspectionResponse]:
+    return await _outsource_inspection_service.create_from_receipt(
+        tenant_id=tenant_id, receipt_id=receipt_id, user_id=current_user.id
+    )
+
+
+@router.get(
+    "/outsource-inspections/{inspection_id}",
+    response_model=OutsourceInspectionResponse,
+    summary="Get outsource inspection",
+)
+async def get_outsource_inspection(
+    inspection_id: int,
+    _auth=_OSQC_READ,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceInspectionResponse:
+    return await _outsource_inspection_service.get_by_id(tenant_id, inspection_id)
+
+
+@router.put(
+    "/outsource-inspections/{inspection_id}",
+    response_model=OutsourceInspectionResponse,
+    summary="Update outsource inspection",
+)
+async def update_outsource_inspection(
+    inspection_id: int,
+    payload: OutsourceInspectionUpdate,
+    _auth=_OSQC_UPDATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceInspectionResponse:
+    return await _outsource_inspection_service.update(
+        tenant_id, inspection_id, current_user.id, payload
+    )
+
+
+@router.delete(
+    "/outsource-inspections/{inspection_id}",
+    summary="Delete outsource inspection",
+)
+async def delete_outsource_inspection(
+    inspection_id: int,
+    _auth=_OSQC_DELETE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await _outsource_inspection_service.delete(tenant_id, inspection_id, current_user.id)
+    return {"success": True}
+
+
+@router.post(
+    "/outsource-inspections/{inspection_id}/conduct",
+    response_model=OutsourceInspectionResponse,
+    summary="Conduct outsource inspection",
+)
+async def conduct_outsource_inspection(
+    inspection_id: int,
+    payload: OutsourceInspectionConduct,
+    _auth=_OSQC_EXECUTE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceInspectionResponse:
+    return await _outsource_inspection_service.conduct(
+        tenant_id, inspection_id, current_user.id, payload
+    )
+
+
+@router.post(
+    "/outsource-inspections/{inspection_id}/approve",
+    response_model=OutsourceInspectionResponse,
+    summary="Approve outsource inspection",
+)
+async def approve_outsource_inspection(
+    inspection_id: int,
+    approve: bool = Body(True, embed=True),
+    remarks: Optional[str] = Body(None, embed=True),
+    _auth=_OSQC_APPROVE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceInspectionResponse:
+    return await _outsource_inspection_service.approve(
+        tenant_id, inspection_id, current_user.id, approve=approve, remarks=remarks
+    )
+
+
+@router.post(
+    "/outsource-inspections/{inspection_id}/apply-plan",
+    response_model=OutsourceInspectionResponse,
+    summary="Apply inspection plan to outsource inspection",
+)
+async def apply_plan_outsource_inspection(
+    inspection_id: int,
+    body: QualityInspectionApplyPlanBody,
+    _auth=_OSQC_UPDATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceInspectionResponse:
+    return await _outsource_inspection_service.apply_plan(
+        tenant_id, inspection_id, current_user.id, int(body.inspection_plan_id)
+    )
+
+
+@router.post(
+    "/outsource-inspections/{inspection_id}/revoke-conduct",
+    response_model=OutsourceInspectionResponse,
+    summary="Revoke outsource inspection conduct",
+)
+async def revoke_conduct_outsource_inspection(
+    inspection_id: int,
+    _auth=_OSQC_EXECUTE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceInspectionResponse:
+    return await _outsource_inspection_service.revoke_conduct(
+        tenant_id, inspection_id, current_user.id
+    )
+
+
+from apps.kuaizhizao.schemas.quality_patrol import (
+    QualityPatrolConduct,
+    QualityPatrolCreate,
+    QualityPatrolResponse,
+    QualityPatrolUpdate,
+)
+from apps.kuaizhizao.services.quality_patrol_service import QualityPatrolService
+
+_quality_patrol_service = QualityPatrolService()
+_PATROL_READ = Depends(require_permission_codes("kuaizhizao:quality-management-quality-patrol:read"))
+_PATROL_CREATE = Depends(require_permission_codes("kuaizhizao:quality-management-quality-patrol:create"))
+_PATROL_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-quality-patrol:update"))
+_PATROL_DELETE = Depends(require_permission_codes("kuaizhizao:quality-management-quality-patrol:delete"))
+_PATROL_EXECUTE = Depends(require_permission_codes("kuaizhizao:quality-management-quality-patrol:execute"))
+_PATROL_APPROVE = Depends(require_permission_codes("kuaizhizao:quality-management-quality-patrol:approve"))
+
+
+@router.get("/quality-patrols", summary="List quality patrols")
+async def list_quality_patrols(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    status: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None),
+    order_by: Optional[str] = Query(None),
+    inspection_start_date: Optional[str] = Query(None),
+    inspection_end_date: Optional[str] = Query(None),
+    created_start_date: Optional[str] = Query(None),
+    created_end_date: Optional[str] = Query(None),
+    _auth=_PATROL_READ,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await _quality_patrol_service.list(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        keyword=keyword,
+        order_by=order_by,
+        inspection_start_date=inspection_start_date,
+        inspection_end_date=inspection_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+    )
+
+
+@router.post(
+    "/quality-patrols",
+    response_model=QualityPatrolResponse,
+    summary="Create quality patrol",
+)
+async def create_quality_patrol(
+    payload: QualityPatrolCreate,
+    _auth=_PATROL_CREATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityPatrolResponse:
+    return await _quality_patrol_service.create(tenant_id, current_user.id, payload)
+
+
+@router.get(
+    "/quality-patrols/{inspection_id}",
+    response_model=QualityPatrolResponse,
+    summary="Get quality patrol",
+)
+async def get_quality_patrol(
+    inspection_id: int,
+    _auth=_PATROL_READ,
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityPatrolResponse:
+    return await _quality_patrol_service.get_by_id(tenant_id, inspection_id)
+
+
+@router.put(
+    "/quality-patrols/{inspection_id}",
+    response_model=QualityPatrolResponse,
+    summary="Update quality patrol",
+)
+async def update_quality_patrol(
+    inspection_id: int,
+    payload: QualityPatrolUpdate,
+    _auth=_PATROL_UPDATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityPatrolResponse:
+    return await _quality_patrol_service.update(
+        tenant_id, inspection_id, current_user.id, payload
+    )
+
+
+@router.delete(
+    "/quality-patrols/{inspection_id}",
+    summary="Delete quality patrol",
+)
+async def delete_quality_patrol(
+    inspection_id: int,
+    _auth=_PATROL_DELETE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await _quality_patrol_service.delete(tenant_id, inspection_id, current_user.id)
+    return {"success": True}
+
+
+@router.post(
+    "/quality-patrols/{inspection_id}/conduct",
+    response_model=QualityPatrolResponse,
+    summary="Conduct quality patrol",
+)
+async def conduct_quality_patrol(
+    inspection_id: int,
+    payload: QualityPatrolConduct,
+    _auth=_PATROL_EXECUTE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityPatrolResponse:
+    return await _quality_patrol_service.conduct(
+        tenant_id, inspection_id, current_user.id, payload
+    )
+
+
+@router.post(
+    "/quality-patrols/{inspection_id}/approve",
+    response_model=QualityPatrolResponse,
+    summary="Approve quality patrol",
+)
+async def approve_quality_patrol(
+    inspection_id: int,
+    approve: bool = Body(True, embed=True),
+    remarks: Optional[str] = Body(None, embed=True),
+    _auth=_PATROL_APPROVE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityPatrolResponse:
+    return await _quality_patrol_service.approve(
+        tenant_id, inspection_id, current_user.id, approve=approve, remarks=remarks
+    )
+
+
+@router.post(
+    "/quality-patrols/{inspection_id}/apply-plan",
+    response_model=QualityPatrolResponse,
+    summary="Apply inspection plan to quality patrol",
+)
+async def apply_plan_quality_patrol(
+    inspection_id: int,
+    body: QualityInspectionApplyPlanBody,
+    _auth=_PATROL_UPDATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityPatrolResponse:
+    return await _quality_patrol_service.apply_plan(
+        tenant_id, inspection_id, current_user.id, int(body.inspection_plan_id)
+    )
+
+
+@router.post(
+    "/quality-patrols/{inspection_id}/revoke-conduct",
+    response_model=QualityPatrolResponse,
+    summary="Revoke conduct quality patrol",
+)
+async def revoke_conduct_quality_patrol(
+    inspection_id: int,
+    _auth=_PATROL_EXECUTE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityPatrolResponse:
+    return await _quality_patrol_service.revoke_conduct(
+        tenant_id, inspection_id, current_user.id
+    )

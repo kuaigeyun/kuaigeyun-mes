@@ -9,18 +9,22 @@ from infra.exceptions.exceptions import BusinessLogicError
 
 QualityInspectionEntityType = Literal[
     "incoming_inspection",
+    "outsource_inspection",
     "process_inspection",
     "finished_goods_inspection",
     "oqc_inspection",
+    "quality_patrol",
 ]
 
 _REVOKE_CONDUCT_ALLOWED_STATUSES = frozenset({"已检验", "已驳回"})
 
 _TEMPLATE_ATTR_BY_ENTITY: Dict[QualityInspectionEntityType, str] = {
     "incoming_inspection": "other_checks",
+    "outsource_inspection": "other_checks",
     "process_inspection": "quality_characteristics",
     "finished_goods_inspection": "other_checks",
     "oqc_inspection": "other_checks",
+    "quality_patrol": "other_checks",
 }
 
 _MEASUREMENT_ATTR_BY_ENTITY: Dict[QualityInspectionEntityType, str] = {

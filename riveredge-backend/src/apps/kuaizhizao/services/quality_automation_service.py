@@ -45,6 +45,38 @@ class QualityAutomationService:
                 f"采购入库 {purchase_receipt_id} 自动创建来料检验失败: {e}"
             )
 
+    async def maybe_auto_create_osqc_from_outsource_receipt(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        created_by: int,
+    ) -> None:
+        cfg = await get_quality_effective_config(tenant_id)
+        if not cfg["stage_enabled"]["osqc"]:
+            return
+        if not cfg["module_enabled"]["outsource"]:
+            return
+        if not cfg["auto_create"]["osqc_on_outsource_receipt"]:
+            return
+        try:
+            from apps.kuaizhizao.services.outsource_inspection_service import (
+                OutsourceInspectionService,
+            )
+
+            created = await OutsourceInspectionService().create_from_receipt(
+                tenant_id=tenant_id,
+                receipt_id=receipt_id,
+                user_id=created_by,
+            )
+            if created:
+                logger.info(
+                    f"委外收货 {receipt_id} 自动创建委外检验 {len(created)} 张"
+                )
+        except Exception as e:
+            logger.warning(
+                f"委外收货 {receipt_id} 自动创建委外检验失败: {e}"
+            )
+
     async def maybe_auto_create_ipqc_fqc_from_reporting(
         self,
         tenant_id: int,

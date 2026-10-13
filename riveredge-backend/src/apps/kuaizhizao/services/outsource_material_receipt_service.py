@@ -387,6 +387,20 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
                 await material_receipt.refresh_from_db()
                 response = OutsourceMaterialReceiptResponse.model_validate(material_receipt)
+                try:
+                    from apps.kuaizhizao.services.quality_automation_service import (
+                        QualityAutomationService,
+                    )
+
+                    await QualityAutomationService().maybe_auto_create_osqc_from_outsource_receipt(
+                        tenant_id=tenant_id,
+                        receipt_id=int(material_receipt.id),
+                        created_by=created_by,
+                    )
+                except Exception as auto_exc:
+                    logger.warning(
+                        f"委外收货 {material_receipt.id} 触发自动委外检验异常: {auto_exc}"
+                    )
                 if product_id:
                     stock_payload = {
                         "tenant_id": tenant_id,
@@ -774,6 +788,22 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
             return OutsourceMaterialReceiptResponse.model_validate(receipt)
 
         assert_inbound_hub_capability(receipt, "confirm", receipt_type="outsource_receipt")
+
+        from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            assert_osqc_for_outsource_receipt,
+        )
+
+        owo = await OutsourceWorkOrder.get_or_none(
+            id=receipt.outsource_work_order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        await assert_osqc_for_outsource_receipt(
+            tenant_id,
+            int(receipt.id),
+            material_id=int(owo.product_id) if owo and owo.product_id else None,
+        )
 
         from apps.kuaizhizao.utils.inbound_confirm_helper import (
             resolve_inbound_confirm_business_time,
