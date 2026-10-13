@@ -12,11 +12,11 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
-import { App, Button, Modal, Row, Col, Table, Switch, Input, Typography } from 'antd';
+import { App, Button, Grid, Modal, Row, Col, Table, Switch, Input, Typography, Select } from 'antd';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalGridBlock, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -62,7 +62,7 @@ function formatSpotCheckFormDate(value: unknown): string | undefined {
   return parsed.isValid() ? parsed.format('YYYY-MM-DD') : undefined;
 }
 
-interface SpotCheckLine {
+interface SpotCheckLine extends Record<string, unknown> {
   line_no?: number;
   item_id?: number;
   item_code?: string;
@@ -75,13 +75,13 @@ interface SpotCheckLine {
   numeric_min?: number | string | null;
   numeric_max?: number | string | null;
   measured_value?: string;
-  is_pass?: boolean;
+  is_pass?: boolean | null;
   photo_required?: boolean;
   remark?: string;
   attachments?: DocumentAttachmentFile[];
 }
 
-interface SpotCheck {
+interface SpotCheck extends Record<string, unknown> {
   id?: number;
   uuid?: string;
   document_no?: string;
@@ -89,6 +89,11 @@ interface SpotCheck {
   equipment_code?: string;
   equipment_name?: string;
   scheme_id?: number;
+  plan_uuid?: string;
+  period_key?: string;
+  scheduled_at?: string;
+  due_at?: string;
+  shift_name?: string;
   capture_mode?: string;
   check_date?: string;
   inspector_id?: number;
@@ -113,6 +118,7 @@ const SpotChecksPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const screens = Grid.useBreakpoint();
   const perms = useResourcePermissions(RESOURCE);
   const canApprove = perms.canAction?.('approve') ?? false;
   const canReject = perms.canAction?.('reject') ?? false;
@@ -122,6 +128,7 @@ const SpotChecksPage: React.FC = () => {
   const createDeepLinkHandledRef = useRef(false);
   const schemeDomain = (searchParams.get('domain') || '').trim().toLowerCase() || undefined;
   const urlSchemeId = Number(searchParams.get('scheme_id') || 0) || undefined;
+  const planUuid = searchParams.get('plan_uuid') || undefined;
   const formRef = useRef<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -403,6 +410,17 @@ const SpotChecksPage: React.FC = () => {
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     const mode = String(captureMode || 'A').toUpperCase();
+    if (current?.period_key && mode !== 'B') {
+      const missing = previewLines.find((line) =>
+        (line.value_type || 'boolean') === 'boolean'
+          ? line.is_pass == null
+          : !line.measured_value?.trim(),
+      );
+      if (missing) {
+        messageApi.warning(`请填写点检项「${missing.item_name || missing.line_no}」的实际结果`);
+        return;
+      }
+    }
     if (mode === 'B') {
       if (!headerAttachments.length) {
         messageApi.warning(t(`${P}.headerPhotosRequired`));
@@ -523,9 +541,27 @@ const SpotChecksPage: React.FC = () => {
     {
       title: t(`${P}.line.isPass`),
       dataIndex: 'is_pass',
-      width: 80,
-      render: (_: unknown, row: SpotCheckLine, index: number) => (
-        <Switch
+      width: 120,
+      render: (_: unknown, row: SpotCheckLine, index: number) => {
+        if (current?.period_key) {
+          if (row.value_type === 'numeric') return <span>按实测值判定</span>;
+          return (
+            <Select
+              size="small" style={{ width: 92 }} placeholder="待填写"
+              value={row.is_pass == null ? undefined : row.is_pass ? 'pass' : 'fail'}
+              options={[{ label: '合格', value: 'pass' }, { label: '不合格', value: 'fail' }]}
+              onChange={(value) => {
+                const next = [...previewLines];
+                next[index] = { ...row, is_pass: value === 'pass',
+                  ...((row.value_type || 'boolean') === 'boolean'
+                    ? { measured_value: value === 'pass' ? '是' : '否' } : {}),
+                };
+                setPreviewLines(next);
+              }}
+            />
+          );
+        }
+        return <Switch
           size="small"
           checked={row.is_pass ?? true}
           onChange={(checked) => {
@@ -540,8 +576,8 @@ const SpotChecksPage: React.FC = () => {
             };
             setPreviewLines(next);
           }}
-        />
-      ),
+        />;
+      },
     },
     {
       title: t(`${P}.line.photos`, { defaultValue: '照片' }),
@@ -580,6 +616,9 @@ const SpotChecksPage: React.FC = () => {
             : '-',
       },
       { title: t(`${P}.col.checkDate`), dataIndex: 'check_date', valueType: 'date' },
+      { title: '计划执行时间', dataIndex: 'scheduled_at', valueType: 'dateTime' },
+      { title: '执行截止时间', dataIndex: 'due_at', valueType: 'dateTime' },
+      { title: '执行班次', dataIndex: 'shift_name' },
       { title: t(`${P}.col.inspector`), dataIndex: 'inspector_name' },
       { title: t(`${P}.col.reviewer`), dataIndex: 'reviewer_user_name' },
       { title: t(`${P}.col.reviewedBy`), dataIndex: 'reviewed_by_name' },
@@ -594,7 +633,7 @@ const SpotChecksPage: React.FC = () => {
         title: t(`${P}.col.abnormality`),
         dataIndex: 'has_abnormality',
         render: (_, r) =>
-          r.has_abnormality ? (
+          r.status === '待执行' || r.status === '已取消' ? '-' : r.has_abnormality ? (
             <MarkerTag color="error">{t(`${P}.abnormal`)}</MarkerTag>
           ) : (
             <MarkerTag color="success">{t(`${P}.normal`)}</MarkerTag>
@@ -634,7 +673,7 @@ const SpotChecksPage: React.FC = () => {
         dataIndex: 'is_pass',
         width: 80,
         render: (_, row) =>
-          row.is_pass === false ? (
+          row.is_pass == null ? '-' : row.is_pass === false ? (
             <MarkerTag color="error">{t(`${P}.abnormal`)}</MarkerTag>
           ) : (
             <MarkerTag color="success">{t(`${P}.normal`)}</MarkerTag>
@@ -659,12 +698,18 @@ const SpotChecksPage: React.FC = () => {
 
   const columns: ProColumns<SpotCheck>[] = useMemo(() => alignProColumns<SpotCheck>([
       {
+        title: '执行班次', dataIndex: 'shift_name', search: false, width: 100,
+      },
+      {
+        title: '执行截止', dataIndex: 'due_at', search: false, valueType: 'dateTime', width: 165,
+      },
+      {
         title: t(`${P}.col.checkDate`),
         dataIndex: 'check_date_range',
         valueType: 'dateRange',
         hideInTable: true,
         formItemProps: formDateRangeFormItemProps,
-        search: { order: 10 } as ProColumns['search'],
+        search: { order: 10 } as unknown as ProColumns['search'],
       },
       {
         title: t('common.updatedAt'),
@@ -672,7 +717,7 @@ const SpotChecksPage: React.FC = () => {
         valueType: 'dateRange',
         hideInTable: true,
         formItemProps: formDateRangeFormItemProps,
-        search: { order: 11 } as ProColumns['search'],
+        search: { order: 11 } as unknown as ProColumns['search'],
       },
       {
         title: t('common.status'),
@@ -680,7 +725,7 @@ const SpotChecksPage: React.FC = () => {
         valueType: 'select',
         valueEnum: spotCheckStatusValueEnum,
         hideInTable: true,
-        search: { order: 20 } as ProColumns['search'],
+        search: { order: 20 } as unknown as ProColumns['search'],
       },
       {
         title: t(`${P}.col.abnormality`),
@@ -688,7 +733,7 @@ const SpotChecksPage: React.FC = () => {
         valueType: 'select',
         valueEnum: abnormalityValueEnum,
         hideInTable: true,
-        search: { order: 21 } as ProColumns['search'],
+        search: { order: 21 } as unknown as ProColumns['search'],
       },
       {
         title: t(`${P}.col.documentNo`),
@@ -700,7 +745,7 @@ const SpotChecksPage: React.FC = () => {
         ellipsis: true,
         fixed: 'left',
         sorter: true,
-        search: { order: 30 } as ProColumns['search'],
+        search: { order: 30 } as unknown as ProColumns['search'],
         render: (_, r) => (r.document_no != null && r.document_no !== '' ? String(r.document_no) : '-'),
       },
       {
@@ -760,7 +805,7 @@ const SpotChecksPage: React.FC = () => {
         sorter: true,
         hideInSearch: true,
         render: (_, r) =>
-          r.has_abnormality ? (
+          r.status === '待执行' || r.status === '已取消' ? '-' : r.has_abnormality ? (
             <MarkerTag color="error">{t(`${P}.abnormal`)}</MarkerTag>
           ) : (
             <MarkerTag color="success">{t(`${P}.normal`)}</MarkerTag>
@@ -805,7 +850,7 @@ const SpotChecksPage: React.FC = () => {
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => {
-          const editable = record.status === '待审核' || record.status === '已驳回';
+          const editable = ['待执行', '待审核', '已驳回'].includes(record.status || '');
           return (
             <>
               {perms.canRead ? (
@@ -827,7 +872,7 @@ const SpotChecksPage: React.FC = () => {
                     void handleEdit(record);
                   }}
                 >
-                  {t('common.edit')}
+                  {record.period_key ? '填写并提交' : t('common.edit')}
                 </Button>
               ) : null}
               {canApprove && record.status === '待审核' ? (
@@ -855,7 +900,7 @@ const SpotChecksPage: React.FC = () => {
                   {t(`${P}.action.reject`)}
                 </Button>
               ) : null}
-              {perms.canDelete && editable ? (
+              {perms.canDelete && editable && !record.period_key ? (
                 <ActionConfirmPopconfirm
                   title={t('common.deleteTitle')}
                   onConfirm={() => {
@@ -871,7 +916,7 @@ const SpotChecksPage: React.FC = () => {
           );
         },
       },
-    ], SALES_DOC_LIST_FIELD_RANK),
+    ] as ProColumns<SpotCheck>[], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, canApprove, canReject, spotCheckStatusValueEnum, abnormalityValueEnum, navigate, handleDetail],
   );
 
@@ -903,6 +948,7 @@ const SpotChecksPage: React.FC = () => {
                 ...listParams,
                 ...(urlUuidRef.current ? { uuid: urlUuidRef.current } : {}),
                 scheme_domain: schemeDomain || 'equipment',
+                plan_uuid: planUuid,
               });
               const { data, total } = normalizeEquipmentListResponse(res);
               return { data: data as SpotCheck[], success: true, total };
@@ -960,7 +1006,7 @@ const SpotChecksPage: React.FC = () => {
           Boolean(
             detail &&
               perms.canUpdate &&
-              (detail.status === '待审核' || detail.status === '已驳回'),
+              ['待执行', '待审核', '已驳回'].includes(detail.status || ''),
           ),
           () => {
             if (!detail) return;
@@ -971,7 +1017,7 @@ const SpotChecksPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
+        title={current?.period_key ? '实际点检并提交审核' : isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -981,22 +1027,28 @@ const SpotChecksPage: React.FC = () => {
           setCaptureMode('A');
         }}
         onFinish={handleSubmit}
-        isEdit={isEdit}
+        isEdit={isEdit && !current?.period_key}
+        submitText={current?.period_key ? '提交审核' : undefined}
         loading={submitting}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={screens.md ? MODAL_CONFIG.LARGE_WIDTH : Math.min(360, window.innerWidth - 24)}
         formRef={formRef}
         initialValues={formInitialValues}
         grid={false}
       >
+        <FormModalGridBlock>
         <Row gutter={16}>
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <ProFormSelect
               name="equipment_id"
               label={t(`${P}.form.equipment`)}
-              options={equipmentOptions}
+              options={current?.period_key ? [{
+                label: String(current.equipment_name || current.equipment_code || current.equipment_id),
+                value: current.equipment_id,
+              }] : equipmentOptions}
               rules={[{ required: true }]}
               showSearch
               fieldProps={{
+                disabled: Boolean(current?.period_key),
                 onChange: (val: number) => {
                   void (async () => {
                     let schemeId = formRef.current?.getFieldValue('scheme_id') as number | undefined;
@@ -1032,15 +1084,19 @@ const SpotChecksPage: React.FC = () => {
               }}
             />
           </Col>
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <ProFormSelect
               name="scheme_id"
               label={t(`${P}.form.scheme`)}
-              options={schemeOptions}
+              options={current?.period_key ? [{
+                label: String(current.scheme_name || current.scheme_code || current.scheme_id),
+                value: current.scheme_id,
+              }] : schemeOptions}
               rules={[{ required: true, message: t(`${P}.schemeRequired`) }]}
               showSearch
               allowClear
               fieldProps={{
+                disabled: Boolean(current?.period_key),
                 onChange: (val: number) => {
                   const equipmentId = formRef.current?.getFieldValue('equipment_id');
                   void handlePreview(equipmentId, val);
@@ -1048,15 +1104,16 @@ const SpotChecksPage: React.FC = () => {
               }}
             />
           </Col>
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <ProFormDatePicker
               name="check_date"
               label={t(`${P}.col.checkDate`)}
               rules={[{ required: true }]}
+              disabled={Boolean(current?.period_key)}
               fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
             />
           </Col>
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <EquipmentPersonSelect
               uuidFieldName="inspector_uuid"
               idFieldName="inspector_id"
@@ -1104,6 +1161,7 @@ const SpotChecksPage: React.FC = () => {
             <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
         </Row>
+        </FormModalGridBlock>
       </FormModalTemplate>
 
       <Modal

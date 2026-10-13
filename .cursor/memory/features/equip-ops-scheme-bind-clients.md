@@ -11,7 +11,7 @@ keywords:
   - maintenance_scheme_id
   - 工位点检
   - 移动点检
-standard: 点检只跟绑定方案；保养执行带计划方案（无计划则跟设备保养方案绑定）
+standard: 点检/保养设备均跟 EquipmentSchemeBinding；计划侧类型与周期取自方案快照；执行带计划 scheme_id
 ---
 
 # 点检保养三端方案绑定对齐

@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'equip-ops-plan-scheme-params-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.equip-ops-plan-scheme-params-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equip-ops-plan-scheme-params-r01.description',
+  },
+  {
     id: 'kuaioa-route-permission-import-fix',
     date: '2026-10-13',
     type: 'fix',

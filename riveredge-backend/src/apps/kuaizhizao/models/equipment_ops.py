@@ -158,7 +158,7 @@ class EquipmentMaintenanceItem(BaseModel):
 
 
 class EquipmentMaintenanceScheme(BaseModel):
-    """保养方案"""
+    """保养方案（维护类型 / 周期为真源；设备经 EquipmentSchemeBinding）"""
 
     class Meta:
         table = "apps_kuaizhizao_equipment_maintenance_schemes"
@@ -170,6 +170,18 @@ class EquipmentMaintenanceScheme(BaseModel):
     code = fields.CharField(max_length=64)
     name = fields.CharField(max_length=200)
     description = fields.TextField(null=True)
+    # 日常保养 / 小修 / 中修 / 大修
+    maintenance_type = fields.CharField(
+        max_length=50, null=True, description="维护类型（方案真源）"
+    )
+    # 按时间 / 按运行时长 / 按使用次数
+    cycle_type = fields.CharField(
+        max_length=50, null=True, description="周期类型（方案真源）"
+    )
+    cycle_value = fields.IntField(null=True, description="周期值")
+    cycle_unit = fields.CharField(
+        max_length=20, null=True, description="周期单位（天、小时、次等）"
+    )
     is_active = fields.BooleanField(default=True)
     deleted_at = fields.DatetimeField(null=True)
 
@@ -211,6 +223,10 @@ class EquipmentSpotCheck(BaseModel):
     scheme_id = fields.IntField(null=True)
     plan_id = fields.IntField(null=True, description="来源点检计划ID")
     plan_uuid = fields.CharField(max_length=36, null=True, description="来源点检计划UUID")
+    period_key = fields.CharField(max_length=100, null=True, description="计划执行周期及班次标识")
+    scheduled_at = fields.DatetimeField(null=True, description="计划执行时间")
+    due_at = fields.DatetimeField(null=True, description="计划执行截止时间")
+    shift_name = fields.CharField(max_length=200, null=True, description="班次名称快照")
     capture_mode = fields.CharField(max_length=8, null=True, description="采集方式快照 A/B/C")
     check_date = fields.DateField()
     inspector_id = fields.IntField(null=True)
@@ -250,7 +266,9 @@ class EquipmentSpotCheckLine(BaseModel):
     value_type = fields.CharField(max_length=32, null=True)
     unit = fields.CharField(max_length=32, null=True)
     measured_value = fields.TextField(null=True)
-    is_pass = fields.BooleanField(default=True)
+    is_pass = fields.BooleanField(null=True, description="实际判定结果，待执行为空")
+    numeric_min = fields.DecimalField(max_digits=20, decimal_places=6, null=True)
+    numeric_max = fields.DecimalField(max_digits=20, decimal_places=6, null=True)
     photo_required = fields.BooleanField(default=False, description="提交时是否要求照片")
     remark = fields.TextField(null=True)
     attachments = fields.JSONField(null=True, description="行级附件（问题/对比照片）")

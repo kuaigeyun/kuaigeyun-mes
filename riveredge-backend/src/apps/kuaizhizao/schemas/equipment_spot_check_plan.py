@@ -10,6 +10,9 @@ class EquipmentSpotCheckPlanBase(BaseModel):
     plan_no: Optional[str] = Field(None, max_length=100, description="计划编号（可选，创建时自动生成）")
     plan_name: str = Field(..., min_length=1, max_length=200, description="计划名称")
     scheme_id: int = Field(..., description="点检方案ID")
+    equipment_uuids: Optional[List[str]] = None
+    cycle_type: Optional[str] = None
+    shift_ids: Optional[List[int]] = None
     planned_start_date: Optional[datetime] = Field(None, description="计划开始日期")
     planned_end_date: Optional[datetime] = Field(None, description="计划结束日期")
     responsible_person_id: Optional[int] = Field(None, description="负责人ID")
@@ -34,6 +37,9 @@ class EquipmentSpotCheckPlanCreate(EquipmentSpotCheckPlanBase):
 class EquipmentSpotCheckPlanUpdate(BaseModel):
     plan_name: Optional[str] = Field(None, min_length=1, max_length=200)
     scheme_id: Optional[int] = None
+    equipment_uuids: Optional[List[str]] = None
+    cycle_type: Optional[str] = None
+    shift_ids: Optional[List[int]] = None
     planned_start_date: Optional[datetime] = None
     planned_end_date: Optional[datetime] = None
     responsible_person_id: Optional[int] = None
@@ -63,13 +69,11 @@ class EquipmentSpotCheckPlanResponse(EquipmentSpotCheckPlanBase):
     equipment_uuid: Optional[str] = None
     equipment_name: Optional[str] = None
     equipment_items: Optional[List[Dict[str, Any]]] = None
-    equipment_uuids: Optional[List[str]] = None
     bound_equipment_count: Optional[int] = Field(
-        None, description="点检方案已绑定设备数"
+        None, description="计划设备数"
     )
     scheme_code: Optional[str] = None
     scheme_name: Optional[str] = None
-    cycle_type: Optional[str] = None
     cycle_value: Optional[int] = None
     cycle_unit: Optional[str] = None
     created_by: Optional[int] = None
@@ -79,6 +83,12 @@ class EquipmentSpotCheckPlanResponse(EquipmentSpotCheckPlanBase):
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None
+    task_count: int = 0
+    expected_task_count: int = 0
+    has_published_snapshot: bool = False
+    pending_count: int = 0
+    submitted_count: int = 0
+    completed_count: int = 0
 
 
 class EquipmentSpotCheckPlanListResponse(BaseModel):
@@ -89,9 +99,9 @@ class EquipmentSpotCheckPlanListResponse(BaseModel):
 
 
 class GenerateSpotChecksRequest(BaseModel):
-    check_date: Optional[date] = Field(None, description="点检日期，默认计划开始日或今天")
+    check_date: Optional[date] = Field(None, description="可选排程日期；不填则生成计划全部时段")
     equipment_uuids: Optional[List[str]] = Field(
-        None, description="仅生成指定设备；空则生成方案已绑定的全部设备"
+        None, description="仅生成指定设备；不填则生成已发布计划的全部设备"
     )
 
 

@@ -89,38 +89,75 @@ class MaintenanceReminderService:
                 if existing_reminder and existing_reminder.reminder_type == reminder_type:
                     continue
 
-                # 获取设备信息（获取设备编码）
-                equipment_code = plan.equipment_name  # 默认使用设备名称
-                equipment = await Equipment.filter(
-                    tenant_id=tenant_id,
-                    id=plan.equipment_id,
-                    deleted_at__isnull=True
-                ).first()
-                if equipment:
-                    equipment_code = equipment.code
-
-                # 创建提醒
-                reminder_message = self._generate_reminder_message(plan, days_until_due, reminder_type)
-
-                reminder = MaintenanceReminder(
-                    tenant_id=tenant_id,
-                    maintenance_plan_id=plan.id,
-                    maintenance_plan_uuid=plan.uuid,
-                    equipment_id=plan.equipment_id,
-                    equipment_uuid=plan.equipment_uuid,
-                    equipment_code=equipment_code,
-                    equipment_name=plan.equipment_name,
-                    reminder_type=reminder_type,
-                    reminder_date=now,
-                    planned_maintenance_date=plan.planned_start_date,
-                    days_until_due=days_until_due,
-                    reminder_message=reminder_message,
+                # 设备取自保养方案绑定（计划不再挂设备）
+                from apps.kuaizhizao.services.maintenance_plan_service import (
+                    MaintenancePlanService,
                 )
-                await reminder.save()
-                reminder_count += 1
-                created_reminders.append(reminder)
 
-                logger.info(f"创建维护提醒: {plan.plan_no} - {reminder_type}, 距离到期: {days_until_due}天")
+                bound: list = []
+                if plan.maintenance_scheme_id:
+                    bound = await MaintenancePlanService._list_bound_equipment(
+                        tenant_id, int(plan.maintenance_scheme_id)
+                    )
+                if not bound and plan.equipment_id:
+                    bound = [
+                        {
+                            "id": plan.equipment_id,
+                            "uuid": plan.equipment_uuid,
+                            "code": None,
+                            "name": plan.equipment_name,
+                        }
+                    ]
+                if not bound:
+                    logger.warning(
+                        f"维护计划无绑定设备，跳过提醒: {plan.plan_no}"
+                    )
+                    continue
+
+                for item in bound:
+                    equipment_id = int(item.get("id") or 0)
+                    if equipment_id <= 0:
+                        continue
+                    equipment_code = item.get("code") or item.get("name") or ""
+                    equipment_name = item.get("name") or plan.scheme_name or plan.plan_name
+                    equipment = await Equipment.filter(
+                        tenant_id=tenant_id,
+                        id=equipment_id,
+                        deleted_at__isnull=True,
+                    ).first()
+                    if equipment:
+                        equipment_code = equipment.code
+                        equipment_name = equipment.name
+
+                    reminder_message = self._generate_reminder_message(
+                        plan,
+                        days_until_due,
+                        reminder_type,
+                        equipment_name=str(equipment_name),
+                    )
+
+                    reminder = MaintenanceReminder(
+                        tenant_id=tenant_id,
+                        maintenance_plan_id=plan.id,
+                        maintenance_plan_uuid=plan.uuid,
+                        equipment_id=equipment_id,
+                        equipment_uuid=str(item.get("uuid") or ""),
+                        equipment_code=str(equipment_code or ""),
+                        equipment_name=str(equipment_name or ""),
+                        reminder_type=reminder_type,
+                        reminder_date=now,
+                        planned_maintenance_date=plan.planned_start_date,
+                        days_until_due=days_until_due,
+                        reminder_message=reminder_message,
+                    )
+                    await reminder.save()
+                    reminder_count += 1
+                    created_reminders.append(reminder)
+
+                logger.info(
+                    f"创建维护提醒: {plan.plan_no} - {reminder_type}, "
+                    f"设备数={len(bound)}, 距离到期: {days_until_due}天"
+                )
 
             except Exception as e:
                 logger.error(f"检查维护计划失败: {plan.uuid}, 错误: {e}")
@@ -138,23 +175,20 @@ class MaintenanceReminderService:
         self,
         plan: MaintenancePlan,
         days_until_due: int,
-        reminder_type: str
+        reminder_type: str,
+        equipment_name: Optional[str] = None,
     ) -> str:
-        """
-        生成提醒消息（内部方法）
-
-        Args:
-            plan: 维护计划
-            days_until_due: 距离到期天数
-            reminder_type: 提醒类型
-
-        Returns:
-            str: 提醒消息
-        """
+        """生成提醒消息（内部方法）"""
+        eq_name = equipment_name or plan.equipment_name or plan.scheme_name or ""
         if reminder_type == "overdue":
-            return f"设备 {plan.equipment_name} 的维护计划 {plan.plan_name} 已过期 {abs(days_until_due)} 天，请尽快处理。"
-        else:
-            return f"设备 {plan.equipment_name} 的维护计划 {plan.plan_name} 将在 {days_until_due} 天后到期，请提前准备。"
+            return (
+                f"设备 {eq_name} 的维护计划 {plan.plan_name} 已过期 "
+                f"{abs(days_until_due)} 天，请尽快处理。"
+            )
+        return (
+            f"设备 {eq_name} 的维护计划 {plan.plan_name} 将在 "
+            f"{days_until_due} 天后到期，请提前准备。"
+        )
 
     async def list_reminders(
         self,

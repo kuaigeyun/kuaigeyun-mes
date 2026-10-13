@@ -102,7 +102,6 @@ import {
   type DemandComputationPurchasePullLine,
 } from '../../../services/demand-computation';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { PURCHASE_REQUISITION_WORKFLOW_PROPS } from './components/PurchaseRequisitionDetailDrawer';
 import {
   buildPurchaseRequisitionLifecycleValueEnum,
   getPurchaseRequisitionLifecycle,

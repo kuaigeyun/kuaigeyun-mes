@@ -9,7 +9,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class AuditActorFields(BaseModel):
@@ -321,7 +321,27 @@ class MaintenanceSchemeBase(BaseModel):
     code: str = Field(..., max_length=64)
     name: str = Field(..., max_length=200)
     description: Optional[str] = None
+    maintenance_type: str = Field(..., max_length=50, description="维护类型（日常保养、小修、中修、大修）")
+    cycle_type: str = Field(..., max_length=50, description="周期类型（按时间、按运行时长、按使用次数）")
+    cycle_value: Optional[int] = Field(None, ge=0, description="周期值")
+    cycle_unit: Optional[str] = Field(None, max_length=20, description="周期单位（天、小时、次等）")
     is_active: bool = True
+
+    @field_validator("maintenance_type")
+    @classmethod
+    def validate_maintenance_type(cls, v: str) -> str:
+        allowed = ["日常保养", "小修", "中修", "大修"]
+        if v not in allowed:
+            raise ValueError(f"维护类型必须是 {allowed} 之一")
+        return v
+
+    @field_validator("cycle_type")
+    @classmethod
+    def validate_cycle_type(cls, v: str) -> str:
+        allowed = ["按时间", "按运行时长", "按使用次数"]
+        if v not in allowed:
+            raise ValueError(f"周期类型必须是 {allowed} 之一")
+        return v
 
 
 class MaintenanceSchemeCreate(MaintenanceSchemeBase):
@@ -332,8 +352,32 @@ class MaintenanceSchemeUpdate(BaseModel):
     code: Optional[str] = Field(None, max_length=64)
     name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
+    maintenance_type: Optional[str] = Field(None, max_length=50)
+    cycle_type: Optional[str] = Field(None, max_length=50)
+    cycle_value: Optional[int] = Field(None, ge=0)
+    cycle_unit: Optional[str] = Field(None, max_length=20)
     is_active: Optional[bool] = None
     lines: Optional[List[MaintenanceSchemeLineCreate]] = None
+
+    @field_validator("maintenance_type")
+    @classmethod
+    def validate_maintenance_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed = ["日常保养", "小修", "中修", "大修"]
+        if v not in allowed:
+            raise ValueError(f"维护类型必须是 {allowed} 之一")
+        return v
+
+    @field_validator("cycle_type")
+    @classmethod
+    def validate_cycle_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed = ["按时间", "按运行时长", "按使用次数"]
+        if v not in allowed:
+            raise ValueError(f"周期类型必须是 {allowed} 之一")
+        return v
 
 
 class MaintenanceSchemeResponse(MaintenanceSchemeBase, AuditActorFields):
@@ -444,8 +488,14 @@ class SpotCheckResponse(AuditActorFields):
     equipment_code: Optional[str] = None
     equipment_name: Optional[str] = None
     scheme_id: Optional[int] = None
+    scheme_code: Optional[str] = None
+    scheme_name: Optional[str] = None
     plan_id: Optional[int] = None
     plan_uuid: Optional[str] = None
+    period_key: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    due_at: Optional[datetime] = None
+    shift_name: Optional[str] = None
     capture_mode: Optional[str] = None
     check_date: date
     inspector_id: Optional[int] = None

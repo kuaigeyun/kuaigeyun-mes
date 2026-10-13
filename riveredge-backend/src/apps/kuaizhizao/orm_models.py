@@ -40,6 +40,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaizhizao.models.equipment_ops",
     "apps.kuaizhizao.models.equipment_board_visit",
     "apps.kuaizhizao.models.equipment_point_inspection",
+    "apps.kuaizhizao.models.equipment_spot_check_plan",
     "apps.kuaizhizao.models.equipment_status_monitor",
     "apps.kuaizhizao.models.exception_process_record",
     "apps.kuaizhizao.models.drawing_balloon_sheet",

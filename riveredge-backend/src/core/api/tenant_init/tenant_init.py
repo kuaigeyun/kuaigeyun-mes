@@ -5,6 +5,8 @@
 """
 
 from typing import List, Optional
+from time import perf_counter
+from loguru import logger
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from pydantic import BaseModel, Field
@@ -72,12 +74,14 @@ async def run_bootstrap_step(
     """
     执行单步引导初始化（应用注册/启用，或一项必备系统初始项）。
     """
+    started = perf_counter()
     try:
         result = await TenantInitDataService.run_bootstrap_step(
             tenant_id,
             data.key,
             current_user_id=current_user.id,
         )
+        logger.info("组织 {} 引导步骤 {} 完成，耗时 {:.2f}s", tenant_id, data.key, perf_counter() - started)
         return RunBootstrapStepResponse(
             key=data.key,
             success=True,
@@ -86,6 +90,7 @@ async def run_bootstrap_step(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
+        logger.exception("组织 {} 引导步骤 {} 失败，耗时 {:.2f}s", tenant_id, data.key, perf_counter() - started)
         return RunBootstrapStepResponse(
             key=data.key,
             success=False,

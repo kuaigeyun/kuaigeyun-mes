@@ -1,5 +1,5 @@
 /**
- * 设备点检计划：方案为真源（设备取方案绑定，周期取点检方案）。
+ * 设备点检计划：发布固定设备和排程，生成待执行任务并跟踪审核进度。
  */
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -11,7 +11,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Col, Row } from 'antd';
+import { App, Col, Descriptions, Row } from 'antd';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -33,7 +33,9 @@ import { formDateFormItemProps, coerceFormDate } from '../../../../../utils/form
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { normalizeEquipmentListResponse } from '../../../utils/equipmentListCore';
 import { spotCheckPlanApi } from '../../../services/equipment';
+import { shiftApi } from '../../../services/performance';
 import { inspectionSchemesApi } from '../../../services/equipmentOps';
+import { resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { StatusTag } from '../../../../../constants/statusBadges';
 import { resolveDocumentStatusTagColor } from '../../../../../constants/documentStatusColors';
@@ -44,7 +46,7 @@ const SPOT_RESOURCE = 'kuaizhizao:equipment-spot-check';
 
 type EquipmentItem = { id?: number; uuid?: string; code?: string; name?: string };
 
-interface SpotCheckPlan {
+interface SpotCheckPlan extends Record<string, unknown> {
   id?: number;
   uuid?: string;
   plan_no?: string;
@@ -57,6 +59,13 @@ interface SpotCheckPlan {
   equipment_items?: EquipmentItem[];
   equipment_name?: string;
   bound_equipment_count?: number;
+  shift_ids?: number[];
+  task_count?: number;
+  expected_task_count?: number;
+  has_published_snapshot?: boolean;
+  pending_count?: number;
+  submitted_count?: number;
+  completed_count?: number;
   cycle_type?: string;
   planned_start_date?: string;
   planned_end_date?: string;
@@ -109,6 +118,23 @@ const SpotCheckPlansPage: React.FC = () => {
   const [detail, setDetail] = useState<SpotCheckPlan | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [schemeCyclePreview, setSchemeCyclePreview] = useState<string | undefined>();
+  const [equipmentOptions, setEquipmentOptions] = useState<{ label: string; value: string }[]>([]);
+  const [equipmentLoading, setEquipmentLoading] = useState(false);
+  const equipmentRequest = useRef(0);
+
+  const loadEquipment = useCallback(async () => {
+    const request = ++equipmentRequest.current;
+    setEquipmentLoading(true);
+    try {
+      const items = await spotCheckPlanApi.availableEquipment() as EquipmentItem[];
+      if (request !== equipmentRequest.current) return;
+      setEquipmentOptions(items.map((item) => ({
+        label: `${item.code || ''} - ${item.name || ''}`, value: String(item.uuid),
+      })));
+    } finally {
+      if (request === equipmentRequest.current) setEquipmentLoading(false);
+    }
+  }, []);
 
   const statusEnum = useMemo(
     () => ({
@@ -122,32 +148,38 @@ const SpotCheckPlansPage: React.FC = () => {
   );
 
   const boundLabel = useCallback(
-    (n: number) => t(`${P}.col.boundEquipmentCount`, { count: n }),
-    [t],
+    (n: number) => `${n} 台设备`,
+    [],
   );
 
   const handleCreate = useCallback(() => {
+    if (!canCreate) return;
     setIsEdit(false);
+    equipmentRequest.current += 1;
     setCurrentPlan(null);
     setSchemeCyclePreview(undefined);
+    setEquipmentOptions([]);
     setFormInitialValues({
       status: '草稿',
       planned_start_date: dayjs(),
     });
     setModalVisible(true);
-  }, []);
+    void loadEquipment().catch(() => messageApi.error('加载计划设备失败'));
+  }, [canCreate, loadEquipment, messageApi]);
 
-  useNewShortcut(handleCreate, canCreate);
+  useNewShortcut(handleCreate);
 
   const handleEdit = async (record: SpotCheckPlan) => {
     if (!record.uuid) return;
     try {
       const data = (await spotCheckPlanApi.get(record.uuid)) as SpotCheckPlan;
+      await loadEquipment();
       setIsEdit(true);
       setCurrentPlan(data);
       setSchemeCyclePreview(data.cycle_type);
       setFormInitialValues({
         ...data,
+        responsible_person_uuid: await resolveUserUuidById(data.responsible_person_id),
         planned_start_date: data.planned_start_date ? dayjs(data.planned_start_date) : undefined,
         planned_end_date: data.planned_end_date ? dayjs(data.planned_end_date) : undefined,
       });
@@ -178,11 +210,13 @@ const SpotCheckPlansPage: React.FC = () => {
       const payload = {
         plan_name: values.plan_name,
         scheme_id: values.scheme_id,
+        equipment_uuids: values.equipment_uuids,
+        cycle_type: values.cycle_type,
+        shift_ids: values.shift_ids,
         planned_start_date: toApiDateTimeString(values.planned_start_date) ?? null,
         planned_end_date: toApiDateTimeString(values.planned_end_date) ?? null,
         responsible_person_id: values.responsible_person_id,
         responsible_person_name: values.responsible_person_name,
-        status: values.status,
         remark: values.remark,
       };
       if (isEdit && currentPlan?.uuid) {
@@ -220,9 +254,20 @@ const SpotCheckPlansPage: React.FC = () => {
       };
       messageApi.success(t(`${P}.generateSuccess`, { count: res.total ?? 0 }));
       actionRef.current?.reload();
-      navigate('/apps/kuaizhizao/equipment-management/spot-checks');
+      navigate(`/apps/kuaizhizao/equipment-management/spot-checks?plan_uuid=${record.uuid}`);
     } catch (e: any) {
       messageApi.error(e?.message || t(`${P}.generateFailed`));
+    }
+  };
+
+  const handlePlanAction = async (record: SpotCheckPlan, action: 'publish' | 'cancel') => {
+    if (!record.uuid) return;
+    try {
+      await spotCheckPlanApi[action](record.uuid);
+      messageApi.success(action === 'publish' ? '计划已发布' : '计划已取消');
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.message || '操作失败');
     }
   };
 
@@ -266,6 +311,10 @@ const SpotCheckPlansPage: React.FC = () => {
           ),
       },
       { title: t('common.remark'), dataIndex: 'remark' },
+      {
+        title: '执行进度', key: 'progress',
+        render: (_, r) => `${r.completed_count ?? 0} / ${r.expected_task_count ?? r.task_count ?? 0} 已审核；已生成 ${r.task_count ?? 0}；${r.pending_count ?? 0} 待执行；${r.submitted_count ?? 0} 待审核`,
+      },
     ],
     [t, boundLabel],
   );
@@ -275,6 +324,10 @@ const SpotCheckPlansPage: React.FC = () => {
     () =>
       alignProColumns<SpotCheckPlan>(
         [
+          {
+            title: '完成进度', key: 'progress', search: false,
+            render: (_, r) => `${r.completed_count ?? 0} / ${r.expected_task_count ?? r.task_count ?? 0}`,
+          },
           {
             title: t(`${P}.col.planNo`),
             dataIndex: 'plan_no',
@@ -341,23 +394,34 @@ const SpotCheckPlansPage: React.FC = () => {
             fixed: 'right',
             render: (_, record) => {
               const nodes: React.ReactNode[] = [];
+              const needsPublish = record.status === '草稿' ||
+                (!record.has_published_snapshot && ['已发布', '执行中'].includes(record.status || ''));
               nodes.push(
                 <a key="view" {...rowActionKind('read')} onClick={() => void handleDetail(record)}>
                   {t('common.view')}
                 </a>,
               );
-              if (canUpdate) {
+              if (canUpdate && needsPublish) {
                 nodes.push(
                   <a key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
                     {t('common.edit')}
                   </a>,
                 );
               }
+              if (canUpdate && needsPublish) {
+                nodes.push(
+                  <ActionConfirmPopconfirm key="publish" title="确认发布并固定本计划的设备、方案和周期？"
+                    onConfirm={() => void handlePlanAction(record, 'publish')}>
+                    <a {...rowActionKind('execute')}>发布</a>
+                  </ActionConfirmPopconfirm>,
+                );
+              }
               if (
                 spotPerms.canCreate &&
                 canUpdate &&
+                record.has_published_snapshot &&
                 record.status &&
-                !['已取消', '已完成'].includes(record.status)
+                ['已发布', '执行中'].includes(record.status)
               ) {
                 nodes.push(
                   <ActionConfirmPopconfirm
@@ -369,7 +433,23 @@ const SpotCheckPlansPage: React.FC = () => {
                   </ActionConfirmPopconfirm>,
                 );
               }
-              if (canDelete && record.uuid) {
+              if (record.uuid && record.status !== '草稿') {
+                nodes.push(
+                  <a key="tasks" {...rowActionKind('read')} onClick={() =>
+                    navigate(`/apps/kuaizhizao/equipment-management/spot-checks?plan_uuid=${record.uuid}`)}>
+                    查看任务
+                  </a>,
+                );
+              }
+              if (canUpdate && record.status && !['已取消', '已完成'].includes(record.status)) {
+                nodes.push(
+                  <ActionConfirmPopconfirm key="cancel" title="确认取消计划及尚未提交的任务？"
+                    onConfirm={() => void handlePlanAction(record, 'cancel')}>
+                    <a {...rowActionKind('delete')}>取消</a>
+                  </ActionConfirmPopconfirm>,
+                );
+              }
+              if (canDelete && record.uuid && record.status === '草稿') {
                 nodes.push(
                   <ActionConfirmPopconfirm
                     key="delete"
@@ -383,7 +463,7 @@ const SpotCheckPlansPage: React.FC = () => {
               return nodes;
             },
           },
-        ],
+        ] as ProColumns<SpotCheckPlan>[],
         SALES_DOC_LIST_FIELD_RANK,
       ),
     [t, statusEnum, canUpdate, canDelete, spotPerms.canCreate, boundLabel],
@@ -413,8 +493,22 @@ const SpotCheckPlansPage: React.FC = () => {
               });
               const { data, total } = normalizeEquipmentListResponse(response);
               return { data: data as SpotCheckPlan[], success: true, total };
-            } catch {
-              messageApi.error(t(`${P}.listFailed`));
+            } catch (e: unknown) {
+              const detail =
+                (e as { response?: { data?: { detail?: unknown } }; message?: string })
+                  ?.response?.data?.detail ??
+                (e as { message?: string })?.message;
+              const detailText =
+                typeof detail === 'string'
+                  ? detail
+                  : detail && typeof detail === 'object' && 'message' in detail
+                    ? String((detail as { message?: unknown }).message || '')
+                    : '';
+              messageApi.error(
+                detailText
+                  ? `${t(`${P}.listFailed`)}：${detailText}`
+                  : t(`${P}.listFailed`),
+              );
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -485,29 +579,24 @@ const SpotCheckPlansPage: React.FC = () => {
               fieldProps={{
                 onChange: (_val: number, option: any) => {
                   setSchemeCyclePreview(option?.cycle_type || undefined);
+                  formRef.current?.setFieldsValue({
+                    cycle_type: option?.cycle_type, shift_ids: [],
+                  });
                 },
               }}
-              extra={
-                schemeCyclePreview
-                  ? t(`${P}.form.cycleFromScheme`, { cycle: schemeCyclePreview })
-                  : t(`${P}.form.cycleFromSchemeHint`)
-              }
             />
           </Col>
         </Row>
         <Row gutter={16}>
           <Col span={12}>
             <ProFormSelect
-              name="status"
-              label={t('common.status')}
+              name="cycle_type"
+              label={t(`${P}.col.cycleType`)}
               options={[
-                { label: t(`${P}.status.draft`), value: '草稿' },
-                { label: t(`${P}.status.published`), value: '已发布' },
-                { label: t(`${P}.status.running`), value: '执行中' },
-                { label: t(`${P}.status.completed`), value: '已完成' },
-                { label: t(`${P}.status.cancelled`), value: '已取消' },
+                ...['每班', '每天', '每周', '每月', '每季度'].map((value) => ({ label: value, value })),
               ]}
-              rules={[{ required: true, message: t(`${P}.form.statusRequired`) }]}
+              rules={[{ required: true }]}
+              fieldProps={{ onChange: (value: string) => setSchemeCyclePreview(value) }}
             />
           </Col>
           <Col span={12}>
@@ -527,11 +616,31 @@ const SpotCheckPlansPage: React.FC = () => {
           </Col>
         </Row>
         <Row gutter={16}>
+          <Col span={24}>
+            <ProFormSelect name="equipment_uuids" label="计划设备" mode="multiple"
+              options={equipmentOptions} showSearch
+              fieldProps={{ loading: equipmentLoading, disabled: equipmentLoading, optionFilterProp: 'label' }}
+              rules={[{ required: true, message: '请选择计划设备' }]} />
+          </Col>
+          {schemeCyclePreview === '每班' && (
+            <Col span={24}>
+              <ProFormSelect name="shift_ids" label="执行班次" mode="multiple"
+                rules={[{ required: true, message: '请选择执行班次' }]}
+                request={async () => {
+                  const result = await shiftApi.list({ is_active: true, limit: 1000 });
+                  const { data } = normalizeEquipmentListResponse(result);
+                  return data.map((shift: any) => ({ label: shift.name, value: shift.id }));
+                }} />
+            </Col>
+          )}
+        </Row>
+        <Row gutter={16}>
           <Col span={12}>
             <ProFormDatePicker
               name="planned_start_date"
               label={t(`${P}.col.plannedStartDate`)}
               fieldProps={{ ...formDateFormItemProps, showTime: true, format: 'YYYY-MM-DD HH:mm:ss' }}
+              rules={[{ required: true, message: '请选择计划开始时间' }]}
             />
           </Col>
           <Col span={12}>
@@ -539,6 +648,7 @@ const SpotCheckPlansPage: React.FC = () => {
               name="planned_end_date"
               label={t(`${P}.col.plannedEndDate`)}
               fieldProps={{ ...formDateFormItemProps, showTime: true, format: 'YYYY-MM-DD HH:mm:ss' }}
+              rules={[{ required: true, message: '请选择计划结束时间' }]}
             />
           </Col>
         </Row>
@@ -556,9 +666,9 @@ const SpotCheckPlansPage: React.FC = () => {
           setDetailOpen(false);
           setDetail(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         loading={detailLoading}
-        basic={detailItems}
+        basic={<Descriptions items={detailItems} column={2} />}
       />
     </>
   );

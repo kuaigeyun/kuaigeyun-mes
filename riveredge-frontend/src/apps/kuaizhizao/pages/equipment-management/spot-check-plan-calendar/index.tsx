@@ -1,57 +1,75 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Calendar, Card, List, Typography, theme } from 'antd';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { App, Calendar, Card, List, Typography, theme } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { spotCheckPlanApi } from '../../../services/equipment';
+import { spotChecksApi } from '../../../services/equipmentOps';
 
 const P = 'app.kuaizhizao.spotCheckPlanCalendar';
 const RESOURCE = 'kuaizhizao:equipment-spot-check-plan';
 
 interface SpotCheckPlanItem {
+  id: number;
   uuid: string;
-  plan_no?: string;
-  plan_name?: string;
-  scheme_name?: string;
-  cycle_type?: string;
-  bound_equipment_count?: number;
-  planned_start_date?: string;
+  document_no?: string;
+  equipment_name?: string;
+  shift_name?: string;
+  scheduled_at?: string;
   status?: string;
 }
 
 const SpotCheckPlanCalendarPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { message } = App.useApp();
   const { token } = theme.useToken();
   useResourcePermissions(RESOURCE);
   const [plans, setPlans] = useState<SpotCheckPlanItem[]>([]);
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
   const [loading, setLoading] = useState(false);
+  const month = selectedDate.format('YYYY-MM');
+  const loadSequence = useRef(0);
 
   const loadPlans = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     try {
-      const res = (await spotCheckPlanApi.list({ limit: 1000 })) as {
-        items?: SpotCheckPlanItem[];
-        data?: SpotCheckPlanItem[];
-      };
-      setPlans(res.items ?? res.data ?? []);
+      const items: SpotCheckPlanItem[] = [];
+      for (let skip = 0; ; skip += 1000) {
+        const res = await spotChecksApi.list({
+          skip, limit: 1000,
+          check_start_date: dayjs(month).startOf('month').format('YYYY-MM-DD'),
+          check_end_date: dayjs(month).endOf('month').format('YYYY-MM-DD'),
+          scheme_domain: 'equipment',
+        }) as { items: SpotCheckPlanItem[]; total: number };
+        if (sequence !== loadSequence.current) return;
+        items.push(...res.items);
+        if (skip + res.items.length >= res.total || !res.items.length) break;
+      }
+      setPlans(items.filter((task) => task.scheduled_at));
+    } catch {
+      if (sequence !== loadSequence.current) return;
+      setPlans([]);
+      message.error('加载点检任务失败');
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
-  }, []);
+  }, [month, message]);
 
   useEffect(() => {
     void loadPlans();
+    return () => { loadSequence.current += 1; };
   }, [loadPlans]);
 
   const plansByDate = useMemo(() => {
     const map = new Map<string, SpotCheckPlanItem[]>();
     for (const plan of plans) {
-      if (!plan.planned_start_date) continue;
-      const key = dayjs(plan.planned_start_date).format('YYYY-MM-DD');
+      if (!plan.scheduled_at) continue;
+      const key = dayjs(plan.scheduled_at).format('YYYY-MM-DD');
       const bucket = map.get(key) ?? [];
       bucket.push(plan);
       map.set(key, bucket);
@@ -70,7 +88,7 @@ const SpotCheckPlanCalendarPage: React.FC = () => {
         {dayPlans.slice(0, 2).map((p) => (
           <li key={p.uuid}>
             <Typography.Text ellipsis style={{ fontSize: 12 }}>
-              {p.plan_no ?? p.plan_name}
+              {p.equipment_name} {p.shift_name}
             </Typography.Text>
           </li>
         ))}
@@ -127,18 +145,15 @@ const SpotCheckPlanCalendarPage: React.FC = () => {
                   <List.Item.Meta
                     title={
                       <>
-                        {item.plan_no ?? item.plan_name}{' '}
+                        <Typography.Link onClick={() => navigate(
+                          `/apps/kuaizhizao/equipment-management/spot-checks?uuid=${item.uuid}`,
+                        )}>{item.document_no}</Typography.Link>{' '}
                         {renderDocumentStatusTag(item.status, item.status)}
                       </>
                     }
                     description={[
-                      item.scheme_name,
-                      item.cycle_type,
-                      typeof item.bound_equipment_count === 'number'
-                        ? t('app.kuaizhizao.spotCheckPlan.col.boundEquipmentCount', {
-                            count: item.bound_equipment_count,
-                          })
-                        : null,
+                      item.equipment_name,
+                      item.shift_name,
                     ]
                       .filter(Boolean)
                       .join(' ')}

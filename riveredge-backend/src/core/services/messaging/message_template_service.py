@@ -1451,8 +1451,9 @@ class MessageTemplateService:
         加载中国中小制造业极简消息模板预设数据。
         仅创建不存在的模板（按 code 去重）。
         """
-        from loguru import logger
-
+        existing_codes = set(await MessageTemplate.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True,
+        ).values_list("code", flat=True))
         created = 0
         for item in MessageTemplateService.PRESET_MESSAGE_TEMPLATES:
             code = str(item.get("code") or "").strip()
@@ -1460,12 +1461,7 @@ class MessageTemplateService:
                 continue
             if only_codes is not None and code not in only_codes:
                 continue
-            exists = await MessageTemplate.filter(
-                tenant_id=tenant_id,
-                code=code,
-                deleted_at__isnull=True,
-            ).exists()
-            if not exists:
+            if code not in existing_codes:
                 try:
                     data = MessageTemplateCreate(
                         name=item["name"],
@@ -1479,7 +1475,12 @@ class MessageTemplateService:
                     )
                     await MessageTemplateService.create_message_template(tenant_id, data)
                     created += 1
-                except Exception as e:
-                    logger.warning(f"创建消息模板 {item['code']} 失败: {e}")
+                    existing_codes.add(code)
+                except ValidationError:
+                    # Another initializer may have created the same code concurrently.
+                    if not await MessageTemplate.filter(
+                        tenant_id=tenant_id, code=code, deleted_at__isnull=True,
+                    ).exists():
+                        raise
         return created
 

@@ -37,6 +37,46 @@ _GENERATE = Depends(
 )
 
 
+@router.post("/{uuid}/publish", response_model=EquipmentSpotCheckPlanResponse, dependencies=[_UPDATE])
+async def publish_spot_check_plan(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        plan = await EquipmentSpotCheckPlanService.publish_plan(tenant_id, uuid, current_user)
+        return await EquipmentSpotCheckPlanService.serialize_plan_response(plan)
+    except (ValidationError, NotFoundError) as e:
+        raise HTTPException(status_code=404 if isinstance(e, NotFoundError) else 422, detail=str(e))
+
+
+@router.post("/{uuid}/cancel", response_model=EquipmentSpotCheckPlanResponse, dependencies=[_UPDATE])
+async def cancel_spot_check_plan(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        plan = await EquipmentSpotCheckPlanService.cancel_plan(tenant_id, uuid, current_user)
+        return await EquipmentSpotCheckPlanService.serialize_plan_response(plan)
+    except (ValidationError, NotFoundError) as e:
+        raise HTTPException(status_code=404 if isinstance(e, NotFoundError) else 422, detail=str(e))
+
+
+@router.get("/equipment-options", dependencies=[_READ])
+async def list_plan_equipment(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await EquipmentSpotCheckPlanService.list_available_equipment(tenant_id)
+
+
+@router.get("/scheme-equipment/{scheme_id}", dependencies=[_READ])
+async def list_scheme_bound_equipment(
+    scheme_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await EquipmentSpotCheckPlanService._list_bound_equipment(tenant_id, scheme_id)
+
 @router.post(
     "",
     response_model=EquipmentSpotCheckPlanResponse,
@@ -163,7 +203,7 @@ async def update_spot_check_plan(
 ):
     try:
         plan = await EquipmentSpotCheckPlanService.update_plan(
-            tenant_id=tenant_id, uuid=uuid, data=data
+            tenant_id=tenant_id, uuid=uuid, data=data, current_user=current_user,
         )
         return await EquipmentSpotCheckPlanService.serialize_plan_response(plan)
     except NotFoundError as e:
@@ -182,3 +222,5 @@ async def delete_spot_check_plan(
         await EquipmentSpotCheckPlanService.delete_plan(tenant_id, uuid)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

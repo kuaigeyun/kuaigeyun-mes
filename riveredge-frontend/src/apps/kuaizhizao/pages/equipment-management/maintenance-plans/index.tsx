@@ -20,7 +20,6 @@ import {
   ProFormText,
   ProFormSelect,
   ProFormDatePicker,
-  ProFormDigit,
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col, Descriptions, Typography, Empty, Spin, theme as AntdTheme, Checkbox, Table, Select, InputNumber, Input } from 'antd';
@@ -44,7 +43,7 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { getMaintenancePlanLifecycle } from '../../../utils/equipmentLifecycle';
-import { maintenancePlanApi, equipmentApi, sparePartApi } from '../../../services/equipment';
+import { maintenancePlanApi, sparePartApi } from '../../../services/equipment';
 import { maintenanceSchemesApi } from '../../../services/equipmentOps';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -85,20 +84,10 @@ const PLAN_STATUS_KEYS: Record<string, string> = {
 const EXECUTABLE_PLAN_STATUSES = new Set(['草稿', '已发布', '执行中']);
 
 function buildMaintenancePlanSubmitPayload(values: Record<string, unknown>) {
-  const equipmentUuids = Array.isArray(values.equipment_uuids)
-    ? values.equipment_uuids.map(String).filter(Boolean)
-    : values.equipment_uuid
-      ? [String(values.equipment_uuid)]
-      : [];
   return {
     plan_name: values.plan_name,
     plan_type: values.plan_type,
-    equipment_uuids: equipmentUuids,
     maintenance_scheme_id: values.maintenance_scheme_id,
-    maintenance_type: values.maintenance_type,
-    cycle_type: values.cycle_type,
-    cycle_value: values.cycle_value,
-    cycle_unit: values.cycle_unit,
     planned_start_date: toApiDateString(values.planned_start_date) ?? null,
     planned_end_date: toApiDateString(values.planned_end_date) ?? null,
     responsible_person_id: values.responsible_person_id,
@@ -124,6 +113,7 @@ interface MaintenancePlan {
   maintenance_scheme_id?: number;
   scheme_code?: string;
   scheme_name?: string;
+  bound_equipment_count?: number;
   maintenance_type?: string;
   cycle_type?: string;
   cycle_value?: number;
@@ -209,12 +199,19 @@ const MaintenancePlansPage: React.FC = () => {
   /**
    * 处理新建维护计划
    */
+  const [schemeParamPreview, setSchemeParamPreview] = useState<string | undefined>();
+
+  const boundLabel = useCallback(
+    (n: number) => t(`${P}.col.boundEquipmentCount`, { count: n }),
+    [t],
+  );
+
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentPlan(null);
+    setSchemeParamPreview(undefined);
     setFormInitialValues({
       planned_start_date: dayjs(),
-      cycle_type: '按时间',
       status: '草稿',
     });
     setModalVisible(true);
@@ -237,15 +234,18 @@ const MaintenancePlansPage: React.FC = () => {
       const detail = await maintenancePlanApi.get(record.uuid);
       setIsEdit(true);
       setCurrentPlan(detail);
+      const cycleParts = [
+        detail.maintenance_type,
+        detail.cycle_type,
+        detail.cycle_value != null
+          ? `${detail.cycle_value}${detail.cycle_unit ?? ''}`
+          : undefined,
+      ].filter(Boolean);
+      setSchemeParamPreview(cycleParts.length ? cycleParts.join(' / ') : undefined);
       setFormInitialValues({
         plan_name: detail.plan_name,
         plan_type: detail.plan_type,
-        equipment_uuids: resolveMaintenancePlanEquipmentUuids(detail),
         maintenance_scheme_id: detail.maintenance_scheme_id,
-        maintenance_type: detail.maintenance_type,
-        cycle_type: detail.cycle_type ?? '按时间',
-        cycle_value: detail.cycle_value,
-        cycle_unit: detail.cycle_unit,
         planned_start_date: detail.planned_start_date ? dayjs(detail.planned_start_date) : dayjs(),
         planned_end_date: detail.planned_end_date ? dayjs(detail.planned_end_date) : undefined,
         status: detail.status,
@@ -506,14 +506,9 @@ const MaintenancePlansPage: React.FC = () => {
         r.scheme_code ? `${r.scheme_code} - ${r.scheme_name || ''}` : r.scheme_name || '-',
     },
     {
-      title: t(`${P}.col.equipmentCode`),
-      dataIndex: 'equipment_code',
-      render: (_, r) => formatMaintenancePlanEquipmentText(r),
-    },
-    {
-      title: t(`${P}.col.equipmentName`),
-      dataIndex: 'equipment_name',
-      render: (_, r) => formatMaintenancePlanEquipmentText(r),
+      title: t(`${P}.col.boundEquipment`),
+      dataIndex: 'bound_equipment_count',
+      render: (_, r) => formatMaintenancePlanEquipmentText(r, boundLabel),
     },
     {
       title: t(`${P}.col.maintenanceType`),
@@ -523,7 +518,11 @@ const MaintenancePlansPage: React.FC = () => {
       title: t(`${P}.col.maintenanceCycle`),
       dataIndex: 'cycle_value',
       render: (_, record) =>
-        record ? `${record.cycle_value ?? ''} ${record.cycle_unit ?? ''}`.trim() || '-' : '-',
+        record
+          ? [record.cycle_type, `${record.cycle_value ?? ''}${record.cycle_unit ?? ''}`.trim()]
+              .filter(Boolean)
+              .join(' ') || '-'
+          : '-',
     },
     {
       title: t(`${P}.col.plannedStartDate`),
@@ -557,7 +556,7 @@ const MaintenancePlansPage: React.FC = () => {
       valueType: 'dateTime',
     },
     ],
-    [t]
+    [t, boundLabel],
   );
 
   const planSparePartLines = planDetail?.spare_parts_used?.items ?? [];
@@ -743,17 +742,17 @@ const MaintenancePlansPage: React.FC = () => {
         r.scheme_code ? `${r.scheme_code} - ${r.scheme_name || ''}` : r.scheme_name || '-',
     },
     {
-      title: t(`${P}.col.equipmentName`),
-      dataIndex: 'equipment_name',
-      width: 200,
-      minWidth: 200,
+      title: t(`${P}.col.boundEquipment`),
+      dataIndex: 'bound_equipment_count',
+      width: 120,
+      minWidth: 120,
       uniTableKeepWidth: true,
       resizable: false,
       ellipsis: true,
-      sorter: true,
       hideInSearch: true,
+      search: false,
       render: (_, r) => {
-        const text = formatMaintenancePlanEquipmentText(r);
+        const text = formatMaintenancePlanEquipmentText(r, boundLabel);
         return <Typography.Text ellipsis={{ tooltip: text }}>{text}</Typography.Text>;
       },
     },
@@ -773,13 +772,17 @@ const MaintenancePlansPage: React.FC = () => {
     {
       title: t(`${P}.col.maintenanceCycle`),
       dataIndex: 'cycle_value',
-      width: 120,
-      minWidth: 120,
+      width: 140,
+      minWidth: 140,
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
       render: (_, record) =>
-        record ? `${record.cycle_value ?? ''} ${record.cycle_unit ?? ''}`.trim() || '-' : '-',
+        record
+          ? [record.cycle_type, `${record.cycle_value ?? ''}${record.cycle_unit ?? ''}`.trim()]
+              .filter(Boolean)
+              .join(' ') || '-'
+          : '-',
     },
     {
       title: t(`${P}.col.plannedStartDate`),
@@ -810,7 +813,7 @@ const MaintenancePlansPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => renderPlanRowNodes(record),
     },
-  ], SALES_DOC_LIST_FIELD_RANK), [t, planStatusValueEnum]);
+  ], SALES_DOC_LIST_FIELD_RANK), [t, planStatusValueEnum, boundLabel]);
 
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
     detailBaseColumns, planDetail,
@@ -824,7 +827,7 @@ const MaintenancePlansPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenancePlans)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-plans-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-plans-width-v4"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}
@@ -881,6 +884,7 @@ const MaintenancePlansPage: React.FC = () => {
           setModalVisible(false);
           setCurrentPlan(null);
           setFormInitialValues(undefined);
+          setSchemeParamPreview(undefined);
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
@@ -914,7 +918,7 @@ const MaintenancePlansPage: React.FC = () => {
           </Col>
         </Row>
         <Row gutter={16}>
-          <Col span={24}>
+          <Col span={12}>
             <ProFormSelect
               name="maintenance_scheme_id"
               label={t(`${P}.form.maintenanceScheme`)}
@@ -925,99 +929,44 @@ const MaintenancePlansPage: React.FC = () => {
                 try {
                   const res = await maintenanceSchemesApi.list({ limit: 1000, is_active: true });
                   return ((res as any).items ?? []).map(
-                    (s: { id: number; code: string; name: string }) => ({
+                    (s: {
+                      id: number;
+                      code: string;
+                      name: string;
+                      maintenance_type?: string;
+                      cycle_type?: string;
+                      cycle_value?: number;
+                      cycle_unit?: string;
+                    }) => ({
                       label: `${s.code} - ${s.name}`,
                       value: s.id,
+                      maintenance_type: s.maintenance_type,
+                      cycle_type: s.cycle_type,
+                      cycle_value: s.cycle_value,
+                      cycle_unit: s.cycle_unit,
                     }),
                   );
                 } catch {
                   return [];
                 }
               }}
-            />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={24}>
-            <ProFormSelect
-              name="equipment_uuids"
-              label={t(`${P}.form.equipment`)}
-              placeholder={t(`${P}.form.selectEquipment`)}
-              mode="multiple"
-              showSearch
               fieldProps={{
-                maxTagCount: 'responsive',
+                onChange: (_val: number, option: any) => {
+                  const parts = [
+                    option?.maintenance_type,
+                    option?.cycle_type,
+                    option?.cycle_value != null
+                      ? `${option.cycle_value}${option.cycle_unit ?? ''}`
+                      : undefined,
+                  ].filter(Boolean);
+                  setSchemeParamPreview(parts.length ? parts.join(' / ') : undefined);
+                },
               }}
-              request={async () => {
-                try {
-                  const response = await equipmentApi.list({ limit: 1000 });
-                  return (response.items || []).map((eq: any) => ({
-                    label: `${eq.code} - ${eq.name}`,
-                    value: eq.uuid,
-                  }));
-                } catch (error) {
-                  return [];
-                }
-              }}
-              rules={[{ required: true, message: t(`${P}.form.selectEquipment`) }]}
-            />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormSelect
-              name="maintenance_type"
-              label={t(`${P}.form.maintenanceType`)}
-              placeholder={t(`${P}.form.selectMaintenanceType`)}
-              options={[
-                { label: t(`${P}.maintenanceType.daily`), value: '日常保养' },
-                { label: t(`${P}.maintenanceType.minor`), value: '小修' },
-                { label: t(`${P}.maintenanceType.medium`), value: '中修' },
-                { label: t(`${P}.maintenanceType.overhaul`), value: '大修' },
-              ]}
-              rules={[{ required: true, message: t(`${P}.form.selectMaintenanceType`) }]}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormSelect
-              name="cycle_type"
-              label={t(`${P}.form.cycleType`)}
-              placeholder={t(`${P}.form.selectCycleType`)}
-              options={[
-                { label: t(`${P}.cycleType.byTime`), value: '按时间' },
-                { label: t(`${P}.cycleType.byRuntime`), value: '按运行时长' },
-                { label: t(`${P}.cycleType.byCount`), value: '按使用次数' },
-              ]}
-              rules={[{ required: true, message: t(`${P}.form.selectCycleType`) }]}
-            />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormDigit
-              name="cycle_value"
-              label={t(`${P}.form.maintenanceCycle`)}
-              placeholder={t(`${P}.form.maintenanceCyclePlaceholder`)}
-              min={1}
-              rules={[{ required: true, message: t(`${P}.form.maintenanceCyclePlaceholder`) }]}
-            />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormSelect
-              name="cycle_unit"
-              label={t(`${P}.form.cycleUnit`)}
-              placeholder={t(`${P}.form.selectCycleUnit`)}
-              options={[
-                { label: t(`${P}.cycleUnit.day`), value: '天' },
-                { label: t(`${P}.cycleUnit.week`), value: '周' },
-                { label: t(`${P}.cycleUnit.month`), value: '月' },
-                { label: t(`${P}.cycleUnit.year`), value: '年' },
-                { label: t(`${P}.cycleUnit.hour`), value: '小时' },
-                { label: t(`${P}.cycleUnit.count`), value: '次' },
-              ]}
-              rules={[{ required: true, message: t(`${P}.form.selectCycleUnit`) }]}
+              extra={
+                schemeParamPreview
+                  ? t(`${P}.form.paramsFromScheme`, { params: schemeParamPreview })
+                  : t(`${P}.form.paramsFromSchemeHint`)
+              }
             />
           </Col>
           <Col span={12}>

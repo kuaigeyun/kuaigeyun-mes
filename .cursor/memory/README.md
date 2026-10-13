@@ -93,8 +93,9 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 工作台更新说明、platformUpdateLog、版本卡 | `features/platform-update-log.md` |
 | 流程造数、操作用户、按部门/小组/工序随机、来料检验、过程检验 | `features/flow-data-generate-operator-modes.md` |
 | 设备点检造数、保养执行造数、点检单导入 | `features/equipment-ops-data-generate.md` |
-| 点检计划、点检计划日历、生成点检单、DJJH、方案绑定设备 | `features/equipment-spot-check-plan.md` |
-| 保养计划绑定保养方案、maintenance_scheme_id | `features/maintenance-plan-scheme-bind.md` |
+| 点检方案发布、计划设备清单、计划排程、待执行任务、实际填写、审核完成、DJJH | `features/equipment-spot-check-plan.md` |
+| 应用初始化缓慢、首次组织引导、消息模板预设、失败重试 | `features/tenant-bootstrap-initialization.md` |
+| 保养计划方案真源、设备绑定、维护类型周期 | `features/maintenance-plan-scheme-bind.md` |
 | 移动/工位点检跟绑定、保养执行带计划方案 | `features/equip-ops-scheme-bind-clients.md` |
 | 审核反审核、空壳待审、writeback_failure、revoke_noop | `features/pc-audit-unreview-empty-pending.md` |
 | 原路反审、下推下游、销售已出库仍能删报工、出库撤回送货单 | `features/downstream-revoke-delete-original-path.md` |
@@ -133,7 +134,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 |------|------|--------|------|
 | `features/flow-data-generate-operator-modes.md` | 流程造数步骤操作用户模式 | kuaizhizao-ops | 已交付 |
 | `features/equipment-ops-data-generate.md` | 设备点检保养造数与点检单导入 | kuaizhizao-ops | 已交付 |
-| `features/equipment-spot-check-plan.md` | 设备点检计划与日历 | kuaizhizao-ops | 已交付 |
+| `features/equipment-spot-check-plan.md` | 点检发布、任务执行与审核完成闭环（2026-10-13 用户确认） | kuaizhizao-ops | 已交付 |
 | `features/maintenance-plan-scheme-bind.md` | 保养计划绑定保养方案 | kuaizhizao-ops | 已交付 |
 | `features/equip-ops-scheme-bind-clients.md` | 移动/工位点检保养方案绑定对齐 | kuaizhizao-ops | 已交付 |
 | `features/user-preference-atomic-merge.md` | 用户偏好 JSON 原子深合并 | system | 已交付 |

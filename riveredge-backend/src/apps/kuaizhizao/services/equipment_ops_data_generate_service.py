@@ -174,6 +174,43 @@ def _equipment_items_from_plan(plan: Any) -> list[dict[str, Any]]:
     ]
 
 
+async def _equipment_items_from_scheme_binding(
+    tenant_id: int,
+    *,
+    scheme_id: Optional[int],
+    scheme_type: str,
+) -> list[dict[str, Any]]:
+    """计划设备改由方案绑定展开时，造数从 EquipmentSchemeBinding 取设备。"""
+    if not scheme_id:
+        return []
+    from apps.kuaizhizao.models.equipment import Equipment
+    from apps.kuaizhizao.models.equipment_ops import EquipmentSchemeBinding
+
+    bindings = await EquipmentSchemeBinding.filter(
+        tenant_id=tenant_id,
+        scheme_id=int(scheme_id),
+        scheme_type=scheme_type,
+        deleted_at__isnull=True,
+    ).order_by("id").all()
+    if not bindings:
+        return []
+    rows = await Equipment.filter(
+        tenant_id=tenant_id,
+        id__in=[b.equipment_id for b in bindings],
+        deleted_at__isnull=True,
+    ).all()
+    by_id = {r.id: r for r in rows}
+    out: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for b in bindings:
+        eq = by_id.get(b.equipment_id)
+        if not eq or eq.id in seen:
+            continue
+        seen.add(eq.id)
+        out.append({"id": eq.id, "uuid": eq.uuid, "code": eq.code, "name": eq.name})
+    return out
+
+
 class EquipmentOpsDataGenerateService:
     """按所选点检计划 / 保养计划与其设备、周期批量造演示单据。"""
 
@@ -248,15 +285,16 @@ class EquipmentOpsDataGenerateService:
         current_user: Any,
         req: EquipmentOpsGenerateRequest,
     ) -> dict[str, Any]:
-        from apps.kuaizhizao.schemas.equipment_ops import SpotCheckCreate, SpotCheckLineInput
+        from apps.kuaizhizao.schemas.equipment_ops import SpotCheckUpdate, SpotCheckLineInput
         from apps.kuaizhizao.schemas.maintenance_plan import MaintenanceExecutionCreate
         from apps.kuaizhizao.services.equipment_ops_service import (
-            EquipmentInspectionSchemeService,
             EquipmentSpotCheckService,
-            _normalize_capture_mode,
         )
         from apps.kuaizhizao.services.maintenance_plan_service import MaintenanceExecutionService
         from infra.models.user import User
+        from apps.kuaizhizao.models.equipment_ops import EquipmentSpotCheck
+        from apps.kuaizhizao.schemas.equipment_spot_check_plan import GenerateSpotChecksRequest
+        from apps.kuaizhizao.services.equipment_spot_check_plan_service import EquipmentSpotCheckPlanService
 
         plan = await self._build_plan(tenant_id, req)
         run_id = str(uuid.uuid4())
@@ -270,39 +308,15 @@ class EquipmentOpsDataGenerateService:
         )
 
         spot_svc = EquipmentSpotCheckService()
-        scheme_svc = EquipmentInspectionSchemeService()
         created: list[dict[str, Any]] = []
         errors: list[str] = []
         notes: list[str] = list(plan["notes"])
 
-        # 按 (scheme, equipment) 缓存方案行，避免周期内重复加载
-        scheme_lines_cache: dict[int, list[Any]] = {}
-
         for job in plan["spot_jobs"]:
             equipment = job["equipment"]
-            scheme = job["scheme"]
             sc_plan = job["plan"]
             issued = job["issued_at"]
-            mode = _normalize_capture_mode(getattr(scheme, "capture_mode", None))
-            if mode == "B":
-                continue
-            scheme_id = int(scheme.id)
-            if scheme_id not in scheme_lines_cache:
-                try:
-                    _, scheme_lines = await scheme_svc.get_with_lines(tenant_id, scheme_id)
-                    scheme_lines_cache[scheme_id] = list(scheme_lines or [])
-                except Exception as exc:
-                    errors.append(
-                        f"计划 {sc_plan.plan_no} 方案 {scheme.code}: 加载点检行失败 {exc}"
-                    )
-                    scheme_lines_cache[scheme_id] = []
-                    continue
-            scheme_lines = scheme_lines_cache[scheme_id]
-            if not scheme_lines:
-                errors.append(
-                    f"计划 {sc_plan.plan_no} 方案 {scheme.code}: 方案下无点检项，跳过"
-                )
-                continue
+            scheme_id = int(sc_plan.scheme_id)
 
             inspector_id, inspector_name, insp_note = await self._resolve_ops_person(
                 tenant_id=tenant_id,
@@ -325,9 +339,9 @@ class EquipmentOpsDataGenerateService:
                 tenant_id=tenant_id,
                 cfg=req.approver_operator,
                 fallback_user_id=operator_id,
-                assigned_user_id=getattr(scheme, "reviewer_user_id", None),
-                assigned_user_name=getattr(scheme, "reviewer_user_name", None),
-                label=f"点检审批人({scheme.code})",
+                assigned_user_id=sc_plan.scheme_snapshot.get("reviewer_user_id"),
+                assigned_user_name=sc_plan.scheme_snapshot.get("reviewer_user_name"),
+                label=f"点检审批人({sc_plan.scheme_code})",
                 role_step_key="finished_goods_inspection",
             )
             if appr_note:
@@ -337,41 +351,39 @@ class EquipmentOpsDataGenerateService:
             )
 
             check_date = to_site_date(issued)
-            line_inputs = [
-                SpotCheckLineInput(
-                    line_no=idx + 1,
-                    item_id=sl.item_id,
-                    item_code=sl.item_code,
-                    item_name=sl.item_name,
-                    requirement=sl.requirement,
-                    method=getattr(sl, "method", None),
-                    judgment_standard=getattr(sl, "judgment_standard", None),
-                    value_type=sl.value_type,
-                    unit=sl.unit,
-                    numeric_min=sl.numeric_min,
-                    numeric_max=sl.numeric_max,
-                    measured_value="合格",
-                    is_pass=True,
-                    photo_required=False,
-                )
-                for idx, sl in enumerate(scheme_lines)
-            ]
             try:
-                header = await spot_svc.create(
-                    tenant_id,
-                    SpotCheckCreate(
-                        equipment_id=int(equipment.id),
-                        scheme_id=scheme_id,
-                        check_date=check_date,
+                await EquipmentSpotCheckPlanService.generate_spot_checks(
+                    tenant_id, str(sc_plan.uuid),
+                    GenerateSpotChecksRequest(
+                        check_date=check_date, equipment_uuids=[str(equipment.uuid)],
+                    ),
+                    current_user=current_user,
+                )
+                header = await EquipmentSpotCheck.filter(
+                    tenant_id=tenant_id, plan_id=sc_plan.id, equipment_id=equipment.id,
+                    period_key=job["period_key"], deleted_at__isnull=True,
+                ).first()
+                if not header or header.status != "待执行":
+                    notes.append(f"计划 {sc_plan.plan_no} 设备 {equipment.code}: 任务已执行，跳过")
+                    continue
+                task_lines = await spot_svc._load_lines(tenant_id, header.id)
+                line_inputs = [
+                    SpotCheckLineInput(
+                        line_no=line.line_no, item_id=line.item_id, is_pass=True,
+                        measured_value=(
+                            str(line.numeric_min if line.numeric_min is not None else line.numeric_max if line.numeric_max is not None else 1)
+                            if line.value_type == "numeric" else "是"
+                        ),
+                    ) for line in task_lines
+                ]
+                header = await spot_svc.update(
+                    tenant_id, header.id,
+                    SpotCheckUpdate(
                         inspector_id=inspector_id,
                         inspector_name=inspector_name,
-                        plan_id=int(sc_plan.id),
-                        plan_uuid=str(sc_plan.uuid),
                         remark=f"equipment_ops_generate run={run_id}",
-                        lines=line_inputs or None,
+                        lines=line_inputs,
                     ),
-                    operator_id=inspector_id,
-                    operator_name=inspector_name,
                     current_user=current_user,
                 )
                 if (
@@ -519,10 +531,10 @@ class EquipmentOpsDataGenerateService:
     async def _build_plan(
         self, tenant_id: int, req: EquipmentOpsGenerateRequest
     ) -> dict[str, Any]:
-        from apps.kuaizhizao.models.equipment_ops import EquipmentInspectionScheme
         from apps.kuaizhizao.models.equipment_spot_check_plan import EquipmentSpotCheckPlan
         from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
         from apps.kuaizhizao.services.equipment_ops_service import _normalize_capture_mode
+        from apps.kuaizhizao.services.equipment_spot_check_plan_service import plan_occurrences
 
         if not req.spot_check_plan_ids and not req.maintenance_plan_ids:
             raise ValidationError("请至少选择一个点检计划或保养计划")
@@ -549,43 +561,20 @@ class EquipmentOpsDataGenerateService:
             for pid in req.spot_check_plan_ids:
                 if pid not in found:
                     notes.append(f"点检计划 id={pid} 不存在或已删除")
-            scheme_ids = sorted(
-                {int(p.scheme_id) for p in plans if int(getattr(p, "scheme_id", 0) or 0) > 0}
-            )
-            schemes = (
-                await EquipmentInspectionScheme.filter(
-                    tenant_id=tenant_id,
-                    id__in=scheme_ids,
-                    deleted_at__isnull=True,
-                    is_active=True,
-                ).all()
-                if scheme_ids
-                else []
-            )
-            scheme_map = {int(s.id): s for s in schemes}
-
             for sc_plan in plans:
-                if str(getattr(sc_plan, "status", "") or "") in ("已取消", "已完成"):
+                if sc_plan.status not in ("已发布", "执行中") or not sc_plan.scheme_snapshot:
                     notes.append(
                         f"点检计划 {sc_plan.plan_no} 状态为「{sc_plan.status}」，已跳过"
                     )
                     continue
-                scheme = scheme_map.get(int(sc_plan.scheme_id))
-                if not scheme:
-                    notes.append(f"点检计划 {sc_plan.plan_no}: 点检方案不可用")
-                    continue
-                if getattr(scheme, "domain", "equipment") == "esd":
-                    notes.append(f"点检计划 {sc_plan.plan_no}: ESD 方案跳过")
-                    continue
-                mode = _normalize_capture_mode(getattr(scheme, "capture_mode", None))
-                if mode == "B":
+                mode = _normalize_capture_mode(sc_plan.scheme_snapshot.get("capture_mode"))
+                if mode in ("B", "C"):
                     notes.append(
-                        f"点检计划 {sc_plan.plan_no}: 采集方式 B 须照片，已跳过"
+                        f"点检计划 {sc_plan.plan_no}: 采集方式 {mode} 须真实照片，已跳过"
                     )
                     continue
-                equipments = await self._load_equipments_by_items(
-                    tenant_id, _equipment_items_from_plan(sc_plan)
-                )
+                eq_items = _equipment_items_from_plan(sc_plan)
+                equipments = await self._load_equipments_by_items(tenant_id, eq_items)
                 if not equipments:
                     notes.append(f"点检计划 {sc_plan.plan_no}: 未关联可用设备")
                     continue
@@ -594,34 +583,20 @@ class EquipmentOpsDataGenerateService:
                 equipments = [e for e in equipments if int(e.id) in selected_eq]
                 if not equipments:
                     continue
-                cycle_type = getattr(sc_plan, "cycle_type", None) or getattr(
-                    scheme, "cycle_type", None
-                )
-                occ_dates = _iter_named_cycle_dates(cycle_type, start_d, end_d)
-                if len(occ_dates) >= MAX_OCCURRENCES_PER_TARGET:
-                    notes.append(
-                        f"点检计划 {sc_plan.plan_no}: 周期展开已截断为 "
-                        f"{MAX_OCCURRENCES_PER_TARGET} 次"
-                    )
+                occurrences = [
+                    occurrence for occurrence in plan_occurrences(sc_plan)
+                    if start <= resolve_business_datetime(occurrence["scheduled_at"]) <= end
+                ]
                 for equipment in equipments:
                     equipment_ids.add(int(equipment.id))
-                    for occ_d in occ_dates:
-                        issued = _apply_work_time(
-                            resolve_business_datetime(
-                                datetime(occ_d.year, occ_d.month, occ_d.day, 9, 0, 0)
-                            ),
-                            req,
-                        )
-                        if issued < start or issued > end:
-                            # 用区间日边界：仍生成该周期点检日
-                            if occ_d < start_d or occ_d > end_d:
-                                continue
+                    for occurrence in occurrences:
+                        issued = resolve_business_datetime(occurrence["scheduled_at"])
                         spot_jobs.append(
                             {
                                 "equipment": equipment,
-                                "scheme": scheme,
                                 "plan": sc_plan,
                                 "issued_at": issued,
+                                "period_key": occurrence["period_key"],
                             }
                         )
 
@@ -637,9 +612,14 @@ class EquipmentOpsDataGenerateService:
                     notes.append(f"保养计划 id={pid} 不存在或已删除")
 
             for mp in plans:
-                equipments = await self._load_equipments_by_items(
-                    tenant_id, _equipment_items_from_plan(mp)
-                )
+                eq_items = _equipment_items_from_plan(mp)
+                if not eq_items:
+                    eq_items = await _equipment_items_from_scheme_binding(
+                        tenant_id,
+                        scheme_id=getattr(mp, "maintenance_scheme_id", None),
+                        scheme_type="maintenance",
+                    )
+                equipments = await self._load_equipments_by_items(tenant_id, eq_items)
                 if not equipments:
                     notes.append(f"保养计划 {mp.plan_no}: 未关联可用设备")
                     continue

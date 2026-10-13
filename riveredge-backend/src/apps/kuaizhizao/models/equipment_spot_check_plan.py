@@ -30,7 +30,7 @@ class EquipmentSpotCheckPlan(BaseModel):
     plan_no = fields.CharField(max_length=100, description="计划编号（组织内唯一）")
     plan_name = fields.CharField(max_length=200, description="计划名称")
 
-    # 设备由点检方案绑定展开；历史行可仍有快照，新写入可空
+    # 发布时固定本计划设备范围，后续绑定变更不影响已发布计划。
     equipment_id = fields.IntField(null=True, description="设备ID（首台，可选快照）")
     equipment_uuid = fields.CharField(max_length=36, null=True, description="设备UUID（首台，可选快照）")
     equipment_name = fields.CharField(max_length=200, null=True, description="设备名称（首台或汇总，可选快照）")
@@ -39,8 +39,10 @@ class EquipmentSpotCheckPlan(BaseModel):
     scheme_id = fields.IntField(description="点检方案ID")
     scheme_code = fields.CharField(max_length=64, null=True, description="点检方案编码快照")
     scheme_name = fields.CharField(max_length=200, null=True, description="点检方案名称快照")
+    scheme_snapshot = fields.JSONField(null=True, description="发布时方案及点检项快照")
+    shift_ids = fields.JSONField(null=True, description="每班计划所选班次ID")
 
-    # 周期真源为点检方案；计划仅存快照供列表展示
+    # 方案提供默认周期，计划发布后固定排程规则。
     cycle_type = fields.CharField(max_length=50, null=True, description="周期类型快照（来自点检方案）")
     cycle_value = fields.IntField(null=True, description="周期值（可选）")
     cycle_unit = fields.CharField(max_length=20, null=True, description="周期单位（可选）")

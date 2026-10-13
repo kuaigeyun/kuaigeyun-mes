@@ -54,6 +54,10 @@ interface MaintenanceScheme {
   code?: string;
   name?: string;
   description?: string;
+  maintenance_type?: string;
+  cycle_type?: string;
+  cycle_value?: number;
+  cycle_unit?: string;
   is_active?: boolean;
   lines?: SchemeLine[];
   updated_at?: string;
@@ -89,7 +93,14 @@ const MaintenanceSchemesPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
-    setFormInitialValues({ is_active: true, lines: [{ sort_order: 0 }] });
+    setFormInitialValues({
+      is_active: true,
+      maintenance_type: '日常保养',
+      cycle_type: '按时间',
+      cycle_value: 30,
+      cycle_unit: '天',
+      lines: [{ sort_order: 0 }],
+    });
     setModalVisible(true);
     void loadItemOptions();
   };
@@ -172,6 +183,15 @@ const MaintenanceSchemesPage: React.FC = () => {
     () => [
       { title: t('common.code'), dataIndex: 'code' },
       { title: t('common.name'), dataIndex: 'name' },
+      { title: t(`${P}.col.maintenanceType`), dataIndex: 'maintenance_type' },
+      {
+        title: t(`${P}.col.cycle`),
+        dataIndex: 'cycle_type',
+        render: (_, r) =>
+          [r.cycle_type, r.cycle_value != null ? `${r.cycle_value}${r.cycle_unit ?? ''}` : undefined]
+            .filter(Boolean)
+            .join(' ') || '-',
+      },
       { title: t('common.remark'), dataIndex: 'description', span: 2 },
       buildIsActiveDescriptionColumn<MaintenanceScheme>(t),
     ],
@@ -225,6 +245,32 @@ const MaintenanceSchemesPage: React.FC = () => {
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
+      },
+      {
+        title: t(`${P}.col.maintenanceType`),
+        dataIndex: 'maintenance_type',
+        width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) =>
+          r.maintenance_type != null && r.maintenance_type !== ''
+            ? String(r.maintenance_type)
+            : '-',
+      },
+      {
+        title: t(`${P}.col.cycle`),
+        dataIndex: 'cycle_type',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) =>
+          [r.cycle_type, r.cycle_value != null ? `${r.cycle_value}${r.cycle_unit ?? ''}` : undefined]
+            .filter(Boolean)
+            .join(' ') || '-',
       },
       {
         title: t(`${P}.col.lineCount`),
@@ -293,7 +339,7 @@ const MaintenanceSchemesPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenanceSchemes)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-schemes-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-schemes-width-v3"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -370,6 +416,58 @@ const MaintenanceSchemesPage: React.FC = () => {
           </Col>
           <Col span={12}>
             <ProFormText name="name" label={t('common.name')} rules={[{ required: true }]} />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="maintenance_type"
+              label={t(`${P}.col.maintenanceType`)}
+              rules={[{ required: true, message: t(`${P}.form.maintenanceTypeRequired`) }]}
+              options={[
+                { label: t(`${P}.maintenanceType.daily`), value: '日常保养' },
+                { label: t(`${P}.maintenanceType.minor`), value: '小修' },
+                { label: t(`${P}.maintenanceType.medium`), value: '中修' },
+                { label: t(`${P}.maintenanceType.overhaul`), value: '大修' },
+              ]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="cycle_type"
+              label={t(`${P}.col.cycleType`)}
+              rules={[{ required: true, message: t(`${P}.form.cycleTypeRequired`) }]}
+              options={[
+                { label: t(`${P}.cycleType.byTime`), value: '按时间' },
+                { label: t(`${P}.cycleType.byRuntime`), value: '按运行时长' },
+                { label: t(`${P}.cycleType.byCount`), value: '按使用次数' },
+              ]}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDigit
+              name="cycle_value"
+              label={t(`${P}.form.cycleValue`)}
+              min={1}
+              rules={[{ required: true, message: t(`${P}.form.cycleValueRequired`) }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="cycle_unit"
+              label={t(`${P}.form.cycleUnit`)}
+              rules={[{ required: true, message: t(`${P}.form.cycleUnitRequired`) }]}
+              options={[
+                { label: t(`${P}.cycleUnit.day`), value: '天' },
+                { label: t(`${P}.cycleUnit.week`), value: '周' },
+                { label: t(`${P}.cycleUnit.month`), value: '月' },
+                { label: t(`${P}.cycleUnit.year`), value: '年' },
+                { label: t(`${P}.cycleUnit.hour`), value: '小时' },
+                { label: t(`${P}.cycleUnit.count`), value: '次' },
+              ]}
+            />
           </Col>
         </Row>
         <FormListDetailTable

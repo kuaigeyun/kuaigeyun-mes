@@ -195,6 +195,12 @@ export const spotCheckPlanApi = {
   get: async (uuid: string) => {
     return apiRequest(`/apps/kuaizhizao/equipment-spot-check-plans/${uuid}`, { method: 'GET' });
   },
+  publish: async (uuid: string) =>
+    apiRequest(`/apps/kuaizhizao/equipment-spot-check-plans/${uuid}/publish`, { method: 'POST' }),
+  cancel: async (uuid: string) =>
+    apiRequest(`/apps/kuaizhizao/equipment-spot-check-plans/${uuid}/cancel`, { method: 'POST' }),
+  availableEquipment: async () =>
+    apiRequest('/apps/kuaizhizao/equipment-spot-check-plans/equipment-options', { method: 'GET' }),
   generateSpotChecks: async (
     uuid: string,
     data?: { check_date?: string; equipment_uuids?: string[] },
