@@ -125,10 +125,30 @@
                 }
               },
               {
+                "title": "app.kuaizhizao.menu.equipment-management.spot-check-plans",
+                "path": "/apps/kuaizhizao/equipment-management/spot-check-plans",
+                "permission": "kuaizhizao:equipment-spot-check-plan:read",
+                "sort_order": 2,
+                "meta": {
+                  "node": "equipment_spot_check_plan",
+                  "module": "equipment"
+                }
+              },
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.spot-check-plan-calendar",
+                "path": "/apps/kuaizhizao/equipment-management/spot-check-plan-calendar",
+                "permission": "kuaizhizao:equipment-spot-check-plan:read",
+                "sort_order": 3,
+                "meta": {
+                  "node": "equipment_spot_check_plan_calendar",
+                  "module": "equipment"
+                }
+              },
+              {
                 "title": "app.kuaizhizao.menu.equipment-management.route-patrols",
                 "path": "/apps/kuaizhizao/equipment-management/route-patrols",
                 "permission": "kuaizhizao:equipment-route-patrol:read",
-                "sort_order": 2,
+                "sort_order": 4,
                 "meta": {
                   "node": "equipment_route_patrol",
                   "module": "equipment"
@@ -138,7 +158,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-faults",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-faults",
                 "permission": "kuaizhizao:equipment-fault:read",
-                "sort_order": 3,
+                "sort_order": 5,
                 "meta": {
                   "node": "equipment_fault",
                   "module": "equipment"
@@ -148,7 +168,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-repairs",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-repairs",
                 "permission": "kuaizhizao:equipment-fault:read",
-                "sort_order": 4,
+                "sort_order": 6,
                 "meta": {
                   "node": "equipment_repair",
                   "module": "equipment"
@@ -158,7 +178,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.maintenance-plans",
                 "path": "/apps/kuaizhizao/equipment-management/maintenance-plans",
                 "permission": "kuaizhizao:maintenance-plan:read",
-                "sort_order": 5,
+                "sort_order": 7,
                 "meta": {
                   "node": "maintenance_plan",
                   "module": "equipment"
@@ -168,7 +188,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.maintenance-plan-calendar",
                 "path": "/apps/kuaizhizao/equipment-management/maintenance-plan-calendar",
                 "permission": "kuaizhizao:maintenance-plan:read",
-                "sort_order": 6,
+                "sort_order": 8,
                 "meta": {
                   "node": "maintenance_plan_calendar",
                   "module": "equipment"
@@ -178,7 +198,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.maintenance-executions",
                 "path": "/apps/kuaizhizao/equipment-management/maintenance-executions",
                 "permission": "kuaizhizao:maintenance-plan:read",
-                "sort_order": 7,
+                "sort_order": 9,
                 "meta": {
                   "node": "maintenance_execution",
                   "module": "equipment"
@@ -188,7 +208,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.maintenance-reminders",
                 "path": "/apps/kuaizhizao/equipment-management/maintenance-reminders",
                 "permission": "kuaizhizao:maintenance-reminder:read",
-                "sort_order": 8,
+                "sort_order": 10,
                 "meta": {
                   "node": "maintenance_reminder",
                   "module": "equipment"
@@ -198,7 +218,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.spare-part-requisitions",
                 "path": "/apps/kuaizhizao/equipment-management/spare-part-requisitions",
                 "permission": "kuaizhizao:spare-part-requisition:read",
-                "sort_order": 9,
+                "sort_order": 11,
                 "meta": {
                   "node": "spare_part_requisition",
                   "module": "equipment"
@@ -208,7 +228,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-transfers",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-transfers",
                 "permission": "kuaizhizao:equipment-transfer:read",
-                "sort_order": 10,
+                "sort_order": 12,
                 "meta": {
                   "node": "equipment_transfer",
                   "module": "equipment"
@@ -218,7 +238,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-scrap",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-scrap",
                 "permission": "kuaizhizao:equipment-scrap:read",
-                "sort_order": 11,
+                "sort_order": 13,
                 "meta": {
                   "node": "equipment_scrap",
                   "module": "equipment"
@@ -228,7 +248,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-calibrations",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-calibrations",
                 "permission": "kuaizhizao:equipment-calibration:read",
-                "sort_order": 12,
+                "sort_order": 14,
                 "meta": {
                   "node": "equipment_calibration",
                   "module": "equipment"
@@ -238,7 +258,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-acceptances",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-acceptances",
                 "permission": "kuaizhizao:equipment-acceptance:read",
-                "sort_order": 13,
+                "sort_order": 15,
                 "meta": {
                   "node": "equipment_acceptance",
                   "module": "equipment"
@@ -248,7 +268,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-line-rebinds",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-line-rebinds",
                 "permission": "kuaizhizao:equipment-line-rebind:read",
-                "sort_order": 14,
+                "sort_order": 16,
                 "meta": {
                   "node": "equipment_line_rebind",
                   "module": "equipment"
@@ -258,7 +278,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-status",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-status",
                 "permission": "kuaizhizao:equipment-status:read",
-                "sort_order": 14,
+                "sort_order": 17,
                 "meta": {
                   "node": "equipment_status",
                   "module": "equipment"

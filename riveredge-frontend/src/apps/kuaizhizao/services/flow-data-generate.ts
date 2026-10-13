@@ -6,7 +6,13 @@ import { apiRequest } from '../../../services/api';
 
 export type FlowSourceType = 'sales_order' | 'sales_forecast';
 
-export type StepOperatorMode = 'fixed' | 'random_role' | 'current';
+export type StepOperatorMode =
+  | 'fixed'
+  | 'random_role'
+  | 'random_department'
+  | 'random_team'
+  | 'operation_assigned'
+  | 'current';
 
 export interface FlowEligibleOrder {
   id: number;
@@ -49,6 +55,8 @@ export interface StepOperatorPayload {
   mode: StepOperatorMode;
   user_id?: number | null;
   role_code?: string | null;
+  department_id?: number | null;
+  work_group_id?: number | null;
 }
 
 export interface ReportingBatchConfig {

@@ -245,15 +245,19 @@ REWRITE_SPECS: tuple[RewriteDocSpec, ...] = (
 
 def _parse_hhmm(raw: str, *, field_name: str) -> time:
     text = (raw or "").strip()
+    parts = text.split(":")
     try:
-        hour_s, minute_s = text.split(":", 1)
-        hour = int(hour_s)
-        minute = int(minute_s)
+        if len(parts) == 2:
+            hour, minute, second = int(parts[0]), int(parts[1]), 0
+        elif len(parts) == 3:
+            hour, minute, second = int(parts[0]), int(parts[1]), int(parts[2])
+        else:
+            raise ValueError("bad parts count")
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"{field_name} 格式须为 HH:MM，例如 09:00") from exc
-    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        raise ValueError(f"{field_name} 格式须为 HH:MM 或 HH:MM:SS，例如 09:00:00") from exc
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59 or second < 0 or second > 59:
         raise ValueError(f"{field_name} 非法：{text}")
-    return time(hour=hour, minute=minute)
+    return time(hour=hour, minute=minute, second=second)
 
 
 @dataclass
@@ -276,8 +280,10 @@ class WorkScheduleParams:
         if self.lookback_days < 1 or self.lookback_days > 365:
             raise ValueError("回溯天数须在 1–365 之间")
         self.weekdays = days
-        self.start_time = f"{start.hour:02d}:{start.minute:02d}"
-        self.end_time = f"{end.hour:02d}:{end.minute:02d}"
+        self.start_time = (
+            f"{start.hour:02d}:{start.minute:02d}:{start.second:02d}"
+        )
+        self.end_time = f"{end.hour:02d}:{end.minute:02d}:{end.second:02d}"
 
     @property
     def start_tod(self) -> time:
@@ -299,6 +305,7 @@ class WorkScheduleParams:
             day.day,
             self.start_tod.hour,
             self.start_tod.minute,
+            self.start_tod.second,
             tzinfo=tz,
         )
         end = datetime(
@@ -307,6 +314,7 @@ class WorkScheduleParams:
             day.day,
             self.end_tod.hour,
             self.end_tod.minute,
+            self.end_tod.second,
             tzinfo=tz,
         )
         return start, end

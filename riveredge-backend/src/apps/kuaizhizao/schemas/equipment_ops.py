@@ -416,6 +416,8 @@ class SpotCheckCreate(BaseModel):
     check_date: Optional[date] = None
     inspector_id: Optional[int] = None
     inspector_name: Optional[str] = None
+    plan_id: Optional[int] = None
+    plan_uuid: Optional[str] = None
     remark: Optional[str] = None
     attachments: Optional[List[dict]] = None
     lines: Optional[List[SpotCheckLineInput]] = None
@@ -442,6 +444,8 @@ class SpotCheckResponse(AuditActorFields):
     equipment_code: Optional[str] = None
     equipment_name: Optional[str] = None
     scheme_id: Optional[int] = None
+    plan_id: Optional[int] = None
+    plan_uuid: Optional[str] = None
     capture_mode: Optional[str] = None
     check_date: date
     inspector_id: Optional[int] = None

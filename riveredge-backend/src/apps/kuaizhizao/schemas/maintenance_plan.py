@@ -25,6 +25,7 @@ class MaintenancePlanBase(BaseModel):
     plan_name: str = Field(..., min_length=1, max_length=200, description="计划名称")
     equipment_uuid: Optional[str] = Field(None, description="设备UUID（兼容单选，建议使用 equipment_uuids）")
     equipment_uuids: Optional[List[str]] = Field(None, min_length=1, description="关联设备UUID列表")
+    maintenance_scheme_id: Optional[int] = Field(None, description="保养方案ID")
     plan_type: str = Field(..., max_length=50, description="计划类型（预防性维护、定期维护、临时维护）")
     maintenance_type: str = Field(..., max_length=50, description="维护类型（日常保养、小修、中修、大修）")
     cycle_type: str = Field(..., max_length=50, description="周期类型（按时间、按运行时长、按使用次数）")
@@ -69,6 +70,7 @@ class MaintenancePlanCreate(MaintenancePlanBase):
     
     用于创建新维护计划的请求数据。
     """
+    maintenance_scheme_id: int = Field(..., description="保养方案ID")
 
     @model_validator(mode="after")
     def normalize_equipment_uuids(self):
@@ -95,6 +97,7 @@ class MaintenancePlanUpdate(BaseModel):
     """
     plan_name: Optional[str] = Field(None, min_length=1, max_length=200, description="计划名称")
     equipment_uuids: Optional[List[str]] = Field(None, min_length=1, description="关联设备UUID列表")
+    maintenance_scheme_id: Optional[int] = Field(None, description="保养方案ID")
     plan_type: Optional[str] = Field(None, max_length=50, description="计划类型")
     maintenance_type: Optional[str] = Field(None, max_length=50, description="维护类型")
     cycle_type: Optional[str] = Field(None, max_length=50, description="周期类型")
@@ -124,6 +127,9 @@ class MaintenancePlanResponse(MaintenancePlanBase):
     equipment_name: str = Field(..., description="设备名称")
     equipment_items: Optional[List[Dict[str, Any]]] = Field(None, description="关联设备列表")
     equipment_uuids: Optional[List[str]] = Field(None, description="关联设备UUID列表")
+    maintenance_scheme_id: Optional[int] = Field(None, description="保养方案ID")
+    scheme_code: Optional[str] = Field(None, description="保养方案编码快照")
+    scheme_name: Optional[str] = Field(None, description="保养方案名称快照")
     created_by: Optional[int] = None
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None

@@ -25,9 +25,11 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, Valid
 STEP_KEYS = (
     "demand_computation",
     "purchase",
+    "incoming_inspection",
     "inventory_topup",
     "production_picking",
     "reporting",
+    "process_inspection",
     "finished_goods_inspection",
     "finished_goods_receipt",
     "shipment_delivery",
@@ -37,9 +39,11 @@ STEP_KEYS = (
 STEP_DEFAULT_ROLE_CODES: dict[str, tuple[str, ...]] = {
     "demand_computation": ("PRODUCTION_MANAGER", "SALES_MANAGER"),
     "purchase": ("PURCHASE_PERSON", "PURCHASE_MANAGER"),
+    "incoming_inspection": ("QUALITY_OPERATOR", "QUALITY_MANAGER"),
     "inventory_topup": ("WAREHOUSE_OPERATOR",),
     "production_picking": ("WAREHOUSE_OPERATOR",),
     "reporting": ("PRODUCTION_STAFF", "PRODUCTION_MANAGER"),
+    "process_inspection": ("QUALITY_OPERATOR", "QUALITY_MANAGER"),
     "finished_goods_inspection": ("QUALITY_OPERATOR", "QUALITY_MANAGER"),
     "finished_goods_receipt": ("WAREHOUSE_OPERATOR",),
     "shipment_delivery": ("WAREHOUSE_OPERATOR", "SALES_PERSON"),
@@ -89,12 +93,17 @@ class StepOperatorConfig:
     mode:
       - fixed: 使用 user_id
       - random_role: 从 role_code（或步骤默认角色）下激活用户随机
+      - random_department: 从 department_id 下激活用户随机
+      - random_team: 从 work_group_id（工作小组）成员随机
+      - operation_assigned: 按工单工序派工/工序档案默认人员（报工逐步解析）
       - current: 使用当前登录用户（fallback）
     """
 
     mode: str = "random_role"
     user_id: Optional[int] = None
     role_code: Optional[str] = None
+    department_id: Optional[int] = None
+    work_group_id: Optional[int] = None
 
     def normalized_mode(self) -> str:
         raw = (self.mode or "random_role").strip().lower()
@@ -102,6 +111,16 @@ class StepOperatorConfig:
             return "fixed"
         if raw in ("current", "self", "当前"):
             return "current"
+        if raw in ("random_department", "department", "按部门随机"):
+            return "random_department"
+        if raw in ("random_team", "team", "work_group", "小组随机"):
+            return "random_team"
+        if raw in ("operation_assigned", "by_operation", "按工序指定人员", "工序指定"):
+            return "operation_assigned"
+        if raw in ("equipment_assigned", "设备指定", "设备指定点检人员"):
+            return "equipment_assigned"
+        if raw in ("scheme_assigned", "方案指定", "方案指定审核人员"):
+            return "scheme_assigned"
         return "random_role"
 
 
@@ -396,13 +415,18 @@ class FlowDataGenerateService:
             enabled=enabled,
         )
         outsource_notes.extend(op_notes)
+        reporting_cfg = req.step_operators.get("reporting") or StepOperatorConfig()
         reporting_pool = await self._resolve_operator_pool_for_step(
             tenant_id=tenant_id,
             step_key="reporting",
-            cfg=req.step_operators.get("reporting") or StepOperatorConfig(),
+            cfg=reporting_cfg,
             fallback_user_id=ops.get("reporting", operator_id),
         )
-        if len(reporting_pool) > 1:
+        if reporting_cfg.normalized_mode() == "operation_assigned":
+            outsource_notes.append(
+                "reporting: 按工序指定人员——各工单工序优先用派工人员，其次工序档案默认人员"
+            )
+        elif len(reporting_pool) > 1:
             outsource_notes.append(
                 f"reporting: 报工操作人池 {len(reporting_pool)} 人，将按批次轮换"
             )
@@ -450,18 +474,35 @@ class FlowDataGenerateService:
                 code = owo.get("code") or owo.get("id")
                 outsource_notes.append(f"委外工单 {code} 已生成，本版不自动走委外收发，需人工处理")
 
-            # 3) 采购入库链
+            # 3) 采购：审核 PO；入库走来料检验步骤或直接下推
             if enabled.get("purchase", True) and purchase_orders:
-                await self._step_purchase_inbound(
+                await self._step_approve_purchase_orders(
                     tenant_id=tenant_id,
                     operator_id=ops["purchase"],
                     purchase_orders=purchase_orders,
-                    warehouse=warehouse,
-                    planner=planner,
-                    timeline=timeline,
-                    step_results=step_results,
-                    run_id=run_id,
                 )
+                if enabled.get("incoming_inspection", True):
+                    await self._step_incoming_inspection(
+                        tenant_id=tenant_id,
+                        operator_id=ops["incoming_inspection"],
+                        purchase_orders=purchase_orders,
+                        warehouse=warehouse,
+                        planner=planner,
+                        timeline=timeline,
+                        step_results=step_results,
+                        run_id=run_id,
+                    )
+                else:
+                    await self._step_purchase_direct_receipt(
+                        tenant_id=tenant_id,
+                        operator_id=ops["purchase"],
+                        purchase_orders=purchase_orders,
+                        warehouse=warehouse,
+                        planner=planner,
+                        timeline=timeline,
+                        step_results=step_results,
+                        run_id=run_id,
+                    )
 
             # 4) 生产链（按工单）
             for wo in work_orders:
@@ -495,7 +536,19 @@ class FlowDataGenerateService:
                         tenant_id=tenant_id,
                         operator_id=ops["reporting"],
                         operator_pool=reporting_pool,
+                        operator_cfg=req.step_operators.get("reporting")
+                        or StepOperatorConfig(),
                         batch_cfg=req.reporting_batches.clamp(),
+                        work_order_id=wo_id,
+                        planner=planner,
+                        timeline=timeline,
+                        step_results=step_results,
+                        run_id=run_id,
+                    )
+                if enabled.get("process_inspection", True):
+                    await self._step_process_inspection(
+                        tenant_id=tenant_id,
+                        operator_id=ops["process_inspection"],
                         work_order_id=wo_id,
                         planner=planner,
                         timeline=timeline,
@@ -639,6 +692,12 @@ class FlowDataGenerateService:
         if mode == "current":
             return int(fallback_user_id), None
 
+        if mode in ("equipment_assigned", "scheme_assigned"):
+            return (
+                int(fallback_user_id),
+                f"{step_key}: 主数据指定人员仅用于设备点检造数，已回退当前用户",
+            )
+
         if mode == "fixed":
             uid = int(cfg.user_id or 0)
             if uid <= 0:
@@ -652,6 +711,45 @@ class FlowDataGenerateService:
             if not user:
                 return int(fallback_user_id), f"{step_key}: 指定用户 #{uid} 不可用，已回退当前用户"
             return int(user.id), None
+
+        if mode == "random_department":
+            dept_id = int(cfg.department_id or 0)
+            if dept_id <= 0:
+                return int(fallback_user_id), f"{step_key}: 未选择部门，已回退当前用户"
+            candidates = await self._list_active_user_ids_by_department(tenant_id, dept_id)
+            if not candidates:
+                return (
+                    int(fallback_user_id),
+                    f"{step_key}: 部门 #{dept_id} 下无激活用户，已回退当前用户",
+                )
+            picked = int(random.choice(candidates))
+            return picked, f"{step_key}: 随机选用用户 #{picked}（部门 #{dept_id}）"
+
+        if mode == "random_team":
+            team_id = int(cfg.work_group_id or 0)
+            if team_id <= 0:
+                return int(fallback_user_id), f"{step_key}: 未选择工作小组，已回退当前用户"
+            candidates = await self._list_active_user_ids_by_work_group(tenant_id, team_id)
+            if not candidates:
+                return (
+                    int(fallback_user_id),
+                    f"{step_key}: 小组 #{team_id} 下无激活成员，已回退当前用户",
+                )
+            picked = int(random.choice(candidates))
+            return picked, f"{step_key}: 随机选用用户 #{picked}（小组 #{team_id}）"
+
+        if mode == "operation_assigned":
+            candidates = await self._list_active_user_ids_from_operation_defaults(tenant_id)
+            if not candidates:
+                return (
+                    int(fallback_user_id),
+                    f"{step_key}: 工序档案无默认生产人员，已回退当前用户；报工将按工单工序派工解析",
+                )
+            picked = int(random.choice(candidates))
+            return (
+                picked,
+                f"{step_key}: 预选用户 #{picked}（工序默认人员）；报工按各工序派工",
+            )
 
         # random_role
         role_codes: list[str] = []
@@ -728,6 +826,154 @@ class FlowDataGenerateService:
         pool = [int(x) for x in tenant_users] or [int(x) for x in active]
         return sorted(set(pool))
 
+    async def _filter_active_user_ids(
+        self, tenant_id: int, user_ids: list[int]
+    ) -> list[int]:
+        from infra.models.user import User
+
+        ids = sorted({int(x) for x in user_ids if int(x) > 0})
+        if not ids:
+            return []
+        active = await User.filter(
+            id__in=ids,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).values_list("id", flat=True)
+        tenant_users = await User.filter(
+            id__in=list(active),
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).values_list("id", flat=True)
+        pool = [int(x) for x in tenant_users] or [int(x) for x in active]
+        return sorted(set(pool))
+
+    async def _list_active_user_ids_by_department(
+        self, tenant_id: int, department_id: int
+    ) -> list[int]:
+        from infra.models.user import User
+
+        if department_id <= 0:
+            return []
+        user_ids = await User.filter(
+            tenant_id=tenant_id,
+            department_id=department_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).values_list("id", flat=True)
+        return sorted({int(x) for x in user_ids if x})
+
+    async def _list_active_user_ids_by_work_group(
+        self, tenant_id: int, work_group_id: int
+    ) -> list[int]:
+        from apps.master_data.models.factory import WorkGroup, WorkGroupMember
+
+        if work_group_id <= 0:
+            return []
+        group = await WorkGroup.get_or_none(
+            id=work_group_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        )
+        if not group:
+            return []
+        member_ids = await WorkGroupMember.filter(
+            tenant_id=tenant_id,
+            work_group_id=work_group_id,
+            deleted_at__isnull=True,
+        ).values_list("employee_id", flat=True)
+        return await self._filter_active_user_ids(
+            tenant_id, [int(x) for x in member_ids if x]
+        )
+
+    async def _list_active_user_ids_from_operation_defaults(
+        self, tenant_id: int
+    ) -> list[int]:
+        from apps.master_data.models.process import Operation
+
+        ops = await Operation.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).all()
+        collected: list[int] = []
+        for op in ops:
+            raw = getattr(op, "default_operator_ids", None) or []
+            if not isinstance(raw, list):
+                continue
+            for x in raw:
+                try:
+                    uid = int(x)
+                except (TypeError, ValueError):
+                    continue
+                if uid > 0:
+                    collected.append(uid)
+        return await self._filter_active_user_ids(tenant_id, collected)
+
+    @staticmethod
+    def _parse_worker_id_list(raw: Any, fallback: Optional[int] = None) -> list[int]:
+        out: list[int] = []
+        if isinstance(raw, list):
+            for x in raw:
+                try:
+                    uid = int(x)
+                except (TypeError, ValueError):
+                    continue
+                if uid > 0 and uid not in out:
+                    out.append(uid)
+        if not out and fallback is not None:
+            try:
+                uid = int(fallback)
+            except (TypeError, ValueError):
+                uid = 0
+            if uid > 0:
+                out.append(uid)
+        return out
+
+    async def _workers_for_work_order_operation(
+        self,
+        *,
+        tenant_id: int,
+        wo_op: Any,
+        fallback_user_id: int,
+    ) -> list[int]:
+        """工单工序派工人员 → 工序档案默认人员 → 当前用户。"""
+        from apps.master_data.models.process import Operation
+
+        assigned = self._parse_worker_id_list(
+            getattr(wo_op, "assigned_worker_ids", None),
+            getattr(wo_op, "assigned_worker_id", None),
+        )
+        if assigned:
+            active = await self._filter_active_user_ids(tenant_id, assigned)
+            if active:
+                return active
+
+        op_master_id = int(getattr(wo_op, "operation_id", 0) or 0)
+        if op_master_id > 0:
+            master = await Operation.get_or_none(
+                id=op_master_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if master:
+                defaults = self._parse_worker_id_list(
+                    getattr(master, "default_operator_ids", None)
+                )
+                if defaults:
+                    active = await self._filter_active_user_ids(tenant_id, defaults)
+                    if active:
+                        return active
+
+        team_id = int(getattr(wo_op, "assigned_team_id", 0) or 0)
+        if team_id > 0:
+            team_pool = await self._list_active_user_ids_by_work_group(tenant_id, team_id)
+            if team_pool:
+                return team_pool
+
+        return [int(fallback_user_id)]
+
     async def _resolve_operator_pool_for_step(
         self,
         *,
@@ -753,6 +999,23 @@ class FlowDataGenerateService:
             if not user:
                 user = await User.get_or_none(id=uid, deleted_at__isnull=True, is_active=True)
             return [int(user.id)] if user else [int(fallback_user_id)]
+
+        if mode == "random_department":
+            candidates = await self._list_active_user_ids_by_department(
+                tenant_id, int(cfg.department_id or 0)
+            )
+            return candidates or [int(fallback_user_id)]
+
+        if mode == "random_team":
+            candidates = await self._list_active_user_ids_by_work_group(
+                tenant_id, int(cfg.work_group_id or 0)
+            )
+            return candidates or [int(fallback_user_id)]
+
+        if mode == "operation_assigned":
+            # 报工步骤在 _step_reporting 内按工序解析；此处给非报工/预览用默认池
+            candidates = await self._list_active_user_ids_from_operation_defaults(tenant_id)
+            return candidates or [int(fallback_user_id)]
 
         role_codes: list[str] = []
         if (cfg.role_code or "").strip():
@@ -806,10 +1069,12 @@ class FlowDataGenerateService:
         labels = [
             ("demand_computation", "需求计算"),
             ("demand_computation", "生产工单"),
-            ("purchase", "采购订单/入库"),
+            ("purchase", "采购订单"),
+            ("incoming_inspection", "来料检验/入库"),
             ("inventory_topup", "缺料补库"),
             ("production_picking", "生产领料"),
             ("reporting", "工序报工"),
+            ("process_inspection", "过程检验"),
             ("finished_goods_inspection", "成品检验"),
             ("finished_goods_receipt", "成品入库"),
             ("shipment_delivery", "发货/出库"),
@@ -818,6 +1083,12 @@ class FlowDataGenerateService:
         for key, label in labels:
             if enabled.get(key, True):
                 out.append((key, label))
+        # 未勾选来料检验时，采购步骤预览含直接入库
+        if enabled.get("purchase", True) and not enabled.get("incoming_inspection", True):
+            out = [
+                (k, "采购订单/入库" if k == "purchase" and lab == "采购订单" else lab)
+                for k, lab in out
+            ]
         return out
 
     def _preview_warnings(
@@ -1172,27 +1443,17 @@ class FlowDataGenerateService:
             )
         return results
 
-    async def _step_purchase_inbound(
+    async def _step_approve_purchase_orders(
         self,
         *,
         tenant_id: int,
         operator_id: int,
         purchase_orders: list[dict[str, Any]],
-        warehouse: dict[str, Any],
-        planner: TimelinePlanner,
-        timeline: list[TimelineEntry],
-        step_results: list[dict[str, Any]],
-        run_id: str,
     ) -> None:
         from apps.kuaizhizao.services.purchase_service import PurchaseService
         from apps.kuaizhizao.schemas.purchase import PurchaseOrderApprove
-        from apps.kuaizhizao.services.quality_service import IncomingInspectionService
-        from apps.kuaizhizao.services.warehouse_service import PurchaseReceiptService
 
         po_svc = PurchaseService()
-        iqc_svc = IncomingInspectionService()
-        receipt_svc = PurchaseReceiptService()
-
         for po in purchase_orders:
             po_id = int(po.get("id") or 0)
             if po_id <= 0:
@@ -1207,6 +1468,154 @@ class FlowDataGenerateService:
             except Exception as exc:
                 logger.info("PO {} approve skipped/failed: {}", po_id, exc)
 
+    async def _confirm_purchase_receipt(
+        self,
+        *,
+        tenant_id: int,
+        operator_id: int,
+        receipt_id: int,
+        receipt_code: Optional[str],
+        step_key: str,
+        planner: TimelinePlanner,
+        timeline: list[TimelineEntry],
+        step_results: list[dict[str, Any]],
+        run_id: str,
+    ) -> None:
+        from apps.kuaizhizao.services.warehouse_service import PurchaseReceiptService
+
+        try:
+            await PurchaseReceiptService().confirm_receipt(
+                tenant_id=tenant_id,
+                receipt_id=receipt_id,
+                confirmed_by=operator_id,
+            )
+        except Exception as exc:
+            logger.info("confirm purchase receipt {}: {}", receipt_id, exc)
+        issued = planner.next(step_key)
+        await self._record_step(
+            tenant_id=tenant_id,
+            operator_id=operator_id,
+            run_id=run_id,
+            step_key=step_key,
+            doc_type="purchase_receipt",
+            doc_id=receipt_id,
+            doc_code=str(receipt_code or receipt_id),
+            label="采购入库",
+            issued_at=issued,
+            timeline=timeline,
+            step_results=step_results,
+        )
+
+    async def _pass_quality_inspection(
+        self,
+        *,
+        svc: Any,
+        tenant_id: int,
+        inspection_id: int,
+        operator_id: int,
+        quantity: Any,
+    ) -> None:
+        """检验全合格 + 尽力审核（conduct 可能已 auto_pass）。"""
+        qty = Decimal(str(quantity or 0))
+        if qty < 0:
+            qty = Decimal("0")
+        try:
+            await svc.conduct_inspection(
+                tenant_id=tenant_id,
+                inspection_id=inspection_id,
+                inspection_data={
+                    "qualified_quantity": float(qty),
+                    "unqualified_quantity": 0,
+                },
+                inspected_by=operator_id,
+            )
+        except Exception as exc:
+            logger.info("conduct inspection {}: {}", inspection_id, exc)
+        try:
+            await svc.approve_inspection(
+                tenant_id=tenant_id,
+                inspection_id=inspection_id,
+                approved_by=operator_id,
+                is_auto_approve=True,
+            )
+        except Exception as exc:
+            logger.info("approve inspection {}: {}", inspection_id, exc)
+
+    async def _step_purchase_direct_receipt(
+        self,
+        *,
+        tenant_id: int,
+        operator_id: int,
+        purchase_orders: list[dict[str, Any]],
+        warehouse: dict[str, Any],
+        planner: TimelinePlanner,
+        timeline: list[TimelineEntry],
+        step_results: list[dict[str, Any]],
+        run_id: str,
+    ) -> None:
+        """未勾选来料检验：PO 直接下推采购入库并确认。"""
+        from apps.kuaizhizao.services.purchase_service import PurchaseService
+
+        po_svc = PurchaseService()
+        for po in purchase_orders:
+            po_id = int(po.get("id") or 0)
+            if po_id <= 0:
+                continue
+            try:
+                pushed = await po_svc.push_to_receipt(
+                    tenant_id=tenant_id,
+                    order_id=po_id,
+                    created_by=operator_id,
+                    warehouse_id=warehouse["id"],
+                )
+            except Exception as exc:
+                step_results.append(
+                    {
+                        "step_key": "purchase",
+                        "status": "error",
+                        "label": f"采购入库(PO {po_id})",
+                        "message": str(exc),
+                    }
+                )
+                continue
+            receipt_id = int(pushed.get("id") or pushed.get("receipt_id") or 0) or None
+            receipt_code = pushed.get("receipt_code") or pushed.get("code")
+            if receipt_id:
+                await self._confirm_purchase_receipt(
+                    tenant_id=tenant_id,
+                    operator_id=operator_id,
+                    receipt_id=receipt_id,
+                    receipt_code=str(receipt_code) if receipt_code else None,
+                    step_key="purchase",
+                    planner=planner,
+                    timeline=timeline,
+                    step_results=step_results,
+                    run_id=run_id,
+                )
+
+    async def _step_incoming_inspection(
+        self,
+        *,
+        tenant_id: int,
+        operator_id: int,
+        purchase_orders: list[dict[str, Any]],
+        warehouse: dict[str, Any],
+        planner: TimelinePlanner,
+        timeline: list[TimelineEntry],
+        step_results: list[dict[str, Any]],
+        run_id: str,
+    ) -> None:
+        """来料检验：按物料 IQC 预设（none/simple/plan）从 PO 下推，合格后入库。"""
+        from apps.kuaizhizao.services.purchase_service import PurchaseService
+        from apps.kuaizhizao.services.quality_service import IncomingInspectionService
+
+        po_svc = PurchaseService()
+        iqc_svc = IncomingInspectionService()
+
+        for po in purchase_orders:
+            po_id = int(po.get("id") or 0)
+            if po_id <= 0:
+                continue
             receipt_id: Optional[int] = None
             receipt_code: Optional[str] = None
             try:
@@ -1215,46 +1624,10 @@ class FlowDataGenerateService:
                     purchase_order_id=po_id,
                     created_by=operator_id,
                 )
-                for insp in inspections or []:
-                    insp_id = int(getattr(insp, "id", 0) or 0)
-                    if insp_id <= 0:
-                        continue
-                    issued = planner.next("purchase")
-                    await self._record_step(
-                        tenant_id=tenant_id,
-                        operator_id=operator_id,
-                        run_id=run_id,
-                        step_key="purchase",
-                        doc_type="incoming_inspection",
-                        doc_id=insp_id,
-                        doc_code=str(getattr(insp, "inspection_code", None) or insp_id),
-                        label="来料检验",
-                        issued_at=issued,
-                        timeline=timeline,
-                        step_results=step_results,
-                    )
-                    try:
-                        await iqc_svc.approve_inspection(
-                            tenant_id=tenant_id,
-                            inspection_id=insp_id,
-                            approved_by=operator_id,
-                            is_auto_approve=True,
-                        )
-                    except Exception as exc:
-                        logger.info("IQC approve {}: {}", insp_id, exc)
-                    try:
-                        pushed = await iqc_svc.push_to_purchase_receipt(
-                            tenant_id=tenant_id,
-                            inspection_id=insp_id,
-                            created_by=operator_id,
-                            warehouse_id=warehouse["id"],
-                        )
-                        receipt_id = int(pushed.get("receipt_id") or 0) or None
-                        receipt_code = pushed.get("receipt_code")
-                    except Exception as exc:
-                        logger.info("IQC push receipt {}: {}", insp_id, exc)
             except Exception as exc:
-                logger.info("IQC from PO {} failed, fallback push_to_receipt: {}", po_id, exc)
+                logger.info(
+                    "IQC from PO {} failed, fallback push_to_receipt: {}", po_id, exc
+                )
                 try:
                     pushed = await po_svc.push_to_receipt(
                         tenant_id=tenant_id,
@@ -1267,37 +1640,182 @@ class FlowDataGenerateService:
                 except Exception as exc2:
                     step_results.append(
                         {
-                            "step_key": "purchase",
-                            "status": "error",
-                            "label": f"采购入库(PO {po_id})",
+                            "step_key": "incoming_inspection",
+                            "status": "skipped",
+                            "label": f"来料检验(PO {po_id})",
                             "message": str(exc2),
                         }
                     )
                     continue
+            else:
+                for insp in inspections or []:
+                    insp_id = int(getattr(insp, "id", 0) or 0)
+                    if insp_id <= 0:
+                        continue
+                    issued = planner.next("incoming_inspection")
+                    await self._record_step(
+                        tenant_id=tenant_id,
+                        operator_id=operator_id,
+                        run_id=run_id,
+                        step_key="incoming_inspection",
+                        doc_type="incoming_inspection",
+                        doc_id=insp_id,
+                        doc_code=str(getattr(insp, "inspection_code", None) or insp_id),
+                        label="来料检验",
+                        issued_at=issued,
+                        timeline=timeline,
+                        step_results=step_results,
+                    )
+                    await self._pass_quality_inspection(
+                        svc=iqc_svc,
+                        tenant_id=tenant_id,
+                        inspection_id=insp_id,
+                        operator_id=operator_id,
+                        quantity=getattr(insp, "inspection_quantity", 0),
+                    )
+                    try:
+                        pushed = await iqc_svc.push_to_purchase_receipt(
+                            tenant_id=tenant_id,
+                            inspection_id=insp_id,
+                            created_by=operator_id,
+                            warehouse_id=warehouse["id"],
+                        )
+                        receipt_id = int(pushed.get("receipt_id") or 0) or receipt_id
+                        receipt_code = pushed.get("receipt_code") or receipt_code
+                    except Exception as exc:
+                        logger.info("IQC push receipt {}: {}", insp_id, exc)
 
             if receipt_id:
-                try:
-                    await receipt_svc.confirm_receipt(
-                        tenant_id=tenant_id,
-                        receipt_id=receipt_id,
-                        confirmed_by=operator_id,
-                    )
-                except Exception as exc:
-                    logger.info("confirm purchase receipt {}: {}", receipt_id, exc)
-                issued = planner.next("purchase")
+                await self._confirm_purchase_receipt(
+                    tenant_id=tenant_id,
+                    operator_id=operator_id,
+                    receipt_id=receipt_id,
+                    receipt_code=str(receipt_code) if receipt_code else None,
+                    step_key="incoming_inspection",
+                    planner=planner,
+                    timeline=timeline,
+                    step_results=step_results,
+                    run_id=run_id,
+                )
+
+    async def _step_process_inspection(
+        self,
+        *,
+        tenant_id: int,
+        operator_id: int,
+        work_order_id: int,
+        planner: TimelinePlanner,
+        timeline: list[TimelineEntry],
+        step_results: list[dict[str, Any]],
+        run_id: str,
+    ) -> None:
+        """过程检验：按工序 IPQC 预设（none/simple/plan）建单并合格审核。"""
+        from apps.kuaizhizao.models.process_inspection import ProcessInspection
+        from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+        from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
+        from apps.kuaizhizao.services.quality_service import ProcessInspectionService
+
+        svc = ProcessInspectionService()
+        ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).order_by("sequence").all()
+        if not ops:
+            step_results.append(
+                {
+                    "step_key": "process_inspection",
+                    "status": "skipped",
+                    "label": f"过程检验 WO#{work_order_id}",
+                    "message": "工单无工序，跳过过程检验",
+                }
+            )
+            return
+
+        created_any = False
+        for wo_op in ops:
+            master_op_id = int(getattr(wo_op, "operation_id", 0) or 0)
+            if master_op_id <= 0:
+                continue
+            op_name = str(getattr(wo_op, "operation_name", None) or f"工序{master_op_id}")
+            try:
+                eff, _, _ = await resolve_inspection_policy(
+                    tenant_id,
+                    "ipqc",
+                    operation_id=master_op_id,
+                    work_order_operation=wo_op,
+                )
+            except Exception as exc:
+                logger.info("resolve IPQC policy WO#{} op {}: {}", work_order_id, master_op_id, exc)
+                continue
+            if eff == "none":
+                continue
+            try:
+                await svc.create_inspection_from_work_order(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    operation_id=master_op_id,
+                    created_by=operator_id,
+                )
+            except Exception as exc:
+                logger.info(
+                    "IPQC create WO#{} op {}: {}", work_order_id, master_op_id, exc
+                )
+
+            rows = await ProcessInspection.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                operation_id=master_op_id,
+                deleted_at__isnull=True,
+            ).exclude(status="已取消").all()
+            for row in rows:
+                status = str(getattr(row, "status", "") or "").strip()
+                if status == "已审核":
+                    continue
+                insp_id = int(row.id)
+                created_any = True
+                issued = planner.next("process_inspection")
                 await self._record_step(
                     tenant_id=tenant_id,
                     operator_id=operator_id,
                     run_id=run_id,
-                    step_key="purchase",
-                    doc_type="purchase_receipt",
-                    doc_id=receipt_id,
-                    doc_code=str(receipt_code or receipt_id),
-                    label="采购入库",
+                    step_key="process_inspection",
+                    doc_type="process_inspection",
+                    doc_id=insp_id,
+                    doc_code=str(getattr(row, "inspection_code", None) or insp_id),
+                    label=f"过程检验-{op_name}",
                     issued_at=issued,
                     timeline=timeline,
                     step_results=step_results,
                 )
+                if status in ("待检验", "已驳回"):
+                    await self._pass_quality_inspection(
+                        svc=svc,
+                        tenant_id=tenant_id,
+                        inspection_id=insp_id,
+                        operator_id=operator_id,
+                        quantity=getattr(row, "inspection_quantity", 0),
+                    )
+                elif status in ("已检验", "待审核"):
+                    try:
+                        await svc.approve_inspection(
+                            tenant_id=tenant_id,
+                            inspection_id=insp_id,
+                            approved_by=operator_id,
+                            is_auto_approve=True,
+                        )
+                    except Exception as exc:
+                        logger.info("approve IPQC {}: {}", insp_id, exc)
+
+        if not created_any:
+            step_results.append(
+                {
+                    "step_key": "process_inspection",
+                    "status": "skipped",
+                    "label": f"过程检验 WO#{work_order_id}",
+                    "message": "各工序质检模式为无质检，或无可处理检验单",
+                }
+            )
 
     async def _step_inventory_topup(
         self,
@@ -1446,6 +1964,7 @@ class FlowDataGenerateService:
         tenant_id: int,
         operator_id: int,
         operator_pool: Optional[list[int]] = None,
+        operator_cfg: Optional[StepOperatorConfig] = None,
         batch_cfg: Optional[ReportingBatchConfig] = None,
         work_order_id: int,
         planner: TimelinePlanner,
@@ -1483,6 +2002,9 @@ class FlowDataGenerateService:
         pool = [int(x) for x in (operator_pool or []) if int(x) > 0]
         if not pool:
             pool = [int(operator_id)]
+        use_op_assigned = (operator_cfg or StepOperatorConfig()).normalized_mode() == (
+            "operation_assigned"
+        )
         cfg = (batch_cfg or ReportingBatchConfig()).clamp()
         qty = Decimal(str(wo.quantity or 1))
         if qty <= 0:
@@ -1510,8 +2032,17 @@ class FlowDataGenerateService:
             op_name = str(getattr(op, "operation_name", None) or f"工序{op_id}")
             batch_count = cfg.pick_batch_count(qty)
             parts = self._split_reporting_quantities(qty, batch_count)
+            if use_op_assigned:
+                rotating = await self._workers_for_work_order_operation(
+                    tenant_id=tenant_id,
+                    wo_op=op,
+                    fallback_user_id=operator_id,
+                )
+            else:
+                rotating = list(pool)
+            if not rotating:
+                rotating = [int(operator_id)]
             # 打乱操作人顺序，尽量多角色轮换
-            rotating = list(pool)
             random.shuffle(rotating)
             for batch_idx, part_qty in enumerate(parts, start=1):
                 worker_id = rotating[(batch_idx - 1) % len(rotating)]
@@ -1598,16 +2129,6 @@ class FlowDataGenerateService:
             return
 
         insp_id = int(insp.id)
-        try:
-            await svc.approve_inspection(
-                tenant_id=tenant_id,
-                inspection_id=insp_id,
-                approved_by=operator_id,
-                is_auto_approve=True,
-            )
-        except Exception as exc:
-            logger.info("approve FQC {}: {}", insp_id, exc)
-
         issued = planner.next("finished_goods_inspection")
         await self._record_step(
             tenant_id=tenant_id,
@@ -1621,6 +2142,13 @@ class FlowDataGenerateService:
             issued_at=issued,
             timeline=timeline,
             step_results=step_results,
+        )
+        await self._pass_quality_inspection(
+            svc=svc,
+            tenant_id=tenant_id,
+            inspection_id=insp_id,
+            operator_id=operator_id,
+            quantity=getattr(insp, "inspection_quantity", 0),
         )
 
     async def _step_fg_receipt(
@@ -1852,6 +2380,16 @@ def parse_intervals(raw: Optional[dict[str, Any]]) -> dict[str, IntervalConfig]:
     return out
 
 
+def _optional_positive_int(val: Any) -> Optional[int]:
+    if val in (None, "", 0, "0"):
+        return None
+    try:
+        n = int(val)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
 def parse_step_operators(raw: Optional[dict[str, Any]]) -> dict[str, StepOperatorConfig]:
     out: dict[str, StepOperatorConfig] = {}
     if not raw:
@@ -1862,11 +2400,12 @@ def parse_step_operators(raw: Optional[dict[str, Any]]) -> dict[str, StepOperato
             continue
         if not isinstance(val, dict):
             continue
-        user_id = val.get("user_id")
         out[step_key] = StepOperatorConfig(
             mode=str(val.get("mode") or "random_role"),
-            user_id=int(user_id) if user_id not in (None, "", 0, "0") else None,
+            user_id=_optional_positive_int(val.get("user_id")),
             role_code=(str(val.get("role_code")).strip() if val.get("role_code") else None),
+            department_id=_optional_positive_int(val.get("department_id")),
+            work_group_id=_optional_positive_int(val.get("work_group_id")),
         )
     return out
 

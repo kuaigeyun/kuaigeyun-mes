@@ -48,6 +48,10 @@ import type { DocumentAttachmentFile } from '../../../utils/documentAttachments'
 import { fetchKuaiiotFillContext } from '../../../../../utils/kuaiiotFillContext';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  buildSpotCheckImportTemplate,
+  runSpotCheckExcelImport,
+} from './spotCheckExcelImport';
 const P = 'app.kuaizhizao.equipmentOps.spotCheck';
 const RESOURCE = 'kuaizhizao:equipment-spot-check';
 
@@ -146,6 +150,8 @@ const SpotChecksPage: React.FC = () => {
   const [schemeOptions, setSchemeOptions] = useState<{ label: string; value: number }[]>([]);
   const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
     useEquipmentDetailDrawer<SpotCheck>();
+
+  const spotCheckImportTemplate = useMemo(() => buildSpotCheckImportTemplate(t), [t]);
 
   const handleDetail = useCallback(
     (record: SpotCheck) => {
@@ -877,6 +883,7 @@ const SpotChecksPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.spotChecks)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spot-checks-review-r10-v1"
+          permissionResource={RESOURCE}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -907,6 +914,22 @@ const SpotChecksPage: React.FC = () => {
           showCreateButton={perms.canCreate}
           createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
           onCreate={handleCreate}
+          showImportButton={perms.canImport}
+          importHeaders={spotCheckImportTemplate.importHeaders}
+          importExampleRow={spotCheckImportTemplate.importExampleRow}
+          importColumnOptions={spotCheckImportTemplate.importColumnOptions}
+          importFieldMap={spotCheckImportTemplate.importHeaderMap}
+          onImport={async (data) => {
+            const { success } = await runSpotCheckExcelImport({
+              data,
+              t,
+              messageApi,
+              schemeDomain,
+            });
+            if (success > 0) {
+              actionRef.current?.reload();
+            }
+          }}
           showDeleteButton={perms.canDelete}
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}

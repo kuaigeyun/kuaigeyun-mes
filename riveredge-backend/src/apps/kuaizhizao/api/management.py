@@ -29,6 +29,11 @@ from apps.kuaizhizao.services.flow_data_generate_service import (
     parse_step_operators,
     parse_work_schedule,
 )
+from apps.kuaizhizao.services.equipment_ops_data_generate_service import (
+    EquipmentOpsDataGenerateService,
+    parse_equipment_ops_generate_request,
+)
+from apps.common.audit_actor import operator_name_from_user
 
 router = APIRouter(prefix="/management", tags=["App - Kuaige Zhizao - App Management"])
 
@@ -60,9 +65,17 @@ class WorkScheduleBody(BaseModel):
 
 
 class StepOperatorBody(BaseModel):
-    mode: str = Field("random_role", description="fixed | random_role | current")
+    mode: str = Field(
+        "random_role",
+        description=(
+            "fixed | random_role | random_department | random_team | "
+            "operation_assigned | equipment_assigned | scheme_assigned | current"
+        ),
+    )
     user_id: Optional[int] = Field(None, gt=0)
     role_code: Optional[str] = Field(None, description="角色编码，空则用步骤默认角色")
+    department_id: Optional[int] = Field(None, gt=0, description="部门 ID（按部门随机）")
+    work_group_id: Optional[int] = Field(None, gt=0, description="工作小组 ID（小组随机）")
 
 
 class ReportingBatchBody(BaseModel):
@@ -321,4 +334,82 @@ async def execute_flow_generate(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"流程造数失败: {e}",
+        ) from e
+
+
+class EquipmentOpsGenerateBody(BaseModel):
+    spot_check_plan_ids: list[int] = Field(
+        default_factory=list, description="点检计划 ID 列表"
+    )
+    maintenance_plan_ids: list[int] = Field(
+        default_factory=list, description="保养计划 ID 列表"
+    )
+    equipment_ids: list[int] = Field(
+        default_factory=list, description="计划内设备 ID（全选或多选）"
+    )
+    anchor_start: Optional[datetime] = None
+    anchor_end: Optional[datetime] = None
+    work_schedule: Optional[WorkScheduleBody] = None
+    use_work_schedule: bool = False
+    auto_approve_spot_check: bool = False
+    inspector_operator: StepOperatorBody = Field(
+        default_factory=lambda: StepOperatorBody(mode="equipment_assigned"),
+        description="点检执行人：默认计划负责人/设备点检人",
+    )
+    approver_operator: StepOperatorBody = Field(
+        default_factory=lambda: StepOperatorBody(mode="scheme_assigned"),
+        description="点检审批人：默认方案指定审核人员",
+    )
+
+
+def _to_equipment_ops_request(body: EquipmentOpsGenerateBody):
+    return parse_equipment_ops_generate_request(body.model_dump())
+
+
+@router.post(
+    "/equipment-ops-generate/preview",
+    summary="Preview equipment spot-check / maintenance generate",
+    dependencies=[Depends(require_permission_codes(FLOW_GENERATE_PERMISSION))],
+)
+async def preview_equipment_ops_generate(
+    body: EquipmentOpsGenerateBody,
+    tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
+) -> dict[str, Any]:
+    _assert_admin_gate(auth, action="使用设备点检保养造数")
+    try:
+        return await EquipmentOpsDataGenerateService().preview(
+            tenant_id, _to_equipment_ops_request(body)
+        )
+    except (NotFoundError, BusinessLogicError, ValidationError, ValueError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
+@router.post(
+    "/equipment-ops-generate",
+    summary="Execute equipment spot-check / maintenance generate",
+    dependencies=[Depends(require_permission_codes(FLOW_GENERATE_PERMISSION))],
+)
+async def execute_equipment_ops_generate(
+    body: EquipmentOpsGenerateBody,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
+) -> dict[str, Any]:
+    _assert_admin_gate(auth, action="使用设备点检保养造数")
+    try:
+        return await EquipmentOpsDataGenerateService().execute(
+            tenant_id=tenant_id,
+            operator_id=int(current_user.id),
+            operator_name=operator_name_from_user(current_user),
+            current_user=current_user,
+            req=_to_equipment_ops_request(body),
+        )
+    except (NotFoundError, BusinessLogicError, ValidationError, ValueError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("equipment-ops-generate execute failed: {}", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"设备点检保养造数失败: {e}",
         ) from e

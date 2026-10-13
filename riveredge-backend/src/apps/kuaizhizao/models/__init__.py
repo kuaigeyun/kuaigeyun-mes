@@ -244,6 +244,7 @@ from .equipment import Equipment, EquipmentCalibration
 from .equipment_acceptance import EquipmentAcceptance
 from .equipment_line_rebind import EquipmentLineRebind, EquipmentLineRebindItem
 from .maintenance_plan import MaintenancePlan, MaintenanceExecution
+from .equipment_spot_check_plan import EquipmentSpotCheckPlan
 from .equipment_fault import EquipmentFault, EquipmentRepair
 from .mold import Mold, MoldUsage, MoldCalibration, MoldSignback
 from .mold_ops import (
@@ -500,6 +501,7 @@ __all__ = [
     'Equipment',
     'MaintenancePlan',
     'MaintenanceExecution',
+    'EquipmentSpotCheckPlan',
     'EquipmentFault',
     'EquipmentRepair',
     'EquipmentInspectionItem',

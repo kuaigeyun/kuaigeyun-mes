@@ -370,6 +370,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.equipment_fault",  # 设备故障模型
                 "apps.kuaizhizao.models.equipment_point_inspection",  # 设备点检模型
                 "apps.kuaizhizao.models.equipment_ops",  # 设备运营扩展模型
+                "apps.kuaizhizao.models.equipment_spot_check_plan",  # 设备点检计划
                 "apps.kuaizhizao.models.equipment_status_monitor",  # 设备状态监控模型
                 "apps.kuaizhizao.models.exception_process_record",  # 异常处理记录模型
                 "apps.kuaizhizao.models.inspection_plan",  # 质检方案模型

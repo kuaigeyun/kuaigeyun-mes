@@ -94,6 +94,7 @@ function buildMaintenancePlanSubmitPayload(values: Record<string, unknown>) {
     plan_name: values.plan_name,
     plan_type: values.plan_type,
     equipment_uuids: equipmentUuids,
+    maintenance_scheme_id: values.maintenance_scheme_id,
     maintenance_type: values.maintenance_type,
     cycle_type: values.cycle_type,
     cycle_value: values.cycle_value,
@@ -120,6 +121,9 @@ interface MaintenancePlan {
   equipment_items?: Array<{ id?: number; uuid?: string; code?: string; name?: string }>;
   equipment_code?: string;
   equipment_name?: string;
+  maintenance_scheme_id?: number;
+  scheme_code?: string;
+  scheme_name?: string;
   maintenance_type?: string;
   cycle_type?: string;
   cycle_value?: number;
@@ -237,6 +241,7 @@ const MaintenancePlansPage: React.FC = () => {
         plan_name: detail.plan_name,
         plan_type: detail.plan_type,
         equipment_uuids: resolveMaintenancePlanEquipmentUuids(detail),
+        maintenance_scheme_id: detail.maintenance_scheme_id,
         maintenance_type: detail.maintenance_type,
         cycle_type: detail.cycle_type ?? '按时间',
         cycle_value: detail.cycle_value,
@@ -374,6 +379,7 @@ const MaintenancePlansPage: React.FC = () => {
     setSparePartLines([]);
     setExecuteFormInitialValues({
       equipment_uuid: equipmentUuids[0],
+      maintenance_scheme_id: record.maintenance_scheme_id,
       executor_uuid: currentUser?.uuid,
       executor_id: currentUser?.id,
       executor_name: currentUser?.full_name || currentUser?.username,
@@ -382,6 +388,9 @@ const MaintenancePlansPage: React.FC = () => {
       execution_content: t(`${P}.executionContentTemplate`, { name: record.plan_name }),
     });
     setExecuteModalVisible(true);
+    if (record.maintenance_scheme_id) {
+      void handleSchemeChange(record.maintenance_scheme_id);
+    }
     void Promise.all([
       maintenanceSchemesApi.list({ limit: 1000, is_active: true }),
       sparePartApi.list({ limit: 500 }),
@@ -489,6 +498,12 @@ const MaintenancePlansPage: React.FC = () => {
     {
       title: t(`${P}.col.planType`),
       dataIndex: 'plan_type',
+    },
+    {
+      title: t(`${P}.col.scheme`),
+      dataIndex: 'scheme_name',
+      render: (_, r) =>
+        r.scheme_code ? `${r.scheme_code} - ${r.scheme_name || ''}` : r.scheme_name || '-',
     },
     {
       title: t(`${P}.col.equipmentCode`),
@@ -716,6 +731,18 @@ const MaintenancePlansPage: React.FC = () => {
       render: (_, r) => (r.plan_type != null && r.plan_type !== '' ? String(r.plan_type) : '-'),
     },
     {
+      title: t(`${P}.col.scheme`),
+      dataIndex: 'scheme_name',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) =>
+        r.scheme_code ? `${r.scheme_code} - ${r.scheme_name || ''}` : r.scheme_name || '-',
+    },
+    {
       title: t(`${P}.col.equipmentName`),
       dataIndex: 'equipment_name',
       width: 200,
@@ -797,7 +824,7 @@ const MaintenancePlansPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenancePlans)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-plans-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-plans-width-v3"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}
@@ -883,6 +910,30 @@ const MaintenancePlansPage: React.FC = () => {
                 { label: t(`${P}.planType.temporary`), value: '临时维护' },
               ]}
               rules={[{ required: true, message: t(`${P}.form.selectPlanType`) }]}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={24}>
+            <ProFormSelect
+              name="maintenance_scheme_id"
+              label={t(`${P}.form.maintenanceScheme`)}
+              placeholder={t(`${P}.form.selectMaintenanceScheme`)}
+              showSearch
+              rules={[{ required: true, message: t(`${P}.form.selectMaintenanceScheme`) }]}
+              request={async () => {
+                try {
+                  const res = await maintenanceSchemesApi.list({ limit: 1000, is_active: true });
+                  return ((res as any).items ?? []).map(
+                    (s: { id: number; code: string; name: string }) => ({
+                      label: `${s.code} - ${s.name}`,
+                      value: s.id,
+                    }),
+                  );
+                } catch {
+                  return [];
+                }
+              }}
             />
           </Col>
         </Row>

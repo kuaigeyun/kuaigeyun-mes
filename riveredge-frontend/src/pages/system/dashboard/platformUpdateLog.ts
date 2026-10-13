@@ -44,6 +44,45 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'equip-ops-scheme-bind-clients-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.equip-ops-scheme-bind-clients-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equip-ops-scheme-bind-clients-r01.description',
+  },
+  {
+    id: 'plan-scheme-bind-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.plan-scheme-bind-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.plan-scheme-bind-r01.description',
+  },
+  {
+    id: 'equipment-spot-check-plan-r01',
+    date: '2026-10-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-spot-check-plan-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equipment-spot-check-plan-r01.description',
+  },
+  {
+    id: 'customer-pool-hide-create-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-pool-hide-create-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.customer-pool-hide-create-r01.description',
+  },
+  {
+    id: 'kuaiiot-device-trend-chart-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.description',
+  },
+  {
     id: 'influxdb-live-connection-test-r01',
     date: '2026-10-13',
     type: 'improvement',

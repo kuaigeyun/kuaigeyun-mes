@@ -209,6 +209,8 @@ class EquipmentSpotCheck(BaseModel):
     equipment_code = fields.CharField(max_length=50, null=True)
     equipment_name = fields.CharField(max_length=200, null=True)
     scheme_id = fields.IntField(null=True)
+    plan_id = fields.IntField(null=True, description="来源点检计划ID")
+    plan_uuid = fields.CharField(max_length=36, null=True, description="来源点检计划UUID")
     capture_mode = fields.CharField(max_length=8, null=True, description="采集方式快照 A/B/C")
     check_date = fields.DateField()
     inspector_id = fields.IntField(null=True)

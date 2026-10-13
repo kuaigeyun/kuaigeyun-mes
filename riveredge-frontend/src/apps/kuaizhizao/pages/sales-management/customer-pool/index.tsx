@@ -20,7 +20,6 @@ import {
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
-  PlusOutlined,
   UserAddOutlined,
   UserSwitchOutlined,
   RollbackOutlined,
@@ -35,7 +34,6 @@ import {
 import { CollaboratorMarkerTags } from './collaboratorMarkerTags';
 import { useCustomerPoolPermissions } from '../../../hooks/useCustomerPoolPermissions';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDetail } from '../../../../../components/uni-detail';
@@ -104,7 +102,7 @@ const CustomerPoolPage: React.FC = () => {
   useEffect(() => {
     if (!canAssign && scope === 'all') setScope('mine');
   }, [canAssign, scope]);
-  const { canCreate: canCreateCustomer, canUpdate: canUpdateCustomer, canDelete: canDeleteCustomer } =
+  const { canUpdate: canUpdateCustomer, canDelete: canDeleteCustomer } =
     useResourcePermissions('master-data:supply-chain:customer');
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -170,13 +168,6 @@ const CustomerPoolPage: React.FC = () => {
     setEditUuid(uuid);
     setEditOpen(true);
   };
-
-  const openCreateCustomer = useCallback(() => {
-    setEditUuid(null);
-    setEditOpen(true);
-  }, []);
-
-  useNewShortcut(canCreateCustomer ? openCreateCustomer : undefined);
 
   const openDetailCustomer = (uuid: string) => {
     setDetailUuid(uuid);
@@ -1159,9 +1150,6 @@ const CustomerPoolPage: React.FC = () => {
               ]}
             />
           }
-          showCreateButton={canCreateCustomer}
-          createButtonText={t('app.master-data.customers.create')}
-          onCreate={openCreateCustomer}
           showImportButton={false}
           showExportButton
           onExport={handleExport}

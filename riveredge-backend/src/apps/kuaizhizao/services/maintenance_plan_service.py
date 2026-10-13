@@ -15,6 +15,7 @@ from tortoise.expressions import Q
 
 from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
 from apps.kuaizhizao.models.equipment import Equipment
+from apps.kuaizhizao.models.equipment_ops import EquipmentMaintenanceScheme
 from apps.kuaizhizao.services.spare_part_service import SparePartService
 from apps.kuaizhizao.schemas.maintenance_plan import (
     MaintenancePlanCreate,
@@ -30,6 +31,21 @@ from core.utils.timezone_utils import resolve_business_datetime
 
 
 class MaintenancePlanService:
+    @staticmethod
+    async def _resolve_maintenance_scheme(
+        tenant_id: int, scheme_id: int
+    ) -> EquipmentMaintenanceScheme:
+        scheme = await EquipmentMaintenanceScheme.filter(
+            tenant_id=tenant_id,
+            id=scheme_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not scheme:
+            raise ValidationError(f"保养方案不存在: {scheme_id}")
+        if not scheme.is_active:
+            raise ValidationError(f"保养方案已停用: {scheme.code or scheme_id}")
+        return scheme
+
     """
     维护保养计划服务类
     
@@ -146,6 +162,16 @@ class MaintenancePlanService:
             ).first()
             if not equipment:
                 raise ValidationError(f"设备不存在: {primary['uuid']}")
+
+            scheme_id = payload.get("maintenance_scheme_id")
+            if scheme_id is None:
+                raise ValidationError("请绑定保养方案")
+            scheme = await MaintenancePlanService._resolve_maintenance_scheme(
+                tenant_id, int(scheme_id)
+            )
+            payload["maintenance_scheme_id"] = scheme.id
+            payload["scheme_code"] = scheme.code
+            payload["scheme_name"] = scheme.name
             
             # 如果没有提供计划编号，自动生成（必须写回 payload，勿只改 data）
             plan_no = str(payload.get("plan_no") or "").strip()
@@ -337,6 +363,15 @@ class MaintenancePlanService:
         if equipment_uuids is not None:
             items = await MaintenancePlanService._resolve_equipment_items(tenant_id, equipment_uuids)
             MaintenancePlanService._apply_equipment_items(plan, items)
+
+        if "maintenance_scheme_id" in update_data:
+            scheme = await MaintenancePlanService._resolve_maintenance_scheme(
+                tenant_id, int(update_data["maintenance_scheme_id"])
+            )
+            plan.maintenance_scheme_id = scheme.id
+            plan.scheme_code = scheme.code
+            plan.scheme_name = scheme.name
+            update_data.pop("maintenance_scheme_id")
         
         # 更新字段
         for key, value in update_data.items():
@@ -416,6 +451,9 @@ class MaintenanceExecutionService:
                 
                 if not maintenance_plan:
                     raise ValidationError(f"维护计划不存在: {data.maintenance_plan_uuid}")
+                # 执行未显式选方案时，默认取计划已绑定的保养方案
+                if data.maintenance_scheme_id is None and maintenance_plan.maintenance_scheme_id:
+                    data.maintenance_scheme_id = maintenance_plan.maintenance_scheme_id
             
             # 如果没有提供执行记录编号，自动生成
             if not data.execution_no:

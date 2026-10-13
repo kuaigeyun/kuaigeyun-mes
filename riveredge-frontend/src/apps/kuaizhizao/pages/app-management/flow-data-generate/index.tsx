@@ -22,6 +22,7 @@ import {
   Space,
   Switch,
   Table,
+  Tabs,
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -44,7 +45,9 @@ import { useGlobalStore } from '../../../../../stores';
 import { getMyTenants, switchTenant, tenantNameFromLoginResponse } from '../../../../../services/auth';
 import { getTenantList, TenantStatus } from '../../../../../services/tenant';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
+import { workGroupApi } from '../../../../master-data/services/factory';
 import { getRoleList } from '../../../../../services/role';
+import { getDepartmentTree, type DepartmentTreeItem } from '../../../../../services/department';
 import { UniUserIdSelect } from '../../../../../components/uni-user-id-select';
 import { listSalesOrders } from '../../../services/sales-order';
 import { listSalesForecasts } from '../../../services/sales-forecast';
@@ -60,21 +63,52 @@ import {
   type StepOperatorMode,
   type StepOperatorPayload,
 } from '../../../services/flow-data-generate';
+import EquipmentOpsGeneratePanel from './EquipmentOpsGeneratePanel';
 
 const STEP_OPTIONS = [
   { key: 'demand_computation', required: true },
   { key: 'purchase', required: false },
+  { key: 'incoming_inspection', required: false },
   { key: 'inventory_topup', required: false },
   { key: 'production_picking', required: false },
   { key: 'reporting', required: false },
+  { key: 'process_inspection', required: false },
   { key: 'finished_goods_inspection', required: false },
   { key: 'finished_goods_receipt', required: false },
   { key: 'shipment_delivery', required: false },
 ] as const;
 
-const OPERATOR_MODE_VALUES: StepOperatorMode[] = ['random_role', 'fixed', 'current'];
+const OPERATOR_MODE_VALUES: StepOperatorMode[] = [
+  'random_role',
+  'random_department',
+  'random_team',
+  'operation_assigned',
+  'fixed',
+  'current',
+];
 const DEFAULT_REPORTING_BATCHES_MIN = 2;
 const DEFAULT_REPORTING_BATCHES_MAX = 5;
+
+function flattenDepartmentOptions(
+  nodes: DepartmentTreeItem[],
+  depth = 0,
+): Array<{ value: number; label: string }> {
+  const out: Array<{ value: number; label: string }> = [];
+  for (const node of nodes) {
+    const id = Number(node.id);
+    if (Number.isFinite(id) && id > 0) {
+      const prefix = depth > 0 ? `${'—'.repeat(depth)} ` : '';
+      out.push({
+        value: id,
+        label: `${prefix}${node.name}${node.code ? ` (${node.code})` : ''}`,
+      });
+    }
+    if (node.children?.length) {
+      out.push(...flattenDepartmentOptions(node.children, depth + 1));
+    }
+  }
+  return out;
+}
 
 export default function FlowDataGeneratePage() {
   const { t } = useTranslation();
@@ -246,6 +280,26 @@ export default function FlowDataGeneratePage() {
     retry: 1,
   });
 
+  const departmentsQuery = useQuery({
+    queryKey: ['core', 'departments', 'flow-generate', selectedTenantId],
+    queryFn: async () => {
+      const res = await getDepartmentTree({ is_active: true });
+      return res.items || [];
+    },
+    enabled: ready,
+    retry: 1,
+  });
+
+  const workGroupsQuery = useQuery({
+    queryKey: ['master-data', 'work-groups', 'flow-generate', selectedTenantId],
+    queryFn: async () => {
+      const res = await workGroupApi.list({ skip: 0, limit: 200, is_active: true });
+      return res?.items || [];
+    },
+    enabled: ready,
+    retry: 1,
+  });
+
   const operatorDefaultsQuery = useQuery({
     queryKey: ['kuaizhizao', 'flow-generate', 'operator-defaults', selectedTenantId],
     queryFn: () => getFlowOperatorDefaults(),
@@ -291,6 +345,18 @@ export default function FlowDataGeneratePage() {
       label: `${r.name}${r.code ? ` (${r.code})` : ''}`,
     }));
   }, [rolesQuery.data]);
+
+  const departmentOptions = useMemo(
+    () => flattenDepartmentOptions(departmentsQuery.data || []),
+    [departmentsQuery.data],
+  );
+
+  const workGroupOptions = useMemo(() => {
+    return (workGroupsQuery.data || []).map((g: any) => ({
+      value: Number(g.id),
+      label: `${g.name || g.code || g.id}${g.code ? ` (${g.code})` : ''}`,
+    }));
+  }, [workGroupsQuery.data]);
 
   const defaultRoleByStep = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -397,17 +463,36 @@ export default function FlowDataGeneratePage() {
       const mode: StepOperatorMode = OPERATOR_MODE_VALUES.includes(rawMode) ? rawMode : 'random_role';
       const userId = Number(values[`op_user_${opt.key}`]);
       const roleCode = String(values[`op_role_${opt.key}`] || '').trim();
+      const departmentId = Number(values[`op_dept_${opt.key}`]);
+      const workGroupId = Number(values[`op_team_${opt.key}`]);
+      const stepLabel = t(`app.kuaizhizao.flowDataGenerate.step.${opt.key}`);
       if (mode === 'fixed' && !(Number.isFinite(userId) && userId > 0)) {
         throw new Error(
-          t('app.kuaizhizao.flowDataGenerate.operatorUserRequired', {
-            step: t(`app.kuaizhizao.flowDataGenerate.step.${opt.key}`),
-          }),
+          t('app.kuaizhizao.flowDataGenerate.operatorUserRequired', { step: stepLabel }),
+        );
+      }
+      if (mode === 'random_department' && !(Number.isFinite(departmentId) && departmentId > 0)) {
+        throw new Error(
+          t('app.kuaizhizao.flowDataGenerate.operatorDepartmentRequired', { step: stepLabel }),
+        );
+      }
+      if (mode === 'random_team' && !(Number.isFinite(workGroupId) && workGroupId > 0)) {
+        throw new Error(
+          t('app.kuaizhizao.flowDataGenerate.operatorTeamRequired', { step: stepLabel }),
         );
       }
       step_operators[opt.key] = {
         mode,
         user_id: mode === 'fixed' && Number.isFinite(userId) && userId > 0 ? userId : null,
         role_code: mode === 'random_role' && roleCode ? roleCode : null,
+        department_id:
+          mode === 'random_department' && Number.isFinite(departmentId) && departmentId > 0
+            ? departmentId
+            : null,
+        work_group_id:
+          mode === 'random_team' && Number.isFinite(workGroupId) && workGroupId > 0
+            ? workGroupId
+            : null,
       };
     }
     const reportingMin = Math.max(1, Math.min(20, Number(values.reporting_batches_min ?? DEFAULT_REPORTING_BATCHES_MIN)));
@@ -604,7 +689,14 @@ export default function FlowDataGeneratePage() {
           subTitle={t('app.kuaizhizao.flowDataGenerate.selectTenantFirstHint')}
         />
       ) : (
-        <>
+        <Tabs
+          destroyOnHidden
+          items={[
+            {
+              key: 'manufacturing-flow',
+              label: t('app.kuaizhizao.flowDataGenerate.tabManufacturing'),
+              children: (
+                <>
           <Card size="small" title={t('app.kuaizhizao.flowDataGenerate.configCard')}>
             <Form
               form={form}
@@ -846,6 +938,22 @@ export default function FlowDataGeneratePage() {
                             label: t('app.kuaizhizao.flowDataGenerate.operatorMode.random_role'),
                           },
                           {
+                            value: 'random_department',
+                            label: t(
+                              'app.kuaizhizao.flowDataGenerate.operatorMode.random_department',
+                            ),
+                          },
+                          {
+                            value: 'random_team',
+                            label: t('app.kuaizhizao.flowDataGenerate.operatorMode.random_team'),
+                          },
+                          {
+                            value: 'operation_assigned',
+                            label: t(
+                              'app.kuaizhizao.flowDataGenerate.operatorMode.operation_assigned',
+                            ),
+                          },
+                          {
                             value: 'fixed',
                             label: t('app.kuaizhizao.flowDataGenerate.operatorMode.fixed'),
                           },
@@ -872,7 +980,9 @@ export default function FlowDataGeneratePage() {
                               name={`op_user_${s.key}`}
                               label=""
                               required
-                              placeholder={t('app.kuaizhizao.flowDataGenerate.operatorUserPlaceholder')}
+                              placeholder={t(
+                                'app.kuaizhizao.flowDataGenerate.operatorUserPlaceholder',
+                              )}
                             />
                           );
                         }
@@ -881,6 +991,45 @@ export default function FlowDataGeneratePage() {
                             <Typography.Text type="secondary">
                               {t('app.kuaizhizao.flowDataGenerate.operatorCurrentHint')}
                             </Typography.Text>
+                          );
+                        }
+                        if (mode === 'operation_assigned') {
+                          return (
+                            <Typography.Text type="secondary">
+                              {t('app.kuaizhizao.flowDataGenerate.operatorOperationAssignedHint')}
+                            </Typography.Text>
+                          );
+                        }
+                        if (mode === 'random_department') {
+                          return (
+                            <Form.Item name={`op_dept_${s.key}`} noStyle>
+                              <Select
+                                showSearch
+                                optionFilterProp="label"
+                                loading={departmentsQuery.isLoading}
+                                style={{ width: '100%' }}
+                                placeholder={t(
+                                  'app.kuaizhizao.flowDataGenerate.operatorDepartmentPlaceholder',
+                                )}
+                                options={departmentOptions}
+                              />
+                            </Form.Item>
+                          );
+                        }
+                        if (mode === 'random_team') {
+                          return (
+                            <Form.Item name={`op_team_${s.key}`} noStyle>
+                              <Select
+                                showSearch
+                                optionFilterProp="label"
+                                loading={workGroupsQuery.isLoading}
+                                style={{ width: '100%' }}
+                                placeholder={t(
+                                  'app.kuaizhizao.flowDataGenerate.operatorTeamPlaceholder',
+                                )}
+                                options={workGroupOptions}
+                              />
+                            </Form.Item>
                           );
                         }
                         const defaults = defaultRoleByStep[s.key] || [];
@@ -1015,7 +1164,21 @@ export default function FlowDataGeneratePage() {
               }
             />
           )}
-        </>
+                </>
+              ),
+            },
+            {
+              key: 'equipment-ops',
+              label: t('app.kuaizhizao.flowDataGenerate.tabEquipmentOps'),
+              children: (
+                <EquipmentOpsGeneratePanel
+                  ready={ready}
+                  selectedTenantId={selectedTenantId}
+                />
+              ),
+            },
+          ]}
+        />
       )}
     </div>
   );

@@ -1003,6 +1003,8 @@ class EquipmentSpotCheckService:
                 equipment_code=equipment.code,
                 equipment_name=equipment.name,
                 scheme_id=scheme.id,
+                plan_id=getattr(data, "plan_id", None),
+                plan_uuid=getattr(data, "plan_uuid", None),
                 capture_mode=capture_mode,
                 check_date=data.check_date or date.today(),
                 inspector_id=(

@@ -178,6 +178,34 @@ export const equipmentApi = {
   },
 };
 
+/** 设备点检计划 */
+export const spotCheckPlanApi = {
+  list: async (params?: Record<string, unknown>) => {
+    return apiRequest('/apps/kuaizhizao/equipment-spot-check-plans', { method: 'GET', params });
+  },
+  create: async (data: unknown) => {
+    return apiRequest('/apps/kuaizhizao/equipment-spot-check-plans', { method: 'POST', data });
+  },
+  update: async (uuid: string, data: unknown) => {
+    return apiRequest(`/apps/kuaizhizao/equipment-spot-check-plans/${uuid}`, { method: 'PUT', data });
+  },
+  delete: async (uuid: string) => {
+    return apiRequest(`/apps/kuaizhizao/equipment-spot-check-plans/${uuid}`, { method: 'DELETE' });
+  },
+  get: async (uuid: string) => {
+    return apiRequest(`/apps/kuaizhizao/equipment-spot-check-plans/${uuid}`, { method: 'GET' });
+  },
+  generateSpotChecks: async (
+    uuid: string,
+    data?: { check_date?: string; equipment_uuids?: string[] },
+  ) => {
+    return apiRequest(`/apps/kuaizhizao/equipment-spot-check-plans/${uuid}/generate-spot-checks`, {
+      method: 'POST',
+      data: data ?? {},
+    });
+  },
+};
+
 // 维护保养计划相关接口
 export const maintenancePlanApi = {
   // 获取维护保养计划列表
