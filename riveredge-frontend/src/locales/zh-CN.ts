@@ -11831,6 +11831,7 @@ export default {
   'app.kuaizhizao.purchaseRequisition.form.addLine': '添加明细',
   'app.kuaizhizao.purchaseRequisition.form.material': '物料',
   'app.kuaizhizao.purchaseRequisition.form.warehouseStock': '各仓库存',
+  'app.kuaizhizao.purchaseRequisition.form.totalStock': '总库存',
   'app.kuaizhizao.purchaseRequisition.form.stockLoading': '库存加载中',
   'app.kuaizhizao.purchaseRequisition.form.stockEmpty': '各仓无在库结存',
   'app.kuaizhizao.purchaseRequisition.form.stockUnavailable': '暂无法读取库存',
@@ -21981,7 +21982,9 @@ export default {
   'app.master-data.units.editTitle': '编辑单位',
   'app.master-data.units.codeRequired': '请输入单位编码',
   'app.master-data.units.nameRequired': '请输入单位名称',
-  'app.master-data.units.codeFollowsNameHint': '新建时编码与名称相同，可在列表中查看编码列',
+  'app.master-data.units.codeFollowsNameHint': '快速新建时编码与名称相同',
+  'app.master-data.units.codeEditableHint':
+    '业务单据存单位名称。修改名称会同步物料与换算引用；编码仅作目录识别',
   'app.master-data.units.loadPreset': '加载预设',
   'app.master-data.units.loadPresetSuccess':
     '已加载：预设单位 {units}，字典回填 {backfill}，物料补建 {fromMaterials}，换算 {conversions}',
@@ -25712,6 +25715,8 @@ export default {
   'pages.system.configCenter.auditBinding.switch': '审核开关',
   'pages.system.configCenter.auditBinding.process': '审批流程',
   'pages.system.configCenter.auditBinding.processPlaceholder': '选择审批流程',
+  'pages.system.configCenter.auditBinding.design': '设计',
+  'pages.system.configCenter.auditBinding.selectProcessBeforeDesign': '请先选择审批流程后再设计',
   'pages.system.configCenter.auditBinding.bindRolesBeforeEnable':
     '流程已就绪。请先到「审批流程」设计器为各审批节点绑定角色，再打开右侧开关。',
   'pages.system.configCenter.auditBinding.sectionDesc':
@@ -26050,8 +26055,8 @@ export default {
     '开启后，在单据详情抽屉中显示「操作记录」区块。关闭后隐藏该区块。',
   'pages.system.configCenter.param.common_detail_basic_updated_at_enabled_desc':
     '开启后，在单据详情抽屉「基本信息」中显示更新时间。关闭后隐藏该字段。',
-  'pages.system.configCenter.paramGroup.common_numeric_precision': '数值精度',
-  'pages.system.configCenter.paramGroup.common_numeric_precision_desc':
+  'pages.system.configCenter.paramSection.common_numeric_precision': '数值精度',
+  'pages.system.configCenter.paramSection.common_numeric_precision_desc':
     '数量、单价、金额分项设定，默认均为 2 位，可配置范围 0–4。',
   'pages.system.configCenter.paramSection.production_work_order': '工单',
   'pages.system.configCenter.paramSection.production_work_order_desc':
@@ -26131,7 +26136,7 @@ export default {
   'pages.system.configCenter.category.systemDesc': '系统必备初始项的统一加载与补全',
   'pages.system.configCenter.category.master_data': '基础数据',
   'pages.system.configCenter.category.master_dataDesc': '主数据与文控相关参数',
-  'pages.system.configCenter.category.kuaiplm': '快研发',
+  'pages.system.configCenter.category.kuaiplm': '研发管理',
   'pages.system.configCenter.category.kuaiplmDesc': '实验委托等研发业务参数',
   'pages.system.configCenter.param.kuaiplm_lab_request_delegate_dept_uuids': '实验委托可选委托部门',
   'pages.system.configCenter.param.kuaiplm_lab_request_delegate_dept_uuids_desc':
@@ -38140,6 +38145,86 @@ export default {
     '修复销项发票切换含税金额分币价差',
   'pages.dashboard.updateLog.entries.sales-invoice-tax-amount-cents-math.description':
     '开票金额互算改为分位整数（与后端价税拆分一致），避免 JS 浮点把 1769911.50×1.13 算成 1999999.99；切换含税后与可开票合计对齐，含税录入仍以价税合计为真源。',
+  'pages.dashboard.updateLog.entries.sales-contract-form-hooks-order-r01.title':
+    '销售合同列表与新建页切换不再闪 React 错误',
+  'pages.dashboard.updateLog.entries.sales-contract-form-hooks-order-r01.description':
+    '框架合同/销售合同同一组件在表单页提前 return 前未调用详情抽屉 hooks，列表与新建切换时 hooks 数量不一致触发 #300；已把 hooks 挪到分支之前。',
+  'pages.dashboard.updateLog.entries.material-unit-catalog-show-code-r01.title':
+    '单位管理默认显示单位编码',
+  'pages.dashboard.updateLog.entries.material-unit-catalog-show-code-r01.description':
+    '单位列表在名称旁默认展示编码列。此前编码列默认隐藏，名称改过之后无法直接看出物料上存的仍是旧编码。',
+  'pages.dashboard.updateLog.entries.inventory-unit-follows-material-base-unit-r01.title':
+    '即时库存单位改跟物料当前基础单位',
+  'pages.dashboard.updateLog.entries.inventory-unit-follows-material-base-unit-r01.description':
+    '即时库存不再沿用线边库存快照里的旧单位编码，也不再误读不存在的物料 unit 字段；单位列与数量旁都跟物料当前基础单位，并按单位目录显示名称。',
+  'pages.dashboard.updateLog.entries.inventory-unit-column-uses-catalog-name-r01.title':
+    '即时库存单位列与数量旁单位一致',
+  'pages.dashboard.updateLog.entries.inventory-unit-column-uses-catalog-name-r01.description':
+    '单位列改为显示单位目录名称，与库存数量旁的单位同一套。此前直接拼了单位编码，编码仍是旧文案时会和数量旁的名称不一致。',
+  'pages.dashboard.updateLog.entries.work-order-list-quantity-column-align-r01.title':
+    '工单列表数量列加宽并右对齐',
+  'pages.dashboard.updateLog.entries.work-order-list-quantity-column-align-r01.description':
+    '数量列加宽，表头和数字都靠右，避免「20,000 吨 (T)」挤在窄列里。',
+  'pages.dashboard.updateLog.entries.material-unit-display-name-everywhere-r01.title':
+    '业务单位改存并直出单位名称',
+  'pages.dashboard.updateLog.entries.material-unit-display-name-everywhere-r01.description':
+    '物料与单据上的单位字段改为存单位目录名称，界面直接展示该字段。禁止再用编码对照名称；历史仍存编码的数据由迁移回填为名称。',
+  'pages.dashboard.updateLog.entries.material-unit-code-editable-r01.title':
+    '单位管理支持编辑单位编码',
+  'pages.dashboard.updateLog.entries.material-unit-code-editable-r01.description':
+    '编辑单位时可改编码。保存后会同步物料基础单位与换算关系中的引用，便于纠正名称与编码不一致的历史数据。',
+  'pages.dashboard.updateLog.entries.work-order-related-unit-snapshot-backfill-r01.title':
+    '工单相关单位快照已按物料基础单位回填',
+  'pages.dashboard.updateLog.entries.work-order-related-unit-snapshot-backfill-r01.description':
+    '工单本身不存单位，数量按基础单位落库。迁移已清理无效场景单位，并把线边库存、完工入库、生产领退料等制造单据上的单位快照对齐到当前物料基础单位；工单数量数值未改写。',
+  'pages.dashboard.updateLog.entries.work-order-planned-qty-uses-base-unit-r01.title':
+    '新建工单计划数量只显示物料基础单位',
+  'pages.dashboard.updateLog.entries.work-order-planned-qty-uses-base-unit-r01.description':
+    '没有辅助单位时，物料上那份不显示的生产单位配置会被删掉。新建工单的计划数量只跟物料基础单位，不再读这份配置。',
+  'pages.dashboard.updateLog.entries.material-stale-production-unit-prune-r01.title':
+    '物料基础单位已改千克时工单不再显示残留生产单位吨',
+  'pages.dashboard.updateLog.entries.material-stale-production-unit-prune-r01.description':
+    '删除全部辅助单位后场景映射区会隐藏，但 production 可能仍残留旧吨；解析与保存时会裁掉无效场景单位，工单计划数量改跟当前基础单位（如千克）。',
+  'pages.dashboard.updateLog.entries.production-picking-audit-start-on-create-r01.title':
+    '生产领料开启审核后拉单会真正进入审批流',
+  'pages.dashboard.updateLog.entries.production-picking-audit-start-on-create-r01.description':
+    '配置中心审核设置打开生产领料后，拉单/下推创建待审核单会启动审批实例（与销售出库一致）；未开审核仍为自动通过待领料。审批节点须配置审批人，空审批人且为 auto_pass 仍会瞬间通过。',
+  'pages.dashboard.updateLog.entries.work-order-planned-qty-unit-stale-r01.title':
+    '新建工单计划数量单位不再沿用上次物料',
+  'pages.dashboard.updateLog.entries.work-order-planned-qty-unit-stale-r01.description':
+    '计划数量旁单位取自物料生产单位；关闭/新建弹窗会清空缓存，选产品时按物料 id 重拉多单位配置，避免基础单位已是千克仍显示成吨。',
+  'pages.dashboard.updateLog.entries.sales-order-drop-split-delivery-notify-r01.title':
+    '销售订单审核后不再发送拆分交付计划提醒',
+  'pages.dashboard.updateLog.entries.sales-order-drop-split-delivery-notify-r01.description':
+    '审核通过仍保留订单审核消息；「请拆分交付计划」站内提醒已停发，业务员可自行在销售订单下推交付项目。',
+  'pages.dashboard.updateLog.entries.kuaiai-settings-remove-ocr-workbuddy-r02.title':
+    '模型设置再次去掉 OCR 与 WorkBuddy 配置块',
+  'pages.dashboard.updateLog.entries.kuaiai-settings-remove-ocr-workbuddy-r02.description':
+    'OCR 视觉识别与外部 Agent / WorkBuddy 已迁至应用连接器；模型设置仅保留对话模型选用、智能体开关与 KU-AI 能力，保存时不再覆盖连接器侧配置。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-stock-total-popover-r01.title':
+    '采购申请明细改为总库存悬停看分仓',
+  'pages.dashboard.updateLog.entries.purchase-requisition-stock-total-popover-r01.description':
+    '申请明细列展示各仓合计；鼠标悬停用 Popover 展开分仓库存，物料选择下方不再重复展示库存文案。',
+  'pages.dashboard.updateLog.entries.config-center-kuaiplm-category-rename-r01.title':
+    '配置中心参数分类「快研发」更名为「研发管理」',
+  'pages.dashboard.updateLog.entries.config-center-kuaiplm-category-rename-r01.description':
+    '参数设置侧栏分类文案与销售管理、采购管理等业务模块命名对齐。',
+  'pages.dashboard.updateLog.entries.config-center-numeric-precision-cards-r01.title':
+    '通用配置数值精度拆为三张独立卡片',
+  'pages.dashboard.updateLog.entries.config-center-numeric-precision-cards-r01.description':
+    '数量、单价、金额小数位各自成卡，并归入「数值精度」分区，与工单/报工等参数分区交互一致。',
+  'pages.dashboard.updateLog.entries.config-center-audit-design-btn-r01.title':
+    '审核设置可一键进入流程设计',
+  'pages.dashboard.updateLog.entries.config-center-audit-design-btn-r01.description':
+    '配置中心审核设置各单据卡片的审批流程下拉旁增加「设计」按钮，点击跳转至对应审批流设计器。',
+  'pages.dashboard.updateLog.entries.uni-audit-node-record-ui-r01.title':
+    '审核弹窗节点记录更易区分人员与状态',
+  'pages.dashboard.updateLog.entries.uni-audit-node-record-ui-r01.description':
+    '节点执行记录中可审核人员改为姓名+图标 plain 展示；节点卡片与状态标签按进行中、已通过、已驳回、已跳过、待到达使用对应色底与边框。',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-peer-sync-r01.title':
+    '快财务财务管理菜单与快制造对齐',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-peer-sync-r01.description':
+    '同步快制造菜单时会一并刷新快财务侧栏的财务管理分组（收款管理/付款管理）；菜单同步检测也会识别「路径在库但分组未挂上」并提示重新同步。',
   'pages.dashboard.updateLog.entries.purchase-requisition-uni-audit-resource-fix-r01.title':
     '修复采购申请审核误报权限不足',
   'pages.dashboard.updateLog.entries.purchase-requisition-uni-audit-resource-fix-r01.description':

@@ -2510,6 +2510,15 @@ const SalesContractsPage: React.FC = () => {
     [detail, t],
   );
 
+  // 须在 isFormPage 提前 return 之前调用，否则列表↔新建/编辑切换会触发 React #300（hooks 数量不一致）
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    alignedDetailBasicColumns,
+    detail,
+    'sales_contract',
+  );
+
+  const salesContractAttachments = documentAttachmentsFromRecord(detail);
+  const salesContractAttLabel = t('app.uniDetail.sectionAttachments');
 
   if (isFormPage) {
     return (
@@ -2580,14 +2589,6 @@ const SalesContractsPage: React.FC = () => {
       </>
     );
   }
-
-  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
-    alignedDetailBasicColumns, detail,
-    'sales_contract',
-  );
-
-  const salesContractAttachments = documentAttachmentsFromRecord(detail);
-  const salesContractAttLabel = t('app.uniDetail.sectionAttachments');
 
   return (
 

@@ -123,7 +123,6 @@ import {
 } from './components/PurchaseRequisitionDetailDrawer';
 import {
   PurchaseRequisitionLineStockCell,
-  PurchaseRequisitionLineStockHint,
   PurchaseRequisitionLineStockProvider,
 } from './components/PurchaseRequisitionLineStock';
 import {
@@ -1987,7 +1986,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                                   />
                                 </div>
                               </div>
-                              <PurchaseRequisitionLineStockHint materialId={mid} />
                               <AntForm.Item name={[index, 'demand_computation_item_id']} hidden>
                                 <Input type="hidden" />
                               </AntForm.Item>
@@ -1998,9 +1996,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.purchaseRequisition.form.warehouseStock'),
+                    title: t('app.kuaizhizao.purchaseRequisition.form.totalStock'),
                     dataIndex: '_warehouse_stock',
-                    width: 200,
+                    width: 120,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item
                         noStyle

@@ -68,3 +68,70 @@ def test_collect_manifest_menu_paths_nested():
     paths = ApplicationService.collect_manifest_menu_paths(config)
     assert "/apps/kuaizhizao" in paths
     assert "/apps/kuaizhizao/outsource-management/dashboard" in paths
+
+
+def test_collect_manifest_leaf_immediate_parent_titles_grouped_finance():
+    config = {
+        "title": "app.kuaicaiwu.name",
+        "children": [
+            {
+                "title": "app.kuaicaiwu.menu.finance-management",
+                "children": [
+                    {
+                        "title": "app.kuaicaiwu.menu.group.finance-receipts",
+                        "children": [
+                            {
+                                "title": "app.kuaicaiwu.menu.finance-management.receivables",
+                                "path": "/apps/kuaizhizao/finance-management/receivables",
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+    parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(config)
+    assert (
+        parents["/apps/kuaizhizao/finance-management/receivables"]
+        == "app.kuaicaiwu.menu.group.finance-receipts"
+    )
+
+
+def test_collect_manifest_leaf_immediate_parent_titles_flat_finance_differs():
+    grouped = {
+        "title": "app.kuaicaiwu.name",
+        "children": [
+            {
+                "title": "app.kuaicaiwu.menu.finance-management",
+                "children": [
+                    {
+                        "title": "app.kuaicaiwu.menu.group.finance-receipts",
+                        "children": [
+                            {
+                                "path": "/apps/kuaizhizao/finance-management/receivables",
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+    flat = {
+        "title": "app.kuaicaiwu.name",
+        "children": [
+            {
+                "title": "app.kuaicaiwu.menu.finance-management",
+                "children": [
+                    {
+                        "title": "app.kuaicaiwu.menu.finance-management.receivables",
+                        "path": "/apps/kuaizhizao/finance-management/receivables",
+                    },
+                ],
+            },
+        ],
+    }
+    grouped_parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(grouped)
+    flat_parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(flat)
+    assert grouped_parents["/apps/kuaizhizao/finance-management/receivables"] != flat_parents[
+        "/apps/kuaizhizao/finance-management/receivables"
+    ]

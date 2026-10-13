@@ -3794,7 +3794,6 @@ class SalesOrderService:
                 out["review_remarks"] = merged[:2000]
             from apps.kuaizhizao.services.kuaizhizao_business_notification import (
                 notify_sales_order_approved,
-                notify_salesman_split_delivery_plan,
             )
 
             try:
@@ -3805,12 +3804,6 @@ class SalesOrderService:
                     delivery_date=str(order_row.delivery_date or ""),
                     sales_order_id=sales_order_id,
                     creator_user_id=order_row.created_by,
-                    salesman_user_id=order_row.salesman_id,
-                )
-                await notify_salesman_split_delivery_plan(
-                    tenant_id,
-                    order_code=order_row.order_code or str(sales_order_id),
-                    sales_order_id=sales_order_id,
                     salesman_user_id=order_row.salesman_id,
                 )
             except Exception as exc:

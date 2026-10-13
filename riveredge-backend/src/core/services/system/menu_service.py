@@ -39,6 +39,12 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
 
 
+# 宿主应用菜单同步后，须从 manifest 刷新对应 PRO consumer 侧栏（同路径接管，结构须一致）
+_MENU_PEER_SYNC_AFTER_SOURCE: Dict[str, str] = {
+    "kuaizhizao": "kuaicaiwu",
+}
+
+
 class ManifestMenuSortIndex(TypedDict):
     """manifest menu_config 排序索引：叶子用 path，分组用 title（与 core_menus.name 一致）。"""
 
@@ -1638,6 +1644,50 @@ class MenuService:
         return updated
 
     @staticmethod
+    async def _sync_peer_consumer_menus_from_manifest(
+        tenant_id: int,
+        synced_source_app_code: str,
+    ) -> None:
+        """
+        快制造财务管理菜单变更时，同步刷新快财务 core_menus（接管同路径，分组结构须一致）。
+        """
+        from loguru import logger
+
+        peer_code = _MENU_PEER_SYNC_AFTER_SOURCE.get(str(synced_source_app_code or "").strip())
+        if not peer_code:
+            return
+        from core.services.system.menu_takeover_service import MenuTakeoverService
+
+        if not await MenuTakeoverService.is_consumer_effective(tenant_id, peer_code):
+            return
+        manifest = ApplicationService._get_manifest_by_code(peer_code)
+        if not manifest:
+            return
+        menu_config = manifest.get("menu_config")
+        if not menu_config:
+            return
+        peer_app = await ApplicationService.get_application_by_code(tenant_id, peer_code)
+        if not peer_app or not peer_app.get("uuid"):
+            return
+        logger.info(
+            "peer_menu_sync tenant={} source={} peer={}",
+            tenant_id,
+            synced_source_app_code,
+            peer_code,
+        )
+        await MenuService.sync_menus_from_application_config(
+            tenant_id=tenant_id,
+            application_uuid=str(peer_app["uuid"]),
+            menu_config=menu_config,
+            is_active=bool(peer_app.get("is_active", True)),
+            skip_permission_sync=True,
+            defer_cache_clear=True,
+            defer_menu_takeover=True,
+        )
+        await MenuTakeoverService.reapply_after_source_menu_sync(tenant_id, peer_code)
+        await MenuTakeoverService.reapply_industry_pack_after_host_menu_sync(tenant_id, peer_code)
+
+    @staticmethod
     async def sync_menus_from_application_config(
         tenant_id: int,
         application_uuid: str,
@@ -1925,6 +1975,7 @@ class MenuService:
             await MenuTakeoverService.reapply_industry_pack_after_host_menu_sync(
                 tenant_id, app_code
             )
+            await MenuService._sync_peer_consumer_menus_from_manifest(tenant_id, app_code)
 
         return synced_count
 
@@ -2080,6 +2131,10 @@ class MenuService:
             await MenuTakeoverService.finalize_dedicated_shell_menus_after_batch_sync(
                 tenant_id
             )
+            if "kuaizhizao" in synced_app_codes:
+                await MenuService._sync_peer_consumer_menus_from_manifest(
+                    tenant_id, "kuaizhizao"
+                )
         if total > 0 or synced_app_codes:
             await MenuService._clear_menu_cache(tenant_id)
             logger.info(f"租户 {tenant_id} 菜单同步完成，共 {total} 个菜单")

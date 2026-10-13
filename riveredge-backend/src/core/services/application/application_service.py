@@ -1585,6 +1585,37 @@ class ApplicationService:
         return paths
 
     @staticmethod
+    def collect_manifest_leaf_immediate_parent_titles(menu_config: Any) -> Dict[str, str]:
+        """
+        叶子 path → 直接父级 manifest title（与 core_menus.name 一致）。
+
+        用于检测「路径已在库内但中间分组未挂上」（如快财务仍平铺、快制造已收款/付款分组）。
+        """
+        mapping: Dict[str, str] = {}
+
+        def walk(node: Dict[str, Any], parent_title: str) -> None:
+            title = str(node.get("title") or "").strip()
+            path = node.get("path")
+            children = node.get("children") or []
+            normalized_path = str(path).strip() if path else ""
+            if normalized_path and not children:
+                mapping[normalized_path] = parent_title
+            for child in children:
+                if isinstance(child, dict):
+                    walk(child, title)
+
+        if isinstance(menu_config, dict):
+            root_title = str(menu_config.get("title") or "").strip()
+            for child in menu_config.get("children") or []:
+                if isinstance(child, dict):
+                    walk(child, root_title)
+        elif isinstance(menu_config, list):
+            for item in menu_config:
+                if isinstance(item, dict):
+                    walk(item, "")
+        return mapping
+
+    @staticmethod
     def _is_orphaned_manifest_menu_row(
         *,
         name: Optional[str],
@@ -1617,8 +1648,9 @@ class ApplicationService:
         tenant_id: int,
         application_uuid: str,
         app_code: str,
+        manifest_menu_config: Any = None,
     ) -> bool:
-        """manifest 同步菜单是否存在 parent_id 为空的孤儿分组/页面。"""
+        """manifest 同步菜单是否存在 parent_id 为空的孤儿分组/页面，或叶子父级与 manifest 不一致。"""
         from core.models.menu import Menu
 
         rows = await Menu.filter(
@@ -1635,6 +1667,25 @@ class ApplicationService:
                 app_code=app_code,
             ):
                 return True
+
+        if manifest_menu_config:
+            expected_parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(
+                manifest_menu_config
+            )
+            if expected_parents:
+                by_id = {menu.id: menu for menu in rows}
+                by_path = {
+                    str(menu.path).strip(): menu
+                    for menu in rows
+                    if menu.path and str(menu.path).strip()
+                }
+                for path, expected_parent_title in expected_parents.items():
+                    row = by_path.get(path)
+                    if not row or row.parent_id is None:
+                        continue
+                    parent = by_id.get(row.parent_id)
+                    if not parent or parent.name != expected_parent_title:
+                        return True
         return False
 
     @staticmethod
@@ -1715,6 +1766,7 @@ class ApplicationService:
                     tenant_id,
                     str(app_uuid),
                     code,
+                    manifest_menu_config,
                 )
             if config_stale or rows_stale or hierarchy_stale:
                 stale_app_codes.append(code)

@@ -6,9 +6,10 @@
  */
 
 import React, { useEffect, useMemo } from 'react';
-import { App, Card, Layout, Menu, Select, Spin, Switch, Typography } from 'antd';
+import { App, Button, Card, Layout, Menu, Select, Space, Spin, Switch, Typography } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { theme } from 'antd';
 
 import { AUDIT_CATEGORIES } from './configTree';
@@ -89,6 +90,7 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
   const { t, i18n } = useTranslation();
   const { token } = useToken();
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -238,6 +240,21 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
     });
   };
 
+  const resolveDesignProcessUuid = (item: AuditBindingItem): string | undefined => {
+    if (item.process_uuid) return item.process_uuid;
+    const matched = processOptions.filter((p) => p.code === item.node_key);
+    return matched.length === 1 ? matched[0].uuid : undefined;
+  };
+
+  const handleDesign = (item: AuditBindingItem) => {
+    const uuid = resolveDesignProcessUuid(item);
+    if (!uuid) {
+      messageApi.warning(t('pages.system.configCenter.auditBinding.selectProcessBeforeDesign'));
+      return;
+    }
+    navigate(`/system/approval-processes/designer?uuid=${uuid}`);
+  };
+
   const currentCat =
     visibleCategories.find((c) => c.id === selectedCatId) ||
     AUDIT_CATEGORIES.find((c) => c.id === selectedCatId) ||
@@ -352,18 +369,27 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
                         <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
                           {t('pages.system.configCenter.auditBinding.process')}
                         </Text>
-                        <Select
-                          allowClear
-                          showSearch
-                          size="medium"
-                          placeholder={t('pages.system.configCenter.auditBinding.processPlaceholder')}
-                          style={{ width: '100%' }}
-                          optionFilterProp="label"
-                          value={item.process_uuid ?? undefined}
-                          loading={pendingNodeKey === item.node_key}
-                          options={buildSelectOptionsForItem(item)}
-                          onChange={(v) => handleProcessChange(item, v ?? null)}
-                        />
+                        <Space.Compact style={{ width: '100%' }}>
+                          <Select
+                            allowClear
+                            showSearch
+                            size="medium"
+                            placeholder={t('pages.system.configCenter.auditBinding.processPlaceholder')}
+                            style={{ flex: 1, minWidth: 0 }}
+                            optionFilterProp="label"
+                            value={item.process_uuid ?? undefined}
+                            loading={pendingNodeKey === item.node_key}
+                            options={buildSelectOptionsForItem(item)}
+                            onChange={(v) => handleProcessChange(item, v ?? null)}
+                          />
+                          <Button
+                            size="medium"
+                            disabled={!resolveDesignProcessUuid(item)}
+                            onClick={() => handleDesign(item)}
+                          >
+                            {t('pages.system.configCenter.auditBinding.design')}
+                          </Button>
+                        </Space.Compact>
                         {!item.is_enabled && item.process_matched ? (
                           <Paragraph
                             type="secondary"

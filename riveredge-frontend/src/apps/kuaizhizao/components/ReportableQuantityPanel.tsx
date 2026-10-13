@@ -12,7 +12,6 @@ import {
 } from '../utils/workOrderReporting';
 import { warehouseApi } from '../services/warehouse-execution';
 import { convertBaseQtyToProductionDisplay } from '../../../utils/materialScenarioUnit';
-
 export interface ReportableQuantityPanelProps {
   operation: any;
   /** 工单计划数量（基础单位） */
@@ -48,7 +47,8 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
   const unitSuffix = (() => {
     const productUnit = String(unitContext?.product_unit ?? unitContext?.productUnit ?? '').trim();
     const baseUnit = String(unitContext?.base_unit ?? unitContext?.baseUnit ?? '').trim();
-    return productUnit && baseUnit && productUnit !== baseUnit ? ` ${productUnit}` : '';
+    const raw = productUnit || baseUnit;
+    return raw ? ` ${raw}` : '';
   })();
 
   const operationQualified =

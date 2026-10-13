@@ -22,7 +22,7 @@ import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../.
 import { renderInlineMarkerTagPreview } from '../../../../../components/inline-marker-tag-preview';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { formatQuantity } from '../../../../../utils/format';
-import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
+import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
   getInspectionPlanNameAndCode,
@@ -54,7 +54,7 @@ export const QUALITY_INSPECTION_EXTRA_KEY = 'quality_inspection_extra';
 function renderRecordQuantityWithUnit(record: Record<string, unknown>, quantityKey: string): React.ReactNode {
   const qty = record[quantityKey];
   const unit = String(record.material_unit ?? record.materialUnit ?? '').trim();
-  return formatQuantityWithUnit(qty, unit || undefined);
+  return <QuantityWithUnitDisplay quantity={qty} unit={unit || undefined} />;
 }
 
 export function pickRecordText(record: Record<string, unknown>, ...keys: string[]): string {

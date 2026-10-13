@@ -1674,7 +1674,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       // 单位列：主数据单位目录为唯一真源（禁止 DictionaryLabel "unit"，该码不存在会渲染空串）
       // ProTable render 首参是已渲染 dom，须从 record 取真值（否则 String(ReactNode)=[object Object]）
-      const unitFields = ['material_unit', 'unit', 'baseUnit', 'base_unit'];
+      const unitFields = [
+        'material_unit',
+        'unit',
+        'baseUnit',
+        'base_unit',
+        'product_unit',
+        'productUnit',
+      ];
       if (typeof col.dataIndex === 'string' && unitFields.includes(col.dataIndex) && !col.render) {
         const dataIndex = col.dataIndex
         const unitWidth = typeof col.width === 'number' ? col.width : 80

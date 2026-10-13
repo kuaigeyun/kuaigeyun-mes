@@ -43,6 +43,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | SyncFromSource、多源映射、只补缺字段、match_key 合并 | `features/sync-from-source-multi-source-merge.md` |
 | 通知仓库 504、服务器暂时不可用、NestedTransaction 死锁 | `features/notify-warehouse-nested-tx-deadlock.md` |
 | 单位/物料同步串扰、单位写成物料编码、query_measureunits | `features/unit-material-sync-decouple.md` |
+| 单位显示成编码、库存/工单见吨(T)、MaterialUnitLabel、单位名称 | `features/material-unit-display-name.md` |
 | 来源类型转换没生效、FErpClsID、source_type 仍 Buy | `features/sync-material-source-type-conversion.md` |
 | BOM 自制件下拉空、mainMaterialScope make 找不到 | `features/bom-main-material-make-scope.md` |
 | 物料分组空拉、BD_MATERIALGROUP、FormId 名对体错 | `features/sync-material-group-empty-pull.md` |
@@ -161,6 +162,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/sync-from-source-multi-source-merge.md` | 入站多源：只补缺字段 + 匹配键合并 | sync-from-source | 已交付 |
 | `features/notify-warehouse-nested-tx-deadlock.md` | 通知仓库 Nested 事务死锁修复 | kuaizhizao-warehouse | 已交付 |
 | `features/unit-material-sync-decouple.md` | 单位/物料同步别名与写入前去重拆开 | sync-from-source | 已交付 |
+| `features/material-unit-display-name.md` | 用户可见单位一律显示目录名称 | materialUnitDisplay / MaterialUnitLabel | 已交付 |
 | `features/sync-material-source-type-conversion.md` | 物料来源类型转换依赖 FieldKeys | sync-from-source | 已交付 |
 | `features/bom-main-material-make-scope.md` | BOM 主物料自制件下拉须服务端滤 Make | master-data-ui | 已交付 |
 | `features/sync-material-group-empty-pull.md` | 物料分组空拉与 FormId/createorg | sync-from-source | 已交付 |

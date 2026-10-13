@@ -10,7 +10,6 @@ import {
   convertToBaseQuantity,
   type MaterialScenario,
 } from '../../utils/materialScenarioUnit';
-import { getMaterialUnitDisplayMapShared, resolveMaterialUnitLabel } from '../../utils/materialUnitDisplay';
 import { fetchMaterialForUnitSelectCache } from '../material-unit-select';
 import { UniUserSelect } from '../uni-user-select';
 import { useNumericPrecisionPlaces } from '../../hooks/useNumericPrecision';
@@ -144,7 +143,6 @@ export function InspectionConductQuantityFields({
   const form = Form.useFormInstance();
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const [material, setMaterial] = useState<Material | null>(null);
-  const [unitLabelMap, setUnitLabelMap] = useState<Record<string, string>>({});
   const stepResults = Form.useWatch('conduct_step_results', form) as
     | Record<string, { value?: unknown; judgment?: string }>
     | undefined;
@@ -155,15 +153,6 @@ export function InspectionConductQuantityFields({
     return summarizeConductSteps(steps, stepResults, itemResults, t);
   }, [inspection, stepResults, itemResults, t]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void getMaterialUnitDisplayMapShared().then((map) => {
-      if (!cancelled) setUnitLabelMap(map);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!materialId) {
@@ -187,8 +176,8 @@ export function InspectionConductQuantityFields({
     () => readDocumentUnit(material, materialUnit),
     [material, materialUnit],
   );
-  const displayUnitLabel = resolveMaterialUnitLabel(documentUnit, unitLabelMap) || documentUnit;
-  const addonProps = unitAddonFieldProps(documentUnit, unitLabelMap);
+  const displayUnitLabel = documentUnit;
+  const addonProps = unitAddonFieldProps(documentUnit);
   const useMultiUnit = Boolean(materialId) && materialHasAuxiliaryUnits(material, baseUnit);
 
   // 多单位路径：默认带出单据单位与检验数量（与检验数量展示口径一致）
@@ -431,12 +420,8 @@ export function InspectionDefectQuantityField({
   t,
 }: InspectionDefectQuantityFieldProps) {
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
-  const [unitLabelMap, setUnitLabelMap] = useState<Record<string, string>>({});
   const [resolvedUnit, setResolvedUnit] = useState(String(materialUnit ?? '').trim());
 
-  useEffect(() => {
-    void getMaterialUnitDisplayMapShared().then(setUnitLabelMap);
-  }, []);
 
   useEffect(() => {
     const direct = String(materialUnit ?? '').trim();
@@ -455,7 +440,7 @@ export function InspectionDefectQuantityField({
     };
   }, [materialId, materialUnit]);
 
-  const addonProps = unitAddonFieldProps(resolvedUnit, unitLabelMap);
+  const addonProps = unitAddonFieldProps(resolvedUnit);
 
   return (
     <ProFormDigit

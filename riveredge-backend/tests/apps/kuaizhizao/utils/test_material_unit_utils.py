@@ -48,9 +48,10 @@ def test_build_work_order_unit_fields():
     )
     fields = build_work_order_unit_fields(mat, wo)
     assert fields["base_unit"] == "箱"
-    assert fields["product_unit"] == "瓶"
-    assert fields["display_quantity"] == Decimal("80")
-    assert fields["display_completed_quantity"] == Decimal("16")
+    assert fields["product_unit"] == "箱"
+    assert fields["unit_to_base_factor"] == 1.0
+    assert fields["display_quantity"] == Decimal("10")
+    assert fields["display_completed_quantity"] == Decimal("2")
 
 
 def test_purchase_unit_price_to_base_piece():

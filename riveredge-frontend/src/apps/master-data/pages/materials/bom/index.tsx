@@ -65,7 +65,6 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
-import { getMaterialUnitDisplayMapShared } from '../../../../../utils/materialUnitDisplay';
 import { useImportMaterialUnitOptions } from '../../../hooks/useImportMaterialUnitOptions';
 import {
   IMPORT_YES_NO_OPTIONS,
@@ -165,14 +164,13 @@ interface BOMVersionHistoryRow {
 type MaterialBOMProColumn = ProColumns<MaterialBOMRow>;
 
 /**
- * 单位列展示：接收 Form 的 value（单位 code），渲染字典标签，表格渲染前已映射
+ * 单位列展示：业务字段即为单位名称
  */
 const UnitDisplayCell: React.FC<{
   value?: string;
   onChange?: (v: string) => void;
-  unitValueToLabel: Record<string, string>;
-}> = ({ value, unitValueToLabel }) => (
-  <span>{value && unitValueToLabel[value] ? unitValueToLabel[value] : (value || '-')}</span>
+}> = ({ value }) => (
+  <span>{value || '-'}</span>
 );
 
 /** 同一 BOM 编号（bomCode + materialId + version）分组后的行，用于树形表格展示 */
@@ -653,7 +651,6 @@ const BOMPage: React.FC = () => {
   };
 
   // 单位字典映射（value -> label）
-  const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
 
   // 用户列表（用于渲染审核人姓名）
   const [users, setUsers] = useState<User[]>([]);
@@ -885,20 +882,6 @@ const BOMPage: React.FC = () => {
       formRef.current?.setFieldValue('materialId', undefined);
     }
   }, [mainMaterialOptions, modalVisible, isEdit]);
-
-  useEffect(() => {
-    let cancelled = false;
-    getMaterialUnitDisplayMapShared()
-      .then((map) => {
-        if (!cancelled) setUnitValueToLabel(map);
-      })
-      .catch((error) => {
-        console.error('加载单位主数据失败:', error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   /**
    * 重新生成BOM编号（根据当前表单值）
@@ -2961,7 +2944,7 @@ const BOMPage: React.FC = () => {
       align: 'right',
       render: (_, r: any) => {
         if (isRootRow(r)) return '-';
-        const unitLabel = r.unit ? (unitValueToLabel[r.unit] || r.unit) : '';
+        const unitLabel = r.unit || '';
         return `${r.quantity} ${unitLabel}`.trim() || '-';
       },
     },
@@ -3342,7 +3325,7 @@ const BOMPage: React.FC = () => {
         align: 'center',
         render: (_, record) => {
           const unitValue = record.unit;
-          return unitValueToLabel[unitValue || ''] || unitValue || '-';
+          return unitValue || '-';
         },
       },
       {
@@ -3432,7 +3415,7 @@ const BOMPage: React.FC = () => {
         render: (_, record) => record.description || '-',
       },
     ],
-    [t, materials, unitValueToLabel],
+    [t, materials],
   );
 
   return (
@@ -3943,7 +3926,6 @@ const BOMPage: React.FC = () => {
             );
             const materialsForExport = await ensureMaterialsByIds(materialIdsForExport);
             const flatRows = flattenBomGroupsForExport(groupsForFlat, materialsForExport, {
-              unitValueToLabel,
               yesLabel: IMPORT_YES_NO_OPTIONS[0],
               noLabel: IMPORT_YES_NO_OPTIONS[1],
               issueMethodLabels: bomIssueMethodLabel,
@@ -4445,7 +4427,7 @@ const BOMPage: React.FC = () => {
                     rules={[{ max: 20, message: t('app.master-data.bom.unitMax') }]}
                     style={{ margin: 0 }}
                   >
-                    <UnitDisplayCell unitValueToLabel={unitValueToLabel} />
+                    <UnitDisplayCell />
                   </AntForm.Item>
                 ),
               },
