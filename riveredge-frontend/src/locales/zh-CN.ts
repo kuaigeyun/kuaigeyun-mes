@@ -38110,6 +38110,10 @@ export default {
     '修复销项发票切换含税金额分币价差',
   'pages.dashboard.updateLog.entries.sales-invoice-tax-amount-cents-math.description':
     '开票金额互算改为分位整数（与后端价税拆分一致），避免 JS 浮点把 1769911.50×1.13 算成 1999999.99；切换含税后与可开票合计对齐，含税录入仍以价税合计为真源。',
+  'pages.dashboard.updateLog.entries.approval-status-viewer-import-fix-r01.title':
+    '修复打开审核弹窗审批状态 500',
+  'pages.dashboard.updateLog.entries.approval-status-viewer-import-fix-r01.description':
+    '审批状态接口在部分单据上因 viewer_actions 导入作用域错误返回 500，已改为函数入口统一导入，审核弹窗可正常加载流程与按钮门控。',
   'pages.dashboard.updateLog.entries.purchase-requisition-audit-status-fix-r01.title':
     '修复采购申请审核与审批状态查询失败',
   'pages.dashboard.updateLog.entries.purchase-requisition-audit-status-fix-r01.description':

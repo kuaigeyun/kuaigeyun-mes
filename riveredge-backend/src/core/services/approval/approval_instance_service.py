@@ -688,6 +688,12 @@ class ApprovalInstanceService:
         """
         按 entity_type + entity_id 获取审批状态（统一入口，含流程图与节点概况）。
         """
+        from core.services.approval.approval_viewer_actions import (
+            build_flow_viewer_actions,
+            current_node_eligible_user_ids,
+            viewer_has_pending_task_on_instance,
+        )
+
         entity_instances = await ApprovalInstanceService._list_instances_by_entity(
             tenant_id,
             entity_type,
@@ -776,12 +782,6 @@ class ApprovalInstanceService:
         editable_fields: List[Any] = []
         can_edit_during_approval = False
         if instance and instance.status == "pending" and process:
-            from core.services.approval.approval_viewer_actions import (
-                build_flow_viewer_actions,
-                current_node_eligible_user_ids,
-                viewer_has_pending_task_on_instance,
-            )
-
             graph_nodes = ApprovalInstanceService._normalize_process_graph(process.nodes)
             node_list = graph_nodes.get("nodes") or []
             current_node_obj = next(
