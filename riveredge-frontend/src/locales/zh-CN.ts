@@ -30956,6 +30956,10 @@ export default {
     '修复接入设备查看数据趋势图选点位后空白',
   'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.description':
     '趋势图 Tab 改为可见时再挂载图表并固定容器高度；数值字段兼容字符串小数；无数据时给出明确空态提示。',
+  'pages.dashboard.updateLog.entries.stocktaking-list-params-typo-r01.title':
+    '修复库存盘点创建成功后列表看不到',
+  'pages.dashboard.updateLog.entries.stocktaking-list-params-typo-r01.description':
+    '盘点列表取数参数误用未定义变量导致请求失败并静默显示空表；已改为正确读取搜索条件，创建后可正常刷新看到单据。',
   'pages.dashboard.updateLog.entries.equip-ops-plan-scheme-params-r01.title':
     '点检保养计划设备与周期统一取自方案',
   'pages.dashboard.updateLog.entries.equip-ops-plan-scheme-params-r01.description':

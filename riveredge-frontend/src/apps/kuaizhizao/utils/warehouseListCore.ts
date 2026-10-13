@@ -180,7 +180,7 @@ export function resolveStocktakingListParams(
   sort?: Record<string, unknown>,
 ): Record<string, string | number | undefined> {
   const { date_start: stocktaking_date_start, date_end: stocktaking_date_end } = parseSalesReportDateRange(
-    s,
+    searchFormValues ?? {},
     ['stocktaking_date_range', 'stocktakingDateRange'],
   );
   const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
