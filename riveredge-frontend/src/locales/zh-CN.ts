@@ -31556,6 +31556,10 @@ export default {
     '设备状态 MQTT 无感刷新：设备连接与台账联动',
   'pages.dashboard.updateLog.entries.kuaiiot-device-status-realtime-r01.description':
     '快数采入站后实时推送：设备连接「最后上报/在线」与设备台账「设备状态」无需手动刷新即可更新。绑定仍在设备连接新建/编辑中选择外部设备 ID（可改）并关联台账。',
+  'pages.dashboard.updateLog.entries.iot-connection-direction-advanced-search-r01.title':
+    '接入配置方向筛选改到高级搜索',
+  'pages.dashboard.updateLog.entries.iot-connection-direction-advanced-search-r01.description':
+    '接入配置列表顶部「接入/发送/回调」页签已去掉；可在高级搜索用下拉选择方向与类型快速筛选，列表仍显示方向列。',
   'pages.dashboard.updateLog.entries.iot-device-connection-option-direction-r01.title':
     '设备连接新建时接入配置显示方向并优先接入',
   'pages.dashboard.updateLog.entries.iot-device-connection-option-direction-r01.description':
