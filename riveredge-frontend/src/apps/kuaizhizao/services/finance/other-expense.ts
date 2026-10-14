@@ -2,7 +2,7 @@ import { apiRequest } from '../../../../services/api';
 
 export const OTHER_EXPENSE_RESOURCE = 'kuaicaiwu:other-expense';
 
-const base = '/apps/kuaicaiwu/other-expenses';
+const base = '/apps/kuaizhizao/other-expenses';
 
 export type OtherVoucherLine = {
   id?: number;

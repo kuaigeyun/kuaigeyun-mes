@@ -2,10 +2,10 @@
 
 from types import SimpleNamespace
 
-from apps.kuaicaiwu.services.document_action_policy.other_income import (
+from apps.kuaizhizao.services.document_action_policy.other_income import (
     derive_other_income_capabilities,
 )
-from apps.kuaicaiwu.services.document_action_policy.other_expense import (
+from apps.kuaizhizao.services.document_action_policy.other_expense import (
     derive_other_expense_capabilities,
 )
 
