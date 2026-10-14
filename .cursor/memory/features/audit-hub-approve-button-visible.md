@@ -44,3 +44,5 @@ standard: allowed_actions 管可见；viewer_actions/capabilities 管可执行�
 列表 `batch_flow_viewer_actions` **只读、不补齐待办** → 列表态 `canExecuteByAction.approve=false`；弹窗 live 同步后按钮可点，但 `runAction`→`canRunAction` 仍用列表旧值，误报「您没有该操作权限」。审核/驳回点击门禁只验 `canReview`；待办人由弹窗 live + 后端 `execute_approval` 负责。
 
 流程图已到节点2、可审人是节点2，但审核按钮仍提示「当前节点待办人：节点1」：上一节点 pending 未取消，或 `block_reason` 未按 `current_node` 取待办。真源：`get_approval_status`/`bootstrap` 先取消非当前节点 pending，并清掉当前节点上不在可审名单的残留；`build_flow_viewer_actions` 的 `block_reason` 只认当前节点 pending（与可审无交集则跟可审名单）；弹窗 `disabledReason` 只用来自 live 的文案，禁止沿用列表旧 `block_reason`。
+
+条件节点「是否总经理特批」未确认就进特批支：`_evaluate_conditions` 无命中不得默认边 0；须走最后一条 else。前序审批下一节点为布尔条件时，`_resolve_decision_on_approve_spec` 自动推导审核页开关（可不配 `decisionOnApprove`），通过时写入 `instance.data` 再选边；条件路由写 `condition_route` 历史，概览对已走过的条件显示已通过。

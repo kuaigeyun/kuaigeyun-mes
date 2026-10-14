@@ -31456,6 +31456,10 @@ export default {
     '其他费用收支类别接口改挂快制造主仓',
   'pages.dashboard.updateLog.entries.finance-misc-categories-kuaizhizao-api-r01.description':
     '收支类别与其他费用收入/支出 API 迁入快制造主仓路由，新建类别不再报接口不存在；过账挂账仍衔接轻财务应收应付。',
+  'pages.dashboard.updateLog.entries.audit-condition-branch-decision-r01.title':
+    '条件分支须由前序审批人确认后再进入',
+  'pages.dashboard.updateLog.entries.audit-condition-branch-decision-r01.description':
+    '下一节点为「是否××」类布尔条件时，审核页自动出现分支开关；未确认时不再默认走进第一条特批支，未命中条件走 else 边，条件节点状态与执行记录一并修正。',
   'pages.dashboard.updateLog.entries.audit-block-reason-current-node-r01.title':
     '审核按钮待办人提示与当前节点一致',
   'pages.dashboard.updateLog.entries.audit-block-reason-current-node-r01.description':

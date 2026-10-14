@@ -104,6 +104,8 @@ class ApprovalInstanceService:
             return "urge"
         if raw in {"timeout_escalate", "timeout"}:
             return "timeout_escalate"
+        if raw in {"condition_route", "condition", "branch"}:
+            return "condition_route"
         return raw or "unknown"
 
     @staticmethod
@@ -121,6 +123,7 @@ class ApprovalInstanceService:
             "delegate": "委托",
             "urge": "催办",
             "timeout_escalate": "超时升级",
+            "condition_route": "条件分支",
             "unknown": "未知操作",
         }
         return labels.get(key, labels["unknown"])
@@ -654,18 +657,26 @@ class ApprovalInstanceService:
             elif any(
                 h.from_node == node_id
                 and ApprovalInstanceService._normalize_execution_action(h.action)
-                in ("approve", "approved")
+                in ("approve", "approved", "condition_route")
                 for h in node_history
             ):
                 node_status = "approved"
             elif (
                 instance
                 and instance.status == "pending"
-                and instance.current_node
-                and node_status == "waiting"
-                and node_type == "approval"
+                and on_path_to_current
+                and node_id in on_path_to_current
+                and not is_current
+                and node_type in {"condition", "cc"}
+            ):
+                # 条件/抄送无任务：已走过当前路径则视为已通过（避免仍显示「待到达」）
+                node_status = "approved"
+            elif (
+                instance
+                and instance.status == "pending"
                 and on_path_to_current
                 and node_id not in on_path_to_current
+                and node_type in {"approval", "condition", "cc"}
             ):
                 node_status = "skipped"
             else:
@@ -971,8 +982,8 @@ class ApprovalInstanceService:
             graph = normalize_flow_graph(process.nodes or {})
             cur = get_node_config(graph, instance.current_node)
             if cur and cur.get("type") == "approval":
-                spec = (cur.get("data") or {}).get("decisionOnApprove")
-                if isinstance(spec, dict) and spec.get("field"):
+                spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, cur)
+                if spec and spec.get("field"):
                     current_node_decision = {
                         "field": str(spec.get("field")),
                         "label": str(spec.get("label") or spec.get("field")),
@@ -1814,6 +1825,18 @@ class ApprovalInstanceService:
                 instance.current_approver_id = None
                 await instance.save()
                 return []
+            next_label = ""
+            next_data = next_node.get("data") if isinstance(next_node.get("data"), dict) else {}
+            next_label = str(next_data.get("label") or next_node.get("id") or "").strip()
+            await ApprovalInstanceService._create_approval_history(
+                tenant_id=tenant_id,
+                approval_instance_id=instance.id,
+                action="condition_route",
+                action_by=instance.submitter_id,
+                comment=f"条件分支进入：{next_label}" if next_label else "条件分支已选定",
+                from_node=str(node_id) if node_id else None,
+                to_node=str(next_node.get("id") or "") or None,
+            )
             next_type = next_node.get("type") or (next_node.get("data") or {}).get("type")
             if next_type == "end":
                 instance.status = "approved"
@@ -2170,13 +2193,83 @@ class ApprovalInstanceService:
         return []
 
     @staticmethod
+    def _is_booleanish_condition_value(value: Any) -> bool:
+        if isinstance(value, bool):
+            return True
+        if value in (0, 1):
+            return True
+        if isinstance(value, str) and value.strip().lower() in (
+            "true",
+            "false",
+            "1",
+            "0",
+            "yes",
+            "no",
+            "on",
+            "off",
+        ):
+            return True
+        return False
+
+    @staticmethod
+    def _infer_decision_spec_from_condition_node(condition_node: dict) -> Optional[Dict[str, Any]]:
+        """
+        从布尔型条件节点推导审核页开关：下一节点为「是否××」且条件字段为布尔时，
+        前序审批人须显式确认，无需在审批节点重复配置 decisionOnApprove。
+        """
+        if not isinstance(condition_node, dict) or condition_node.get("type") != "condition":
+            return None
+        data = condition_node.get("data") if isinstance(condition_node.get("data"), dict) else {}
+        conditions = data.get("conditions") or data.get("condition_list") or []
+        fields: List[str] = []
+        for cond in conditions:
+            if not isinstance(cond, dict):
+                continue
+            field = str(cond.get("field") or "").strip()
+            if not field:
+                continue
+            op = str(cond.get("operator") or "==").strip()
+            if op not in ("==", "eq", "!=", "ne"):
+                continue
+            if not ApprovalInstanceService._is_booleanish_condition_value(cond.get("value")):
+                continue
+            fields.append(field)
+        uniq = list(dict.fromkeys(fields))
+        if len(uniq) != 1:
+            return None
+        field = uniq[0]
+        label = str(data.get("label") or "").strip() or field
+        return {"field": field, "label": label, "defaultValue": False}
+
+    @staticmethod
+    def _resolve_decision_on_approve_spec(
+        graph: Dict[str, Any],
+        approval_node: dict,
+    ) -> Optional[Dict[str, Any]]:
+        """优先节点显式 decisionOnApprove；否则从下一条件节点推导布尔分支决策。"""
+        data = approval_node.get("data") if isinstance(approval_node.get("data"), dict) else {}
+        explicit = data.get("decisionOnApprove")
+        if isinstance(explicit, dict) and str(explicit.get("field") or "").strip():
+            return {
+                "field": str(explicit.get("field")).strip(),
+                "label": str(explicit.get("label") or explicit.get("field")).strip(),
+                "defaultValue": bool(explicit.get("defaultValue", False)),
+            }
+        node_id = str(approval_node.get("id") or "")
+        if not node_id:
+            return None
+        # 审批节点出边唯一指向条件节点时推导（不带 instance，走第一条出边）
+        next_node = ApprovalInstanceService._get_next_node(graph, node_id, instance=None)
+        return ApprovalInstanceService._infer_decision_spec_from_condition_node(next_node or {})
+
+    @staticmethod
     async def _apply_decision_on_approve(
         instance: ApprovalInstance,
         node_id: Optional[str],
         process_nodes: Any,
         action_data: ApprovalInstanceAction,
     ) -> None:
-        """审批通过时写入节点配置的 decisionOnApprove 字段，供后续条件分支评估。"""
+        """审批通过时写入分支决策字段，供后续条件节点选边。"""
         from core.schemas.approval_flow_schema import get_node_config, normalize_flow_graph
 
         if not node_id:
@@ -2185,12 +2278,12 @@ class ApprovalInstanceService:
         node = get_node_config(graph, str(node_id))
         if not node or node.get("type") != "approval":
             return
-        spec = (node.get("data") or {}).get("decisionOnApprove")
-        if not isinstance(spec, dict):
+        spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, node)
+        if not spec:
             return
         field = str(spec.get("field") or "").strip()
         if not field:
-            raise ValidationError("审批节点 decisionOnApprove 未配置 field")
+            raise ValidationError("审批分支决策未配置 field")
         patch = action_data.instance_data_patch if isinstance(action_data.instance_data_patch, dict) else {}
         if field in patch:
             value = patch[field]
@@ -2976,7 +3069,8 @@ class ApprovalInstanceService:
     @staticmethod
     def _evaluate_conditions(instance: ApprovalInstance, conditions: List[Dict[str, Any]]) -> int:
         """
-        按顺序评估条件，返回第一条满足条件的下标；若无满足则返回 0（默认第一条出边）。
+        按顺序评估条件，返回第一条满足条件的下标。
+        无命中返回 -1（由选边逻辑走最后一条出边 / else，禁止默认第一条误进特批支）。
         条件项：{ "field": str, "operator": str, "value": any }，instance.data 提供字段值。
         """
         if not conditions:
@@ -3015,7 +3109,7 @@ class ApprovalInstanceService:
                         return i
             except (TypeError, ValueError):
                 continue
-        return 0
+        return -1
 
     @staticmethod
     def _get_start_node(nodes: dict) -> Optional[dict]:
@@ -3054,15 +3148,14 @@ class ApprovalInstanceService:
         current_node = next((n for n in node_list if isinstance(n, dict) and n.get("id") == current_node_id), None)
         node_type = (current_node or {}).get("type") if isinstance(current_node, dict) else None
 
-        # 条件节点：按条件选一条出边
+        # 条件节点：按条件选一条出边；无命中走最后一条（else）
         if node_type == "condition" and instance and current_node:
             data = current_node.get("data", {})
             conditions = data.get("conditions") or data.get("condition_list") or []
             edge_index = ApprovalInstanceService._evaluate_conditions(instance, conditions)
-            if 0 <= edge_index < len(out_edges):
-                next_node_id = out_edges[edge_index].get("target")
-            else:
-                next_node_id = out_edges[0].get("target")
+            if edge_index < 0 or edge_index >= len(out_edges):
+                edge_index = len(out_edges) - 1
+            next_node_id = out_edges[edge_index].get("target")
         else:
             next_node_id = out_edges[0].get("target")
 
