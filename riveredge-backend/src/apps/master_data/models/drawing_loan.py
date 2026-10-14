@@ -20,6 +20,10 @@ class DrawingLoan(BaseModel):
     code = fields.CharField(max_length=50, description="借阅单号")
     name = fields.CharField(max_length=200, description="借阅单名称")
     purpose = fields.CharField(max_length=500, null=True, description="借阅用途")
+    borrower_department_id = fields.IntField(null=True, description="借阅部门ID")
+    borrower_department_name = fields.CharField(max_length=200, null=True, description="借阅部门名称")
+    borrower_user_id = fields.IntField(null=True, description="借阅人用户ID")
+    borrower_user_name = fields.CharField(max_length=100, null=True, description="借阅人姓名")
     due_at = fields.DatetimeField(description="应还时间")
     status = fields.CharField(
         max_length=20,

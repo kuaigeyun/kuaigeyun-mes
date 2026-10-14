@@ -47,16 +47,25 @@ def dedicated_rest_to_host_page(dedicated: str, rest: str) -> tuple[str, str, st
     if dr.startswith("master-data/"):
         host_app = "master-data"
         page_dir = mirror.resolve_host_page_dir(host_app, dr)
-    elif dr.startswith("hr/") or dr.startswith("approval/") or dr.startswith("collaboration/") or dr.startswith("compliance/") or dr.startswith("assets/"):
+    elif (
+        dr.startswith("hr/")
+        or dr.startswith("approval/")
+        or dr.startswith("collaboration/")
+        or dr.startswith("compliance/")
+        or dr.startswith("assets/")
+        or dr == "material-requests"
+        or dr.startswith("material-requests/")
+    ):
         host_app = "kuaioa"
         page_dir = mirror.resolve_host_page_dir(host_app, dr)
     else:
         kuaiplm_first = dr.split("/")[0]
         kuaiplm_set = {
-            "dashboard", "pending-inbox", "rd-projects", "rd-deliverables", "change-management",
-            "knowledge-base", "bom-collaborations", "product-firmwares", "production-files",
-            "lab-requests", "lab-board", "lab-judgment-rules", "annual-lab-plans", "trial-flows",
-            "sample-process-applications", "material-reviews", "mold-sample-orders", "prototype-build-sheets",
+            "dashboard", "pending-inbox", "rd-projects", "rd-deliverables", "gate-templates",
+            "change-management", "knowledge-base", "bom-collaborations", "product-firmwares",
+            "production-files", "lab-requests", "lab-board", "lab-judgment-rules", "annual-lab-plans",
+            "trial-flows", "sample-process-applications", "material-reviews", "mold-sample-orders",
+            "prototype-build-sheets",
         }
         if kuaiplm_first in kuaiplm_set or dr.startswith("phase2/"):
             host_app = "kuaiplm"

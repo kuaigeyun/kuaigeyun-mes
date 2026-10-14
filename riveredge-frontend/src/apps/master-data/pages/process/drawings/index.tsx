@@ -1331,6 +1331,14 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           ),
       },
       {
+        title: t('app.master-data.drawings.drawingFormat'),
+        dataIndex: 'drawingFormat',
+        render: (_, r) =>
+          r.drawingFormat
+            ? t(`app.master-data.drawings.drawingFormat.${r.drawingFormat}`)
+            : '-',
+      },
+      {
         title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => <MarkerTag color={STATUS_COLOR[r.status]}>{statusLabel(r.status)}</MarkerTag>,

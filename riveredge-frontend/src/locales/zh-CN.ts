@@ -6400,7 +6400,7 @@ export default {
   // 福尼特 OA（funide-oa）专用定制应用
   'app.funide-oa.name': '福尼特OA',
   'app.funide-oa.menu.workbench': '工作台',
-  'app.funide-oa.menu.dept.rdElectronics': '研发电子',
+  'app.funide-oa.menu.dept.rdElectronics': '研发电子/结构',
   'app.funide-oa.menu.dept.rdProject': '研发项目',
   'app.funide-oa.menu.dept.laboratory': '实验部门',
   'app.funide-oa.menu.dept.quality': '质量管理',
@@ -6455,6 +6455,9 @@ export default {
   'app.funide-oa.menu.licensesAssets': '证照资产',
   'app.funide-oa.menu.licensesAssets.purchases': '固定资产采购',
   'app.funide-oa.menu.r01.drawings': '工程图纸',
+  'app.funide-oa.menu.r01.structureDrawing2d': '2D图',
+  'app.funide-oa.menu.r01.structureDrawing3d': '3D图',
+  'app.funide-oa.menu.r01.structureMoldDfm': '模具图及DFM',
   'app.funide-oa.menu.r01.drawingDistributions': '图纸下发',
   'app.funide-oa.menu.r01.drawingLoans': '图纸借用',
   'app.funide-oa.menu.r01.peSop': '工艺 SOP',
@@ -6462,6 +6465,7 @@ export default {
   'app.funide-oa.menu.r01.systemDocuments': '体系文件',
   'app.funide-oa.menu.r01.knowledgeBase': '知识库',
   'app.funide-oa.menu.r02.labRequests': '实验委托',
+  'app.funide-oa.menu.r02.trialLabRequests': '试验委托',
   'app.funide-oa.menu.r02.labBoard': '委托看板',
   'app.funide-oa.menu.r02.labJudgmentRules': '判定规则',
   'app.funide-oa.menu.r03.supplierEvaluations': '供方评价',
@@ -6473,9 +6477,9 @@ export default {
   'app.funide-oa.menu.r05.complaintAnalysis': '投诉月度分析',
   'app.funide-oa.menu.r06.deliverables': '交付物',
   'app.funide-oa.menu.r06.productFirmwares': '产品固件',
-  'app.funide-oa.productFirmware.fields.softwareItemCode': '软件12编码',
-  'app.funide-oa.productFirmware.fields.softwareItemCodePlaceholder': '请输入12位软件编码',
-  'app.funide-oa.productFirmware.messages.softwareItemCodeLength': '软件编码须为12位',
+  'app.funide-oa.productFirmware.fields.softwareItemCode': '软件编码',
+  'app.funide-oa.productFirmware.fields.softwareItemCodePlaceholder': '请输入软件编码（可含横杠等分隔符）',
+  'app.funide-oa.productFirmware.messages.softwareItemCodeMaxLength': '软件编码不能超过50个字符',
   'app.funide-oa.menu.r06.productionFiles': '生产软件',
   'app.funide-oa.menu.docControl.deliverables': '交付物',
   'app.funide-oa.menu.r07.annualLabPlans': '年度例试计划',
@@ -6504,6 +6508,24 @@ export default {
   'app.funide-oa.menu.r15.projectProposals': '项目建议书',
   'app.funide-oa.menu.r15.bomCollaborations': 'BOM 协同',
   'app.funide-oa.menu.r15.moldSampleOrders': '打样订单',
+  'app.funide-oa.menu.sampleFlow.materialRequests': '物料申请',
+  'app.funide-oa.materialRequest.createButton': '新建物料申请',
+  'app.funide-oa.materialRequest.hintTitle': '样品试流物料申请',
+  'app.funide-oa.materialRequest.hintBody':
+    '走轻办公通用会签流程，涉及仓库、生产、品质、研发等部门协同；请填写物料编码与申请说明，可按需上传 xls 或 pdf 申请单附件。',
+  'app.funide-oa.materialRequest.templateMissing':
+    '尚未同步物料申请模板，请在应用中心启用 funide-oa 后执行菜单同步，或联系管理员加载 funide_material_request 预置模板。',
+  'app.funide-oa.materialRequest.templateLoadFailed': '加载物料申请模板失败',
+  'app.funide-oa.moldSampleOrder.createTitle': '新建打样订单',
+  'app.funide-oa.moldSampleOrder.editTitle': '编辑打样订单',
+  'app.funide-oa.moldSampleOrder.createButton': '新建打样订单',
+  'app.funide-oa.moldSampleOrder.fields.materialKind': '物料种类',
+  'app.funide-oa.moldSampleOrder.fields.materialName': '物料名称',
+  'app.funide-oa.moldSampleOrder.materialKindRequired': '请选择物料种类',
+  'app.funide-oa.moldSampleOrder.materialNamePlaceholder': '如塑壳、导电胶、电容',
+  'app.funide-oa.moldSampleOrder.materialKind.structural_part': '结构件',
+  'app.funide-oa.moldSampleOrder.materialKind.electronic_component': '电子元器件',
+  'app.funide-oa.moldSampleOrder.materialKind.packaging_material': '包装材料',
   'app.funide-oa.menu.r16.labelStation': '标签打印工位',
   'app.funide-oa.menu.r16.packingBinding': '装箱绑定',
   'app.funide-oa.menu.r16.labelOem': 'OEM 标签签样',
@@ -22069,12 +22091,16 @@ export default {
   'app.master-data.menu.process.engineering-bom.designer': 'BOM设计',
   'app.master-data.menu.process.sop': '标准操作 (SOP)',
   'app.master-data.menu.process.sop.designer': 'SOP设计',
-  'app.master-data.drawings.code': '图号',
+  'app.master-data.drawings.code': '项目名称/图号',
+  'app.master-data.drawings.drawingFormat': '图档格式',
+  'app.master-data.drawings.drawingFormat.2d': '2D',
+  'app.master-data.drawings.drawingFormat.3d': '3D',
   'app.master-data.drawings.name': '图纸名称',
   'app.master-data.drawings.revision': '修订版',
   'app.master-data.drawings.type': '图纸类型',
   'app.master-data.drawings.file': '主文件',
   'app.master-data.drawings.supplementaryFiles': '附加文件',
+  'app.master-data.drawings.detailSectionFiles': '图纸文件',
   'app.master-data.drawings.project': '关联项目',
   'app.master-data.drawings.projectPlaceholder': '选择项目或手填项目代号',
   'app.master-data.drawings.materials': '关联物料',
@@ -31222,6 +31248,14 @@ export default {
     '样品试流菜单更正为样品加工，资料发布日期固定当天',
   'pages.dashboard.updateLog.entries.funide-oa-sample-process-menu-release-date-r01.description':
     '侧栏「样品检验」更正为「样品加工」，与新建按钮及单据一致（样品检验单为另一单据）。新建时资料发布日期自动取站点当天且不可改选。',
+  'pages.dashboard.updateLog.entries.funide-oa-gate-templates-menu-r01.title':
+    '定制应用增加阶段管理菜单',
+  'pages.dashboard.updateLog.entries.funide-oa-gate-templates-menu-r01.description':
+    '福尼特 OA 研发项目分组下新增「阶段管理」，可在定制入口维护 NPI 阶段模板，与新建研发项目的阶段模板下拉一致；需角色具备阶段模板读取权限。',
+  'pages.dashboard.updateLog.entries.funide-oa-product-firmware-software-code-no-fixed-len-r01.title':
+    '产品固件软件编码取消固定位数',
+  'pages.dashboard.updateLog.entries.funide-oa-product-firmware-software-code-no-fixed-len-r01.description':
+    '新建编辑产品固件时软件编码不再限制为12位字符，可录入带横杠等分隔符的完整编码（最长50字符）。',
   'pages.dashboard.updateLog.entries.funide-oa-product-firmware-software-item-code-r01.title':
     '产品固件可填写软件12编码',
   'pages.dashboard.updateLog.entries.funide-oa-product-firmware-software-item-code-r01.description':
@@ -31342,6 +31376,42 @@ export default {
     '例试委托材料与整机双流程',
   'pages.dashboard.updateLog.entries.kuaiplm-l52-lab-request-workflow-r01.description':
     '材料试验与整机例试提交审批后进入待提交实验室，再提交实验室受理；整机支持结构/电子分区填写与双经理审核模板；实验完成可通知项目负责人与指定关注人。',
+  'pages.dashboard.updateLog.entries.funide-oa-sample-flow-material-request-menu-r01.title':
+    '定制样品试流增加物料申请入口',
+  'pages.dashboard.updateLog.entries.funide-oa-sample-flow-material-request-menu-r01.description':
+    '样品试流菜单下新增「物料申请」，对接轻办公 material_request 会签与 funide_material_request 模板，供仓库、生产、品质、研发协同填写与审批。',
+  'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.title':
+    '样品加工研发项目支持手填代号',
+  'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.description':
+    '新建样品加工申请时，研发项目可从系统项目选择，也可直接输入项目代号，不再因项目主数据未建档而无法保存。',
+  'pages.dashboard.updateLog.entries.kuaiplm-business-file-upload-delete-r01.title':
+    '产品固件等业务附件上传删除与单据权限对齐',
+  'pages.dashboard.updateLog.entries.kuaiplm-business-file-upload-delete-r01.description':
+    '拥有产品固件等快研发单据新建或编辑权限的角色，可在弹窗内上传与移除固件附件，不再因缺少系统文件权限出现上传失败或「权限不足」提示；服务端删除文件与上传采用同一套业务写权限校验。',
+  'pages.dashboard.updateLog.entries.drawing-distribution-loan-party-r01.title':
+    '图档发放与借阅登记部门和使用人',
+  'pages.dashboard.updateLog.entries.drawing-distribution-loan-party-r01.description':
+    '图档发放新建/编辑增加部门与使用人；图档借阅在表头与明细之间增加借阅部门与借阅人；列表与详情同步展示。',
+  'pages.dashboard.updateLog.entries.engineering-drawing-format-field-r01.title':
+    '工程图纸新建增加图档格式',
+  'pages.dashboard.updateLog.entries.engineering-drawing-format-field-r01.description':
+    '工程图纸新建/编辑将原「图号」改为「项目名称/图号」，并增加图档格式（2D/3D）可选字段；详情同步展示。',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-flow-header-material-supplier-r01.title':
+    '定制试流单增加物料名称与供应商',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-flow-header-material-supplier-r01.description':
+    '试流单新建/编辑在标题下方增加物料名称、供应商两行手填字段，保存至试流头扩展信息；列表与详情同步展示。',
+  'pages.dashboard.updateLog.entries.funide-oa-mold-sample-order-material-fields-r01.title':
+    '定制打样订单增加物料种类与物料名称',
+  'pages.dashboard.updateLog.entries.funide-oa-mold-sample-order-material-fields-r01.description':
+    '打样订单新建/编辑将原「单据种类」改为物料种类（结构件、电子元器件、包装材料），并增加物料名称手填行；列表与详情同步展示。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-structure-menu-r01.title':
+    '定制研发电子/结构菜单与结构图纸入口',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-structure-menu-r01.description':
+    '菜单组改名为研发电子/结构；工程图纸下挂 2D图、3D图、模具图及DFM（交付物类型预置）；试验委托入口预置通用委托类型。',
+  'pages.dashboard.updateLog.entries.funide-oa-drawing-detail-files-section-r01.title':
+    '定制工程图纸详情独立图纸文件板块',
+  'pages.dashboard.updateLog.entries.funide-oa-drawing-detail-files-section-r01.description':
+    '图纸详情将主文件与附加文件从基本信息拆出为「图纸文件」板块；点击文件名直接打开预览组件，不再落到列表内联预览。',
   'pages.dashboard.updateLog.entries.funide-oa-l06-rework-direct-create-r02.title':
     '福尼特OA返工单可不取单直接新建',
   'pages.dashboard.updateLog.entries.funide-oa-l06-rework-direct-create-r02.description':
@@ -42656,6 +42726,12 @@ export default {
   'app.master-data.drawingDistributions.linesRequired': '请至少添加一行发放明细',
   'app.master-data.drawingDistributions.name': '发放单名称',
   'app.master-data.drawingDistributions.nameRequired': '请输入发放单名称',
+  'app.master-data.drawingDistributions.issueDepartment': '部门',
+  'app.master-data.drawingDistributions.issueDepartmentPlaceholder': '请选择部门',
+  'app.master-data.drawingDistributions.issueDepartmentRequired': '请选择部门',
+  'app.master-data.drawingDistributions.recipientUser': '使用人',
+  'app.master-data.drawingDistributions.recipientUserPlaceholder': '请选择使用人',
+  'app.master-data.drawingDistributions.partyRequired': '请填写部门与使用人',
   'app.master-data.drawingDistributions.create': '新建图档发放',
   'app.master-data.drawingDistributions.createTitle': '新建图档发放',
   'app.master-data.drawingDistributions.editTitle': '编辑图档发放',
@@ -42681,6 +42757,14 @@ export default {
   'app.master-data.drawingLoans.clearanceUser': '授权用户',
   'app.master-data.drawingLoans.clearanceUserRequired': '请选择授权用户',
   'app.master-data.drawingLoans.create': '新建图纸借阅',
+  'app.master-data.drawingLoans.createTitle': '新建图纸借阅',
+  'app.master-data.drawingLoans.editTitle': '编辑图纸借阅',
+  'app.master-data.drawingLoans.borrowerDepartment': '借阅部门',
+  'app.master-data.drawingLoans.borrowerDepartmentPlaceholder': '请选择借阅部门',
+  'app.master-data.drawingLoans.borrowerDepartmentRequired': '请选择借阅部门',
+  'app.master-data.drawingLoans.borrowerUser': '借阅人',
+  'app.master-data.drawingLoans.borrowerUserPlaceholder': '请选择借阅人',
+  'app.master-data.drawingLoans.partyRequired': '请填写借阅部门与借阅人',
   'app.master-data.drawingLoans.code': '借阅单号',
   'app.master-data.drawingLoans.complete': '归还',
   'app.master-data.drawingLoans.completeConfirm': '确认归还该借阅单？',

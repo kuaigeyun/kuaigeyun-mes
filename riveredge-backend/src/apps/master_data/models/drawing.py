@@ -57,13 +57,18 @@ class EngineeringDrawing(BaseModel):
 
     id = fields.IntField(pk=True, description="主键ID")
 
-    code = fields.CharField(max_length=50, description="图号")
+    code = fields.CharField(max_length=50, description="项目名称/图号")
     name = fields.CharField(max_length=200, description="图纸名称")
     revision = fields.CharField(max_length=20, default="A", description="修订版")
     drawing_type = fields.CharField(
         max_length=20,
         default="part",
         description="类型：part/assembly/process/other/product_spec",
+    )
+    drawing_format = fields.CharField(
+        max_length=10,
+        null=True,
+        description="图档格式：2d/3d",
     )
     status = fields.CharField(
         max_length=20,

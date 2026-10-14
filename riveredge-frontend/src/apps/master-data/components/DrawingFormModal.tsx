@@ -235,6 +235,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           processRouteUuids: detail.processRouteUuids ?? [],
           operationUuids: detail.operationUuids ?? [],
           folderUuid: detail.folderUuid ?? undefined,
+          drawingFormat: detail.drawingFormat ?? undefined,
           description: detail.description,
         });
         const fieldFormValues = await loadFieldValues(detail.id);
@@ -321,6 +322,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           operationUuids: (standardValues.operationUuids as string[]) ?? [],
           folderUuid: (standardValues.folderUuid as string | undefined) ?? null,
           securityLevel: standardValues.securityLevel as EngineeringDrawingCreate['securityLevel'],
+          drawingFormat: (standardValues.drawingFormat as EngineeringDrawingCreate['drawingFormat']) ?? null,
           description: standardValues.description as string | undefined,
         });
         messageApi.success(t('common.updateSuccess'));
@@ -356,6 +358,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           operationUuids: (standardValues.operationUuids as string[]) ?? undefined,
           folderUuid: (standardValues.folderUuid as string | undefined) ?? defaultFolderUuid ?? null,
           securityLevel: (standardValues.securityLevel as EngineeringDrawingCreate['securityLevel']) || 'internal',
+          drawingFormat: (standardValues.drawingFormat as EngineeringDrawingCreate['drawingFormat']) ?? undefined,
           description: standardValues.description as string | undefined,
         });
         await saveCustomFieldValues(created.id, customData);
@@ -449,6 +452,16 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         colProps={{ span: 12 }}
       />
       <FolderTreeSelectField folders={folders} />
+      <ProFormSelect
+        name="drawingFormat"
+        label={t('app.master-data.drawings.drawingFormat')}
+        allowClear
+        options={[
+          { label: t('app.master-data.drawings.drawingFormat.2d'), value: '2d' },
+          { label: t('app.master-data.drawings.drawingFormat.3d'), value: '3d' },
+        ]}
+        colProps={{ span: 12 }}
+      />
       <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} gridColumns={2} />
       <ProFormUploadDragger
         name="mainFile"

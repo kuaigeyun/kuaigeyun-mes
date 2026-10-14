@@ -14,6 +14,7 @@ DRAWING_TYPE_MAX_LENGTH = 20
 DRAWING_STATUSES = {"Draft", "Editing", "Pending", "Released", "Obsolete"}
 DRAWING_WORKING_STATUSES = {"Draft", "Editing", "Pending"}
 DRAWING_SECURITY_LEVELS = {"public", "internal", "secret", "confidential"}
+DRAWING_FORMATS = frozenset({"2d", "3d"})
 
 
 class AssociatedMaterialBrief(BaseModel):
@@ -82,7 +83,10 @@ class FileBriefResponse(BaseModel):
 
 
 class EngineeringDrawingBase(BaseModel):
-    code: str = Field(..., max_length=50, description="图号")
+    code: str = Field(..., max_length=50, description="项目名称/图号")
+    drawing_format: Optional[str] = Field(
+        None, alias="drawingFormat", max_length=10, description="图档格式 2d/3d"
+    )
     name: str = Field(..., max_length=200, description="图纸名称")
     revision: str = Field("A", max_length=20, description="修订版")
     drawing_type: str = Field("part", alias="drawingType", description="图纸类型")
@@ -105,7 +109,7 @@ class EngineeringDrawingBase(BaseModel):
     @classmethod
     def validate_code(cls, v: str) -> str:
         if not v or not v.strip():
-            raise ValueError("图号不能为空")
+            raise ValueError("项目名称/图号不能为空")
         return v.strip().upper()
 
     @field_validator("name")
@@ -143,6 +147,16 @@ class EngineeringDrawingBase(BaseModel):
             raise ValueError(f"密级无效，允许: {', '.join(sorted(DRAWING_SECURITY_LEVELS))}")
         return val
 
+    @field_validator("drawing_format")
+    @classmethod
+    def validate_drawing_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not str(v).strip():
+            return None
+        val = str(v).strip().lower()
+        if val not in DRAWING_FORMATS:
+            raise ValueError(f"图档格式无效，允许: 2d, 3d")
+        return val
+
 
 class EngineeringDrawingCreate(EngineeringDrawingBase):
     pass
@@ -160,6 +174,7 @@ class EngineeringDrawingUpdate(BaseModel):
     operation_uuids: Optional[List[str]] = Field(None, alias="operationUuids")
     folder_uuid: Optional[str] = Field(None, alias="folderUuid")
     security_level: Optional[str] = Field(None, alias="securityLevel")
+    drawing_format: Optional[str] = Field(None, alias="drawingFormat", max_length=10)
     description: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
@@ -180,6 +195,11 @@ class EngineeringDrawingUpdate(BaseModel):
         if val not in DRAWING_SECURITY_LEVELS:
             raise ValueError(f"密级无效，允许: {', '.join(sorted(DRAWING_SECURITY_LEVELS))}")
         return val
+
+    @field_validator("drawing_format")
+    @classmethod
+    def validate_drawing_format(cls, v: Optional[str]) -> Optional[str]:
+        return EngineeringDrawingBase.validate_drawing_format(v)
 
 
 class EngineeringDrawingResponse(EngineeringDrawingBase):

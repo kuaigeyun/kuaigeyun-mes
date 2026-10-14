@@ -44,8 +44,9 @@ from core.schemas.private_file_vault import (
     PrivateFileVaultUnlockResponse,
 )
 from core.api.deps.deps import get_current_tenant
-from core.api.deps.access import AuthContext, require_permission_codes
+from core.api.deps.access import AuthContext, get_auth_context, require_permission_codes
 from core.api.deps.file_upload_access import require_file_upload_access
+from core.api.deps.file_delete_access import assert_file_delete_access, require_file_delete_access
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -822,7 +823,7 @@ async def delete_file(
     uuid: str,
     x_private_vault_token: Optional[str] = Header(None, alias=VAULT_TOKEN_HEADER),
     x_private_vault_scope: Optional[str] = Header(None, alias=VAULT_SCOPE_HEADER),
-    _auth: object = Depends(require_permission_codes("system:file:delete")),
+    _auth: AuthContext = Depends(require_file_delete_access()),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -860,10 +861,11 @@ async def delete_file(
 
 @router.post("/batch-delete", status_code=status.HTTP_200_OK)
 async def batch_delete_files(
+    request: Request,
     uuids: List[str],
     x_private_vault_token: Optional[str] = Header(None, alias=VAULT_TOKEN_HEADER),
     x_private_vault_scope: Optional[str] = Header(None, alias=VAULT_SCOPE_HEADER),
-    _auth: object = Depends(require_permission_codes("system:file:delete")),
+    auth: AuthContext = Depends(get_auth_context),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -882,6 +884,12 @@ async def batch_delete_files(
     for file_uuid in uuids:
         try:
             existing = await FileService.get_file_by_uuid(tenant_id=tenant_id, uuid=file_uuid)
+            await assert_file_delete_access(
+                auth=auth,
+                tenant_id=tenant_id,
+                request=request,
+                file_category=existing.category,
+            )
             await PrivateFileVaultService.assert_file_manager_vault_access(
                 tenant_id,
                 current_user.id,

@@ -44,6 +44,38 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaiplm-sample-process-manual-project-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.description',
+  },
+  {
+    id: 'kuaiplm-business-file-upload-delete-r01',
+    date: '2026-10-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-business-file-upload-delete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-business-file-upload-delete-r01.description',
+  },
+  {
+    id: 'drawing-distribution-loan-party-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-distribution-loan-party-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-distribution-loan-party-r01.description',
+  },
+  {
+    id: 'engineering-drawing-format-field-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.engineering-drawing-format-field-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.engineering-drawing-format-field-r01.description',
+  },
+  {
     id: 'kuaiai-hub-load-perf-r01',
     date: '2026-10-14',
     type: 'improvement',

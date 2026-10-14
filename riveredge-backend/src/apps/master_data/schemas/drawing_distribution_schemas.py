@@ -26,6 +26,8 @@ class DrawingDistributionLineResponse(BaseModel):
 class DrawingDistributionCreate(BaseModel):
     code: Optional[str] = Field(None, max_length=50)
     name: str = Field(..., max_length=200)
+    issue_department_id: int = Field(..., alias="issueDepartmentId")
+    recipient_user_id: int = Field(..., alias="recipientUserId")
     remark: Optional[str] = None
     lines: List[DrawingDistributionLineInput] = Field(default_factory=list)
 
@@ -42,6 +44,8 @@ class DrawingDistributionCreate(BaseModel):
 
 class DrawingDistributionUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
+    issue_department_id: Optional[int] = Field(None, alias="issueDepartmentId")
+    recipient_user_id: Optional[int] = Field(None, alias="recipientUserId")
     remark: Optional[str] = None
     lines: Optional[List[DrawingDistributionLineInput]] = None
 
@@ -60,6 +64,11 @@ class DrawingDistributionResponse(BaseModel):
     tenant_id: int = Field(..., alias="tenantId")
     code: str
     name: str
+    issue_department_id: Optional[int] = Field(None, alias="issueDepartmentId")
+    issue_department_name: Optional[str] = Field(None, alias="issueDepartmentName")
+    recipient_user_id: Optional[int] = Field(None, alias="recipientUserId")
+    recipient_user_name: Optional[str] = Field(None, alias="recipientUserName")
+    recipient_user_uuid: Optional[str] = Field(None, alias="recipientUserUuid")
     status: str
     remark: Optional[str] = None
     issued_at: Optional[datetime] = Field(None, alias="issuedAt")

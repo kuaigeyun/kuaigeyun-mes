@@ -4,7 +4,14 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import {
+  ActionType,
+  ProColumns,
+  ProFormInstance,
+  ProFormItem,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
 import { App, Button, Col, Descriptions, Form, Input, Row, Select, Space, Switch, Table } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
@@ -42,6 +49,13 @@ import {
   type DrawingDistribution,
   type DrawingDistributionStatus,
 } from '../../../services/drawingDistribution';
+import { getDepartmentTree } from '../../../../../services/department';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniUserSelect } from '../../../../../components/uni-user-select';
+import {
+  flattenDepartmentTreeOptions,
+  type DepartmentPickerOption,
+} from '../../../utils/flattenDepartmentTreeOptions';
 
 const RESOURCE = 'master-data:process:drawing-distribution';
 
@@ -76,11 +90,27 @@ const DrawingDistributionsPage: React.FC = () => {
   const [policyEnabled, setPolicyEnabled] = useState(false);
   const [policyLoading, setPolicyLoading] = useState(false);
   const [releasedDrawings, setReleasedDrawings] = useState<EngineeringDrawing[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<DepartmentPickerOption[]>([]);
+  const [issueDepartmentUuid, setIssueDepartmentUuid] = useState<string | undefined>();
 
   useEffect(() => {
     void drawingDistributionApi.getPolicy().then((p) => setPolicyEnabled(!!p.isEnabled));
     void drawingApi.list({ status: 'Released', limit: 200 }).then((res) => setReleasedDrawings(res.data ?? []));
+    void getDepartmentTree({ is_active: true })
+      .then((res) => setDepartmentOptions(flattenDepartmentTreeOptions(res?.items ?? [])))
+      .catch(() => setDepartmentOptions([]));
   }, []);
+
+  useEffect(() => {
+    if (!modalOpen) {
+      setIssueDepartmentUuid(undefined);
+      return;
+    }
+    if (editing?.issueDepartmentId != null) {
+      const match = departmentOptions.find((item) => item.value === editing.issueDepartmentId);
+      setIssueDepartmentUuid(match?.uuid);
+    }
+  }, [modalOpen, editing, departmentOptions]);
 
   const reload = useCallback(() => {
     actionRef.current?.reload();
@@ -162,6 +192,26 @@ const DrawingDistributionsPage: React.FC = () => {
         minWidth: 160,
         uniTableRemainderFlex: true,
         uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: true,
+      },
+      {
+        title: t('app.master-data.drawingDistributions.issueDepartment'),
+        dataIndex: 'issueDepartmentName',
+        hideInSearch: true,
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+      },
+      {
+        title: t('app.master-data.drawingDistributions.recipientUser'),
+        dataIndex: 'recipientUserName',
+        hideInSearch: true,
+        width: 96,
+        minWidth: 96,
+        uniTableKeepWidth: true,
         resizable: false,
         ellipsis: true,
       },
@@ -332,6 +382,14 @@ const DrawingDistributionsPage: React.FC = () => {
           { title: t('app.master-data.drawingDistributions.code'), dataIndex: 'code' },
           { title: t('app.master-data.drawingDistributions.name'), dataIndex: 'name' },
           {
+            title: t('app.master-data.drawingDistributions.issueDepartment'),
+            dataIndex: 'issueDepartmentName',
+          },
+          {
+            title: t('app.master-data.drawingDistributions.recipientUser'),
+            dataIndex: 'recipientUserName',
+          },
+          {
             title: t('app.master-data.drawingDistributions.issuedAt'),
             dataIndex: 'issuedAt',
             render: (_, row) => (row.issuedAt ? formatDateTimeBySiteSetting(row.issuedAt) : '-'),
@@ -368,7 +426,7 @@ const DrawingDistributionsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.master-data.pages.process.drawing-distributions.v4"
+        columnPersistenceId="apps.master-data.pages.process.drawing-distributions.v5"
         showAdvancedSearch
         pinnedTabsField="status"
         showCreateButton={perms.canCreate}
@@ -444,6 +502,7 @@ const DrawingDistributionsPage: React.FC = () => {
         onClose={() => {
           setModalOpen(false);
           setEditing(null);
+          setIssueDepartmentUuid(undefined);
           formRef.current?.resetFields();
         }}
         isEdit={!!editing}
@@ -452,12 +511,29 @@ const DrawingDistributionsPage: React.FC = () => {
         grid={false}
         initialValues={
           editing
-            ? { name: editing.name, remark: editing.remark, lines: editing.lines?.map((line) => ({ drawingUuid: line.drawingUuid })) ?? [] }
+            ? {
+                name: editing.name,
+                issueDepartmentId: editing.issueDepartmentId,
+                recipientUserUuid: editing.recipientUserUuid,
+                recipientUserId: editing.recipientUserId,
+                remark: editing.remark,
+                lines: editing.lines?.map((line) => ({ drawingUuid: line.drawingUuid })) ?? [],
+              }
             : { lines: [{}] }
         }
         onFinish={async (values) => {
           const lines = ((values.lines as FormLine[]) || []).filter((line) => line.drawingUuid);
-          const payload = { name: values.name, remark: values.remark, lines };
+          if (!values.issueDepartmentId || !values.recipientUserId) {
+            messageApi.error(t('app.master-data.drawingDistributions.partyRequired'));
+            return;
+          }
+          const payload = {
+            name: values.name,
+            issueDepartmentId: values.issueDepartmentId,
+            recipientUserId: values.recipientUserId,
+            remark: values.remark,
+            lines,
+          };
           if (editing) {
             await drawingDistributionApi.update(editing.uuid, payload);
           } else {
@@ -470,12 +546,48 @@ const DrawingDistributionsPage: React.FC = () => {
         }}
       >
         <Row gutter={16}>
-          <Col span={12}>
+          <Col span={8}>
             <ProFormText
               name="name"
               label={t('app.master-data.drawingDistributions.name')}
               rules={[{ required: true, message: t('app.master-data.drawingDistributions.nameRequired') }]}
             />
+          </Col>
+          <Col span={8}>
+            <ProFormItem
+              name="issueDepartmentId"
+              label={t('app.master-data.drawingDistributions.issueDepartment')}
+              rules={[{ required: true, message: t('app.master-data.drawingDistributions.issueDepartmentRequired') }]}
+            >
+              <UniDropdown
+                placeholder={t('app.master-data.drawingDistributions.issueDepartmentPlaceholder')}
+                options={departmentOptions.map((item) => ({ label: item.label, value: item.value }))}
+                showSearch
+                optionFilterProp="label"
+                onChange={(value) => {
+                  const match = departmentOptions.find((item) => item.value === value);
+                  setIssueDepartmentUuid(match?.uuid);
+                  formRef.current?.setFieldsValue({ recipientUserUuid: undefined, recipientUserId: undefined });
+                }}
+              />
+            </ProFormItem>
+          </Col>
+          <Col span={8}>
+            <UniUserSelect
+              name="recipientUserUuid"
+              label={t('app.master-data.drawingDistributions.recipientUser')}
+              placeholder={t('app.master-data.drawingDistributions.recipientUserPlaceholder')}
+              required
+              departmentUuid={issueDepartmentUuid}
+              onChange={(_value: unknown, user: unknown) => {
+                const picked = Array.isArray(user) ? user[0] : user;
+                const id = picked && typeof picked === 'object' && 'id' in picked ? (picked as { id: number }).id : undefined;
+                formRef.current?.setFieldsValue({ recipientUserId: id });
+              }}
+            />
+            <Form.Item name="recipientUserId" hidden>
+              <Input />
+            </Form.Item>
           </Col>
         </Row>
         <UniTableDetail

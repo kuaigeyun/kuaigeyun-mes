@@ -28,6 +28,8 @@ class DrawingLoanCreate(BaseModel):
     code: Optional[str] = Field(None, max_length=50)
     name: str = Field(..., max_length=200)
     purpose: Optional[str] = Field(None, max_length=500)
+    borrower_department_id: int = Field(..., alias="borrowerDepartmentId")
+    borrower_user_id: int = Field(..., alias="borrowerUserId")
     due_at: datetime = Field(..., alias="dueAt")
     lines: List[DrawingLoanLineInput] = Field(default_factory=list)
 
@@ -45,6 +47,8 @@ class DrawingLoanCreate(BaseModel):
 class DrawingLoanUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
     purpose: Optional[str] = Field(None, max_length=500)
+    borrower_department_id: Optional[int] = Field(None, alias="borrowerDepartmentId")
+    borrower_user_id: Optional[int] = Field(None, alias="borrowerUserId")
     due_at: Optional[datetime] = Field(None, alias="dueAt")
     lines: Optional[List[DrawingLoanLineInput]] = None
 
@@ -58,6 +62,11 @@ class DrawingLoanResponse(BaseModel):
     code: str
     name: str
     purpose: Optional[str] = None
+    borrower_department_id: Optional[int] = Field(None, alias="borrowerDepartmentId")
+    borrower_department_name: Optional[str] = Field(None, alias="borrowerDepartmentName")
+    borrower_user_id: Optional[int] = Field(None, alias="borrowerUserId")
+    borrower_user_name: Optional[str] = Field(None, alias="borrowerUserName")
+    borrower_user_uuid: Optional[str] = Field(None, alias="borrowerUserUuid")
     due_at: datetime = Field(..., alias="dueAt")
     status: str
     returned_at: Optional[datetime] = Field(None, alias="returnedAt")

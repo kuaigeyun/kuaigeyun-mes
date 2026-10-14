@@ -9,6 +9,82 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-gate-templates-menu-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-gate-templates-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-gate-templates-menu-r01.description',
+  },
+  {
+    id: 'funide-oa-product-firmware-software-code-no-fixed-len-r01',
+    date: '2026-10-14',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-product-firmware-software-code-no-fixed-len-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-product-firmware-software-code-no-fixed-len-r01.description',
+  },
+  {
+    id: 'funide-oa-sample-flow-material-request-menu-r01',
+    date: '2026-10-14',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-sample-flow-material-request-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-sample-flow-material-request-menu-r01.description',
+  },
+  {
+    id: 'funide-oa-trial-flow-header-material-supplier-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-header-material-supplier-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-header-material-supplier-r01.description',
+  },
+  {
+    id: 'funide-oa-mold-sample-order-material-fields-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-mold-sample-order-material-fields-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-mold-sample-order-material-fields-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-electronics-structure-menu-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-structure-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-structure-menu-r01.description',
+  },
+  {
+    id: 'funide-oa-drawing-detail-files-section-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-drawing-detail-files-section-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-drawing-detail-files-section-r01.description',
+  },
+  {
     id: 'funide-oa-l06-rework-direct-create-r02',
     date: '2026-10-10',
     type: 'fix',

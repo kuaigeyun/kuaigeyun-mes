@@ -9,10 +9,11 @@ import {
   ProColumns,
   ProFormDateTimePicker,
   ProFormInstance,
+  ProFormItem,
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Descriptions, Form, Row, Select, Space, Table } from 'antd';
+import { App, Button, Col, Descriptions, Form, Input, Row, Select, Space, Table } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
@@ -52,6 +53,13 @@ import {
 } from '../../../services/drawingLoan';
 import { getUserList } from '../../../../../services/user';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { getDepartmentTree } from '../../../../../services/department';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniUserSelect } from '../../../../../components/uni-user-select';
+import {
+  flattenDepartmentTreeOptions,
+  type DepartmentPickerOption,
+} from '../../../utils/flattenDepartmentTreeOptions';
 
 const RESOURCE = 'master-data:process:drawing-loan';
 
@@ -98,10 +106,26 @@ const DrawingLoansPage: React.FC = () => {
   const [clearanceOpen, setClearanceOpen] = useState(false);
   const [clearances, setClearances] = useState<DrawingClearance[]>([]);
   const [userOptions, setUserOptions] = useState<Array<{ label: string; value: number }>>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<DepartmentPickerOption[]>([]);
+  const [borrowerDepartmentUuid, setBorrowerDepartmentUuid] = useState<string | undefined>();
 
   useEffect(() => {
     void drawingApi.list({ status: 'Released', limit: 200 }).then((res) => setReleasedDrawings(res.data ?? []));
+    void getDepartmentTree({ is_active: true })
+      .then((res) => setDepartmentOptions(flattenDepartmentTreeOptions(res?.items ?? [])))
+      .catch(() => setDepartmentOptions([]));
   }, []);
+
+  useEffect(() => {
+    if (!modalOpen) {
+      setBorrowerDepartmentUuid(undefined);
+      return;
+    }
+    if (editing?.borrowerDepartmentId != null) {
+      const match = departmentOptions.find((item) => item.value === editing.borrowerDepartmentId);
+      setBorrowerDepartmentUuid(match?.uuid);
+    }
+  }, [modalOpen, editing, departmentOptions]);
 
   const reload = useCallback(() => {
     actionRef.current?.reload();
@@ -201,6 +225,26 @@ const DrawingLoansPage: React.FC = () => {
         hideInSearch: true,
         width: 160,
         minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+      },
+      {
+        title: t('app.master-data.drawingLoans.borrowerDepartment'),
+        dataIndex: 'borrowerDepartmentName',
+        hideInSearch: true,
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+      },
+      {
+        title: t('app.master-data.drawingLoans.borrowerUser'),
+        dataIndex: 'borrowerUserName',
+        hideInSearch: true,
+        width: 96,
+        minWidth: 96,
         uniTableKeepWidth: true,
         resizable: false,
         ellipsis: true,
@@ -362,6 +406,11 @@ const DrawingLoansPage: React.FC = () => {
           { title: t('app.master-data.drawingLoans.name'), dataIndex: 'name' },
           { title: t('app.master-data.drawingLoans.purpose'), dataIndex: 'purpose' },
           {
+            title: t('app.master-data.drawingLoans.borrowerDepartment'),
+            dataIndex: 'borrowerDepartmentName',
+          },
+          { title: t('app.master-data.drawingLoans.borrowerUser'), dataIndex: 'borrowerUserName' },
+          {
             title: t('app.master-data.drawingLoans.dueAt'),
             dataIndex: 'dueAt',
             render: (_, row) => (row.dueAt ? formatDateTimeBySiteSetting(row.dueAt) : '-'),
@@ -395,7 +444,7 @@ const DrawingLoansPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.master-data.pages.process.drawing-loans.v3"
+        columnPersistenceId="apps.master-data.pages.process.drawing-loans.v4"
         showAdvancedSearch
         pinnedTabsField="status"
         showCreateButton={perms.canCreate}
@@ -453,11 +502,14 @@ const DrawingLoansPage: React.FC = () => {
 
       <FormModalTemplate
         key={editing?.uuid ?? 'create'}
-        title={editing ? t('common.edit') : t('common.create')}
+        title={
+          editing ? t('app.master-data.drawingLoans.editTitle') : t('app.master-data.drawingLoans.createTitle')
+        }
         open={modalOpen}
         onClose={() => {
           setModalOpen(false);
           setEditing(null);
+          setBorrowerDepartmentUuid(undefined);
           formRef.current?.resetFields();
         }}
         isEdit={!!editing}
@@ -470,6 +522,9 @@ const DrawingLoansPage: React.FC = () => {
                 name: editing.name,
                 purpose: editing.purpose,
                 dueAt: editing.dueAt,
+                borrowerDepartmentId: editing.borrowerDepartmentId,
+                borrowerUserUuid: editing.borrowerUserUuid,
+                borrowerUserId: editing.borrowerUserId,
                 lines: editing.lines?.map((line) => ({ drawingUuid: line.drawingUuid })) ?? [],
               }
             : { lines: [{}] }
@@ -481,7 +536,18 @@ const DrawingLoansPage: React.FC = () => {
             messageApi.error(t('app.master-data.drawingLoans.dueAtRequired'));
             return;
           }
-          const payload = { name: values.name, purpose: values.purpose, dueAt, lines };
+          if (!values.borrowerDepartmentId || !values.borrowerUserId) {
+            messageApi.error(t('app.master-data.drawingLoans.partyRequired'));
+            return;
+          }
+          const payload = {
+            name: values.name,
+            purpose: values.purpose,
+            dueAt,
+            borrowerDepartmentId: values.borrowerDepartmentId,
+            borrowerUserId: values.borrowerUserId,
+            lines,
+          };
           if (editing) {
             await drawingLoanApi.update(editing.uuid, payload);
           } else {
@@ -510,6 +576,44 @@ const DrawingLoansPage: React.FC = () => {
               label={t('app.master-data.drawingLoans.dueAt')}
               rules={[{ required: true, message: t('app.master-data.drawingLoans.dueAtRequired') }]}
             />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormItem
+              name="borrowerDepartmentId"
+              label={t('app.master-data.drawingLoans.borrowerDepartment')}
+              rules={[{ required: true, message: t('app.master-data.drawingLoans.borrowerDepartmentRequired') }]}
+            >
+              <UniDropdown
+                placeholder={t('app.master-data.drawingLoans.borrowerDepartmentPlaceholder')}
+                options={departmentOptions.map((item) => ({ label: item.label, value: item.value }))}
+                showSearch
+                optionFilterProp="label"
+                onChange={(value) => {
+                  const match = departmentOptions.find((item) => item.value === value);
+                  setBorrowerDepartmentUuid(match?.uuid);
+                  formRef.current?.setFieldsValue({ borrowerUserUuid: undefined, borrowerUserId: undefined });
+                }}
+              />
+            </ProFormItem>
+          </Col>
+          <Col span={12}>
+            <UniUserSelect
+              name="borrowerUserUuid"
+              label={t('app.master-data.drawingLoans.borrowerUser')}
+              placeholder={t('app.master-data.drawingLoans.borrowerUserPlaceholder')}
+              required
+              departmentUuid={borrowerDepartmentUuid}
+              onChange={(_value: unknown, user: unknown) => {
+                const picked = Array.isArray(user) ? user[0] : user;
+                const id = picked && typeof picked === 'object' && 'id' in picked ? (picked as { id: number }).id : undefined;
+                formRef.current?.setFieldsValue({ borrowerUserId: id });
+              }}
+            />
+            <Form.Item name="borrowerUserId" hidden>
+              <Input />
+            </Form.Item>
           </Col>
         </Row>
         <UniTableDetail

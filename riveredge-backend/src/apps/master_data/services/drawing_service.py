@@ -283,6 +283,7 @@ async def _to_response(
         "name": drawing.name,
         "revision": drawing.revision,
         "drawing_type": drawing.drawing_type,
+        "drawing_format": drawing.drawing_format,
         "status": drawing.status,
         "file_uuid": drawing.file_uuid,
         "supplementary_file_uuids": supp_uuids or None,
@@ -373,7 +374,7 @@ class DrawingService:
             deleted_at__isnull=True,
         ).exists()
         if exists:
-            raise ValidationError(f"图号 {data.code} 修订版 {data.revision} 已存在")
+            raise ValidationError(f"项目名称/图号 {data.code} 修订版 {data.revision} 已存在")
 
         project_id, project_code, project_name = await _resolve_drawing_project(
             tenant_id, data.project_id, data.project_code
@@ -397,6 +398,7 @@ class DrawingService:
             "security_level": normalize_security_level(
                 data.security_level or DEFAULT_DRAWING_SECURITY_LEVEL
             ),
+            "drawing_format": data.drawing_format,
             "description": (data.description or "").strip() or None,
         }
         apply_create_audit(payload, current_user)
@@ -1151,6 +1153,7 @@ class DrawingService:
             "operation_uuids": _norm_uuid_list(source.operation_uuids) or None,
             "folder_id": source.folder_id,
             "security_level": source.security_level or DEFAULT_DRAWING_SECURITY_LEVEL,
+            "drawing_format": source.drawing_format,
             "description": (body.description if body.description is not None else source.description),
         }
         apply_create_audit(payload, current_user)

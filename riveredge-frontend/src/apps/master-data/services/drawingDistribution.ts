@@ -21,6 +21,11 @@ export interface DrawingDistribution {
   tenantId: number;
   code: string;
   name: string;
+  issueDepartmentId?: number;
+  issueDepartmentName?: string;
+  recipientUserId?: number;
+  recipientUserName?: string;
+  recipientUserUuid?: string;
   status: DrawingDistributionStatus;
   remark?: string;
   issuedAt?: string;
@@ -63,6 +68,8 @@ export const drawingDistributionApi = {
   create: async (data: {
     code?: string;
     name: string;
+    issueDepartmentId: number;
+    recipientUserId: number;
     remark?: string;
     lines: Array<{ drawingUuid: string }>;
   }): Promise<DrawingDistribution> => {
@@ -71,7 +78,13 @@ export const drawingDistributionApi = {
 
   update: async (
     uuid: string,
-    data: { name?: string; remark?: string; lines?: Array<{ drawingUuid: string }> },
+    data: {
+      name?: string;
+      issueDepartmentId?: number;
+      recipientUserId?: number;
+      remark?: string;
+      lines?: Array<{ drawingUuid: string }>;
+    },
   ): Promise<DrawingDistribution> => {
     return api.put<DrawingDistribution>(`${BASE}/${uuid}`, data);
   },

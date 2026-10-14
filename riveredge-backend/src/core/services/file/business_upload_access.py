@@ -434,6 +434,35 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "haoligo:monthly-factory-ledger:create",
         "haoligo:monthly-factory-ledger:update",
     ),
+    # kuaiplm — 项目文档 / 实验（与 PC 上传 category 一致）
+    "product_firmware": (
+        "kuaiplm:product-firmware:create",
+        "kuaiplm:product-firmware:update",
+    ),
+    "production_file": (
+        "kuaiplm:production-file:create",
+        "kuaiplm:production-file:update",
+    ),
+    "rd_deliverable": (
+        "kuaiplm:project:create",
+        "kuaiplm:project:update",
+    ),
+    "sample_process": (
+        "kuaiplm:sample-process:create",
+        "kuaiplm:sample-process:update",
+    ),
+    "mold_sample_order": (
+        "kuaiplm:mold-sample:create",
+        "kuaiplm:mold-sample:update",
+    ),
+    "lab-report": (
+        "kuaiplm:lab-request:create",
+        "kuaiplm:lab-request:update",
+    ),
+    "lab-request-attachment": (
+        "kuaiplm:lab-request:create",
+        "kuaiplm:lab-request:update",
+    ),
 }
 
 
