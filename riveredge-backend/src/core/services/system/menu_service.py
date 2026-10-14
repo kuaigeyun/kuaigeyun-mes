@@ -2322,17 +2322,23 @@ class MenuService:
                     try:
                         from infra.infrastructure.database.database import get_db_connection
 
+                        disk_version = str((manifest or {}).get("version") or "").strip()
+                        if not disk_version:
+                            raise ValidationError(
+                                f"应用 {app_code} 的 manifest 缺少 version，不能回写菜单"
+                            )
                         conn = await get_db_connection()
                         try:
                             await conn.execute(
                                 """
                                 UPDATE core_applications
-                                SET menu_config = $3::jsonb, updated_at = NOW()
+                                SET menu_config = $3::jsonb, version = $4, updated_at = NOW()
                                 WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
                                 """,
                                 tenant_id,
                                 str(app_uuid),
                                 json.dumps(manifest_menu, ensure_ascii=False),
+                                disk_version,
                             )
                         finally:
                             await conn.close()

@@ -1481,10 +1481,19 @@ class ApplicationService:
                 # 读取 manifest.json
                 with open(manifest_file, 'r', encoding='utf-8') as f:
                     manifest_data = json.load(f)
-                
+
+                code = str(manifest_data.get("code") or "").strip()
+                if code:
+                    # 接管菜单子树从宿主衍生，扫描结果与同步/侧栏排序同一真源
+                    manifest_data = ApplicationService._materialize_takeover_manifest(
+                        code, manifest_data
+                    )
                 # 添加插件目录路径信息
                 manifest_data['_plugin_dir'] = str(plugin_dir)
                 plugins.append(manifest_data)
+            except ValidationError as e:
+                logger.warning(f"警告: 插件 {plugin_dir.name} 菜单接管派生失败: {e}")
+                continue
             except (json.JSONDecodeError, IOError) as e:
                 # 忽略无法读取的 manifest.json
                 logger.warning(f"警告: 无法读取插件 {plugin_dir.name} 的 manifest.json: {e}")
