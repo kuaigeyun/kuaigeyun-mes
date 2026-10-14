@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'audit-uni-audit-body-patch-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-uni-audit-body-patch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-uni-audit-body-patch-r01.description',
+  },
+  {
+    id: 'audit-future-nodes-not-skipped-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-future-nodes-not-skipped-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-future-nodes-not-skipped-r01.description',
+  },
+  {
     id: 'finance-ar-ap-audit-writeback-r01',
     date: '2026-10-14',
     type: 'fix',

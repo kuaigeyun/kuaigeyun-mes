@@ -65,8 +65,9 @@ async def execute_audit_action(
     entity_id: int,
     action: str,
     request: Request,
+    # 单一 Body：勿再并列 embed reason，否则 FastAPI 期望 {body, reason}，
+    # 前端扁平的 instance_data_patch / selected_approver_by_node 会被整段丢弃。
     body: Optional[dict] = Body(default=None),
-    reason: Optional[str] = Body(default=None, embed=True),
     auth: AuthContext = Depends(get_auth_context),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -85,7 +86,7 @@ async def execute_audit_action(
     )
 
     payload = dict(body or {})
-    merged_reason = payload.pop("reason", None) or payload.pop("comment", None) or reason
+    merged_reason = payload.pop("reason", None) or payload.pop("comment", None)
 
     return await execute_uni_audit(
         entity_type=entity_type,

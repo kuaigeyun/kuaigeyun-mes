@@ -546,6 +546,26 @@ class ApprovalInstanceService:
         ).first()
 
     @staticmethod
+    def _graph_node_ids_reachable_from(graph: Dict[str, Any], source_id: Optional[str]) -> Set[str]:
+        """从 source 沿边正向可达的全部节点（含 source 自身）。"""
+        if not source_id:
+            return set()
+        edges = graph.get("edges") or []
+        source_id = str(source_id)
+        seen = {source_id}
+        queue = [source_id]
+        while queue:
+            nid = queue.pop(0)
+            for edge in edges:
+                if not isinstance(edge, dict) or edge.get("source") != nid:
+                    continue
+                tgt = str(edge.get("target") or "")
+                if tgt and tgt not in seen:
+                    seen.add(tgt)
+                    queue.append(tgt)
+        return seen
+
+    @staticmethod
     def _graph_node_ids_on_some_path_to_target(graph: Dict[str, Any], target_id: Optional[str]) -> Set[str]:
         """从 start 能走到 target 的路径上可能出现的节点（forward ∩ backward）。"""
         if not target_id:
@@ -556,20 +576,6 @@ class ApprovalInstanceService:
         if not start_id:
             return set()
         target_id = str(target_id)
-
-        def bfs_forward(source: str) -> Set[str]:
-            seen = {source}
-            queue = [source]
-            while queue:
-                nid = queue.pop(0)
-                for edge in edges:
-                    if not isinstance(edge, dict) or edge.get("source") != nid:
-                        continue
-                    tgt = str(edge.get("target") or "")
-                    if tgt and tgt not in seen:
-                        seen.add(tgt)
-                        queue.append(tgt)
-            return seen
 
         def bfs_backward(sink: str) -> Set[str]:
             seen = {sink}
@@ -585,7 +591,9 @@ class ApprovalInstanceService:
                         queue.append(src)
             return seen
 
-        return bfs_forward(start_id) & bfs_backward(target_id)
+        return ApprovalInstanceService._graph_node_ids_reachable_from(graph, start_id) & bfs_backward(
+            target_id
+        )
 
     @staticmethod
     async def _build_nodes_overview(
@@ -599,9 +607,15 @@ class ApprovalInstanceService:
         overview: List[Dict[str, Any]] = []
         user_ids: List[int] = []
         on_path_to_current: Set[str] = set()
+        reachable_from_current: Set[str] = set()
         if instance and instance.status == "pending" and instance.current_node:
+            current_id = str(instance.current_node)
             on_path_to_current = ApprovalInstanceService._graph_node_ids_on_some_path_to_target(
-                graph, str(instance.current_node)
+                graph, current_id
+            )
+            # 当前节点之后仍可能走到的节点（含当前）→ 未执行完前不得标「已跳过」
+            reachable_from_current = ApprovalInstanceService._graph_node_ids_reachable_from(
+                graph, current_id
             )
 
         if instance:
@@ -676,8 +690,11 @@ class ApprovalInstanceService:
                 and instance.status == "pending"
                 and on_path_to_current
                 and node_id not in on_path_to_current
+                and node_id not in reachable_from_current
                 and node_type in {"approval", "condition", "cc"}
             ):
+                # 仅旁路死支（已走过路径上未选中、且从当前再也走不到）才「已跳过」；
+                # 当前之后尚未到达的节点保持 waiting（待到达）
                 node_status = "skipped"
             else:
                 node_status = "waiting"

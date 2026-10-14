@@ -1064,17 +1064,18 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
               {t('components.uniAudit.branchDecisionHint')}
             </Text>
             <Radio.Group
-              value={branchDecision}
-              onChange={(e) => setBranchDecision(Boolean(e.target.value))}
-              optionType="button"
+              value={
+                branchDecision === null ? undefined : branchDecision ? 'true' : 'false'
+              }
+              onChange={(e) => setBranchDecision(e.target.value === 'true')}
               buttonStyle="solid"
             >
-              <Radio.Button value={true}>
+              <Radio.Button value="true">
                 {t('components.uniAudit.branchDecisionYes', {
                   name: nodeDecision.trueBranchLabel || t('common.yes'),
                 })}
               </Radio.Button>
-              <Radio.Button value={false}>
+              <Radio.Button value="false">
                 {t('components.uniAudit.branchDecisionNo', {
                   name: nodeDecision.falseBranchLabel || t('common.no'),
                 })}

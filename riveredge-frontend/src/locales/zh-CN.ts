@@ -31456,6 +31456,14 @@ export default {
     '其他费用收支类别接口改挂快制造主仓',
   'pages.dashboard.updateLog.entries.finance-misc-categories-kuaizhizao-api-r01.description':
     '收支类别与其他费用收入/支出 API 迁入快制造主仓路由，新建类别不再报接口不存在；过账挂账仍衔接轻财务应收应付。',
+  'pages.dashboard.updateLog.entries.audit-uni-audit-body-patch-r01.title':
+    '审核已选分支走向不再误报请先选择',
+  'pages.dashboard.updateLog.entries.audit-uni-audit-body-patch-r01.description':
+    '统一审核接口修正 Body 解析，前端提交的分支选择 instance_data_patch 能正确到达后端；条件节点选边后可一次审核通过。',
+  'pages.dashboard.updateLog.entries.audit-future-nodes-not-skipped-r01.title':
+    '审批节点执行记录未到达不再误标已跳过',
+  'pages.dashboard.updateLog.entries.audit-future-nodes-not-skipped-r01.description':
+    '流程停在当前节点时，其后尚未执行的条件/审批节点显示为待到达；仅已绕过且从当前再也走不到的旁路才标已跳过。',
   'pages.dashboard.updateLog.entries.finance-ar-ap-audit-writeback-r01.title':
     '应收应付审核通过后单据一次写回',
   'pages.dashboard.updateLog.entries.finance-ar-ap-audit-writeback-r01.description':
