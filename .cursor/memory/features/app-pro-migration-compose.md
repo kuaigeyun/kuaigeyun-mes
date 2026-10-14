@@ -25,7 +25,7 @@ standard: 真源在 pro 仓；主仓 gitignore + 占位；`scan_pro_oss_layout.p
 
 - 专业 APP 清单：`pro_app_catalog.py` / `proAppCatalog.ts`（含 kuaipd、kuaiplm、kuaicaiwu、kuaioa、kuaiconnect）
 - 行业：原免费 `ind-*` 已并入 `PRO_INDUSTRY_APP_CODES`
-- 财务管理：页面在 `kuaizhizao/pages/finance-management`；菜单路径 `/apps/kuaizhizao/finance-management/*`；轻财务 `menu_takeover`
+- 财务管理：页面在 `kuaizhizao/pages/finance-management`；菜单路径 `/apps/kuaizhizao/finance-management/*`；轻财务启用后侧栏改挂 kuaicaiwu。接管是否生效只认 `core_applications` 已安装且启用，导航读路径不按本机 manifest 写 `is_active`（见 `features/menu-takeover-single-source.md`）
 
 ## 开源主仓
 

@@ -1277,7 +1277,49 @@ class MenuService:
             root_menus.append(menu_response)
         elif str(menu.uuid) == parent_uuid:
             root_menus.append(menu_response)
-    
+
+    @staticmethod
+    def _exclude_taken_over_source_menus(
+        menus: List[Menu],
+        visible_apps: List[Dict[str, Any]],
+    ) -> List[Menu]:
+        """侧栏隐藏已被启用 consumer 接管的 source 菜单。只读库内启用状态与接管规则，不写 is_active。"""
+        from core.config.menu_takeover import MENU_TAKEOVER_RULES, path_matches_takeover_prefix
+
+        active_codes = {str(a.get("code") or "").strip() for a in visible_apps}
+        rules = [
+            rule
+            for rule in MENU_TAKEOVER_RULES.values()
+            if rule.consumer_app_code in active_codes
+        ]
+        if not rules:
+            return menus
+        code_by_uuid = {
+            str(a.get("uuid")): str(a.get("code") or "").strip()
+            for a in visible_apps
+            if a.get("uuid")
+        }
+        hidden: set[int] = set()
+        for menu in menus:
+            app_code = code_by_uuid.get(str(menu.application_uuid or ""))
+            if not app_code:
+                continue
+            for rule in rules:
+                if rule.source_app_code == app_code and path_matches_takeover_prefix(menu.path, rule):
+                    hidden.add(menu.id)
+                    break
+        changed = True
+        while changed:
+            changed = False
+            for menu in menus:
+                if menu.id in hidden or menu.parent_id not in hidden:
+                    continue
+                hidden.add(menu.id)
+                changed = True
+        if not hidden:
+            return menus
+        return [menu for menu in menus if menu.id not in hidden]
+
     @staticmethod
     async def get_menu_tree(
         tenant_id: int,
@@ -1307,27 +1349,18 @@ class MenuService:
         # 生成缓存键（基于查询参数）
         # v8：树构建不再在 SQL 层按 is_active 截断，避免禁用项失去父级导致层级错乱；
         #     过滤在完整树成型后执行（菜单管理保留祖先链，侧栏导航严格启用）。
+        # v9：侧栏不再按本节点 manifest 指纹分缓存，也不在读路径写接管。
         suffix = f"_{cache_key_suffix}" if cache_key_suffix else ""
-        manifest_fp = MenuService._get_manifest_fingerprint()
         overlay_tag = "o1" if overlay_manifest_sort else "o0"
         cache_key_value = (
             f"p{parent_uuid or 'root'}_a{application_uuid or 'all'}"
-            f"_i{is_active if is_active is not None else 'all'}_v8{suffix}_m{manifest_fp}_{overlay_tag}"
+            f"_i{is_active if is_active is not None else 'all'}_v9{suffix}_{overlay_tag}"
         )
         cache_key = MenuService._get_cache_key(tenant_id, "tree", cache_key_value)
 
-        if cache_key_suffix == NAV_TREE_CACHE_SUFFIX:
-            from core.services.system.menu_takeover_service import MenuTakeoverService
-
-            await MenuTakeoverService.reconcile_takeovers_for_tenant(tenant_id)
-        
         # 尝试从缓存获取（命中直出）。
-        # 缓存写入的就是已做孤儿过滤 + manifest 排序的成品树（见下方构建逻辑），
-        # 且所有改变菜单可见性/顺序的操作都会失效缓存：
-        #   - 应用 安装/卸载/启用/禁用、专用应用 绑定/解绑 → _clear_menu_cache
-        #   - manifest 同步扫描、菜单 CRUD → _clear_menu_cache
-        #   - manifest 内容变更（部署）→ 缓存键中的 manifest 指纹变化
-        # 因此命中后无需再查已安装应用做孤儿过滤、也无需重读 manifest 重排。
+        # 缓存写入的就是已做孤儿过滤 + 接管隐藏 + manifest 排序的成品树（见下方构建逻辑）。
+        # 改变菜单可见性的写操作会失效缓存：应用安装/卸载/启用/禁用、菜单同步与 CRUD。
         if use_cache:
             try:
                 cached = await cache_manager.get("menu", cache_key)
@@ -1362,20 +1395,17 @@ class MenuService:
         all_menus_raw = await query.order_by("sort_order", "created_at").all()
         menu_by_id_full = {menu.id: menu for menu in all_menus_raw}
 
-        # 过滤孤儿菜单：application_uuid 对应的应用已卸载/禁用/软删除/占位时不显示；
-        # 且须在本节点已部署 manifest（PRO 未 compose 时不得进入 navigation-tree）。
-        # 说明：平台/系统菜单（application_uuid 为 NULL）照常保留。
+        # 过滤孤儿菜单：只认库内已安装且启用的应用。节点磁盘不得再决定侧栏可见范围。
+        # 平台/系统菜单（application_uuid 为 NULL）照常保留。
         all_menus = list(all_menus_raw)
         visible_apps = await ApplicationService.get_installed_applications(tenant_id=tenant_id)
-        visible_app_uuids = {
-            str(a["uuid"])
-            for a in visible_apps
-            if ApplicationService.is_manifest_deployed_on_node(str(a.get("code") or "").strip())
-        }
+        visible_app_uuids = {str(a["uuid"]) for a in visible_apps}
         all_menus = [
             m for m in all_menus
             if (not m.application_uuid) or (str(m.application_uuid) in visible_app_uuids)
         ]
+        if cache_key_suffix == NAV_TREE_CACHE_SUFFIX:
+            all_menus = MenuService._exclude_taken_over_source_menus(all_menus, visible_apps)
         
         # 构建菜单映射
         menu_map: Dict[int, MenuTreeResponse] = {}

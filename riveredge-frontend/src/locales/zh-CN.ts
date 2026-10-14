@@ -31452,6 +31452,10 @@ export default {
     '样品加工研发项目支持手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.description':
     '新建样品加工申请时，研发项目可从系统项目选择，也可直接输入项目代号，不再因项目主数据未建档而无法保存。',
+  'pages.dashboard.updateLog.entries.finance-menu-single-source-r01.title':
+    '财务管理侧栏本地与生产同一套结构',
+  'pages.dashboard.updateLog.entries.finance-menu-single-source-r01.description':
+    '打开侧栏不再按各服务器本机应用包改菜单启用状态。收款管理、付款管理以库内已启用应用和菜单接管规则为准。',
   'pages.dashboard.updateLog.entries.finance-misc-create-document-relation-filter-r01.title':
     '其他费用收入新建不再报错',
   'pages.dashboard.updateLog.entries.finance-misc-create-document-relation-filter-r01.description':

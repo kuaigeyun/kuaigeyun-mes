@@ -71,6 +71,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 研发电子/结构菜单、2D/3D/模具交付物、试验委托 general | `features/funide-oa-rd-electronics-structure-menu.md` |
 | 构建 dist、deploy、H5、launch.dev、fast-deploy、开机自启 install-service | `features/fast-deploy-scripts.md` |
 | APP 转 PRO、compose、财务管理托管、数据中心占位 | `features/app-pro-migration-compose.md` |
+| 侧栏本地生产不一致、菜单接管抢 is_active、财务管理缺分组 | `features/menu-takeover-single-source.md` |
 | KU-AI 能力矩阵、调用分析、insights 菜单、hub 加载慢 | `features/kuaiai-insights-in-hub.md` |
 | KU-AI 异常感知、Pulse 下线 | `features/kuaiai-pulse-offline.md` |
 | KU-AI 信任中心下线 | `features/kuaiai-trust-offline.md` |
@@ -201,6 +202,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/fast-deploy-scripts.md` | fast-deploy 脚本入口 | deploy | 已交付 |
 | `features/riveredge-app-client-junctions.md` | 主仓 riveredge-app 联接到私仓终端 | deploy | 已交付 |
 | `features/compose-kuaicaiwu-empty-husk.md` | Pro 空壳导致 kuaicaiwu.models 缺失 | deploy | 已交付 |
+| `features/menu-takeover-single-source.md` | 菜单接管只认库内启用，侧栏读路径不写 is_active | system | 已交付 |
 | `features/station-settings-api-origin.md` | 工位 API 走服务器设置 | mes-station | 已交付 |
 | `features/station-face-settings-manage.md` | 工位人脸录入与采样管理在设备设置 | mes-station | 已交付 |
 | `features/station-assigned-wo-includes-team.md` | 指派给我含班组成员被指派工单 | mes-station | 已交付 |

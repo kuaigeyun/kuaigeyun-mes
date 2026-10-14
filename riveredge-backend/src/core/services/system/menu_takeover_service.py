@@ -50,13 +50,8 @@ class MenuTakeoverService:
 
     @staticmethod
     async def is_consumer_effective(tenant_id: int, consumer_app_code: str) -> bool:
-        """接管是否应生效：consumer 已启用且本节点已部署 manifest（PRO 未 compose 时不接管）。"""
-        from core.services.application.application_service import ApplicationService
-
-        code = str(consumer_app_code or "").strip()
-        if not code or not ApplicationService.is_manifest_deployed_on_node(code):
-            return False
-        return await MenuTakeoverService.is_consumer_active(tenant_id, code)
+        """接管是否应生效：只认库内 consumer 已安装且已启用。各节点磁盘包不得改同一张 core_menus。"""
+        return await MenuTakeoverService.is_consumer_active(tenant_id, consumer_app_code)
 
     @staticmethod
     async def reconcile_takeovers_for_tenant(tenant_id: int) -> int:
