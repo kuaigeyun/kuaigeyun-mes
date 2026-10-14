@@ -107,7 +107,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 保养计划方案真源、设备绑定、维护类型周期 | `features/maintenance-plan-scheme-bind.md` |
 | 移动/工位点检跟绑定、保养执行带计划方案 | `features/equip-ops-scheme-bind-clients.md` |
 | 审核反审核、空壳待审、writeback_failure、revoke_noop | `features/pc-audit-unreview-empty-pending.md` |
-| 可审人有委托无审核按钮、allowed_actions 裁掉 approve | `features/audit-hub-approve-button-visible.md` |
+| 可审人有委托无审核按钮、点审核误报没有权限、列表态未补齐待办 | `features/audit-hub-approve-button-visible.md` |
 | 原路反审、下推下游、销售已出库仍能删报工、出库撤回送货单 | `features/downstream-revoke-delete-original-path.md` |
 | 不要做两套、复用、标准入口 | `principles/reuse-existing-patterns.md` |
 | 迁移、菜单同步、manifest、权限码、死代码交付自检 | `principles/feature-delivery.md` |

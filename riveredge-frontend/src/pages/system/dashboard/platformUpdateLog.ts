@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'audit-hub-stale-list-gate-click-r01',
+    date: '2026-10-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-hub-stale-list-gate-click-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-hub-stale-list-gate-click-r01.description',
+  },
+  {
     id: 'audit-hub-approve-button-visible-r01',
     date: '2026-10-14',
     type: 'fix',

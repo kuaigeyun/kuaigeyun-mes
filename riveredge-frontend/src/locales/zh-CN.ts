@@ -31452,6 +31452,10 @@ export default {
     '样品加工研发项目支持手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.description':
     '新建样品加工申请时，研发项目可从系统项目选择，也可直接输入项目代号，不再因项目主数据未建档而无法保存。',
+  'pages.dashboard.updateLog.entries.audit-hub-stale-list-gate-click-r01.title':
+    '当前待办人点审核不再被列表态误拦',
+  'pages.dashboard.updateLog.entries.audit-hub-stale-list-gate-click-r01.description':
+    '打开审核弹窗会先同步当前节点待办；点击审核/驳回只再验角色审核权限，不再用列表未补齐待办时的旧门禁误报「没有权限」。',
   'pages.dashboard.updateLog.entries.audit-hub-approve-button-visible-r01.title':
     '当前可审人打开审核弹窗可见审核按钮',
   'pages.dashboard.updateLog.entries.audit-hub-approve-button-visible-r01.description':

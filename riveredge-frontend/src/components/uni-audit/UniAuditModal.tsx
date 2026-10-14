@@ -117,6 +117,9 @@ interface UniAuditModalProps {
 
   hubActions?: UniAuditHubAction[];
 
+  /** 模块审核 RBAC；列表未带出 approve 项时 reinject 仍须按此门禁 */
+  rbacAllowed?: boolean;
+
   hubTitle?: string;
 
   onCancel: () => void;
@@ -668,6 +671,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
   hubActions = [],
 
+  rbacAllowed: rbacAllowedProp,
+
   hubTitle = '审核',
 
   onCancel,
@@ -711,12 +716,12 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         if (item.action !== 'approve' && item.action !== 'reject') {
           return item;
         }
-        const rbacAllowed = item.rbacAllowed ?? item.canExecute;
+        const rbacAllowed = item.rbacAllowed ?? rbacAllowedProp ?? item.canExecute;
         const flowPerm = resolveAuditFlowExecutePermission(
           item.action === 'approve' ? 'approve' : 'reject',
           {
             adminBypass: adminOpen,
-            rbacAllowed,
+            rbacAllowed: Boolean(rbacAllowed),
             liveViewerActions: viewerActions ?? null,
             flowPending: true,
           },
@@ -745,8 +750,14 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         };
       });
       // 列表若曾裁掉 approve/reject，弹窗在待办补齐后仍须给出审核按钮
-      const liveCanApprove = adminOpen || Boolean(viewerActions?.approve) || hasMyPendingTask;
-      const liveCanReject = adminOpen || Boolean(viewerActions?.reject) || hasMyPendingTask;
+      const moduleRbac =
+        rbacAllowedProp
+        ?? items.find((item) => item.action === 'approve' || item.action === 'reject')?.rbacAllowed
+        ?? adminOpen;
+      const liveAssigneeOk = adminOpen || Boolean(viewerActions?.approve) || hasMyPendingTask;
+      const liveCanApprove = liveAssigneeOk && Boolean(moduleRbac);
+      const liveCanReject =
+        (adminOpen || Boolean(viewerActions?.reject) || hasMyPendingTask) && Boolean(moduleRbac);
       if (liveCanApprove && !items.some((item) => item.action === 'approve')) {
         items.push({
           action: 'approve',
@@ -765,6 +776,18 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
           danger: true,
         });
       }
+      // 列表态 canExecute 可能仍为 false（batch 未补齐待办）；live 确认后抬升可点
+      if (liveCanApprove || liveCanReject) {
+        items = items.map((item) => {
+          if (item.action === 'approve' && liveCanApprove) {
+            return { ...item, canExecute: true, rbacAllowed: true };
+          }
+          if (item.action === 'reject' && liveCanReject) {
+            return { ...item, canExecute: true, rbacAllowed: true };
+          }
+          return item;
+        });
+      }
       if ((hasMyPendingTask || adminOpen) && caps.allow_transfer) {
         items.push({ action: 'transfer', title: t('components.uniAudit.transfer'), canExecute: true });
       }
@@ -780,7 +803,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
       }
     }
     return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
-  }, [hubActions, flowStatus, currentUserId, adminOpen, t]);
+  }, [hubActions, flowStatus, currentUserId, adminOpen, rbacAllowedProp, t]);
 
 
 

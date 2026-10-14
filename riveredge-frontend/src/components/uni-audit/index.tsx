@@ -452,6 +452,9 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     if (adminOpen) return true;
     if (action === 'urge') return canSubmit;
     if (action === 'transfer' || action === 'add_sign' || action === 'delegate') return canReview;
+    // approve/reject：此处只验 RBAC。列表态 viewer_actions 可能尚未补齐待办（batch 只读），
+    // 弹窗 getApprovalStatus 会同步任务后再用 live 门控按钮；后端 execute_approval 仍校验待办人。
+    if (action === 'approve' || action === 'reject') return canReview;
     return Boolean(canExecuteByAction[action as keyof typeof canExecuteByAction]);
   };
 
@@ -461,7 +464,11 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     payload?: Record<string, unknown>,
   ) => {
     if (!canRunAction(action)) {
-      message.warning('您没有该操作权限，仅可查看审核流程');
+      message.warning(
+        action === 'approve' || action === 'reject'
+          ? '您的角色未开通本单据的审核权限'
+          : '您没有该操作权限，仅可查看审核流程',
+      );
       return;
     }
     setLoadingAction(action);
@@ -620,6 +627,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
           entityType={resolvedEntityType || undefined}
           entityId={recordId}
           hubActions={hubActions}
+          rbacAllowed={canReview}
           onCancel={() => setAuditHubOpen(false)}
           onAction={handleHubAction}
         />

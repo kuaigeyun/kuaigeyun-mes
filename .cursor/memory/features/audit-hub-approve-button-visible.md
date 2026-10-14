@@ -38,3 +38,5 @@ standard: allowed_actions 管可见；viewer_actions/capabilities 管可执行�
 ## 踩坑
 
 列表曾把非待办人的 approve/reject 从 `allowed_actions` 删掉 → `showApprove=false` → hub 无按钮；`get_approval_status` 补齐待办后只加「委托」。可见与可执行必须拆开。
+
+列表 `batch_flow_viewer_actions` **只读、不补齐待办** → 列表态 `canExecuteByAction.approve=false`；弹窗 live 同步后按钮可点，但 `runAction`→`canRunAction` 仍用列表旧值，误报「您没有该操作权限」。审核/驳回点击门禁只验 `canReview`；待办人由弹窗 live + 后端 `execute_approval` 负责。
