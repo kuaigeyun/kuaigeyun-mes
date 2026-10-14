@@ -31248,6 +31248,10 @@ export default {
     '样品试流菜单更正为样品加工，资料发布日期固定当天',
   'pages.dashboard.updateLog.entries.funide-oa-sample-process-menu-release-date-r01.description':
     '侧栏「样品检验」更正为「样品加工」，与新建按钮及单据一致（样品检验单为另一单据）。新建时资料发布日期自动取站点当天且不可改选。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-archive-in-deliverables-r01.title':
+    '研发项目体系清单并入阶段门交付物',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-archive-in-deliverables-r01.description':
+    '福尼特 OA 研发项目工作台不再单独展示「体系归档八类」区块与列表归档列；26 项预置清单改为各阶段门交付物行，支持关联单据、模板上传、标记待补与验收，与原有清单能力一致。',
   'pages.dashboard.updateLog.entries.funide-oa-gate-templates-menu-r01.title':
     '定制应用增加阶段管理菜单',
   'pages.dashboard.updateLog.entries.funide-oa-gate-templates-menu-r01.description':
@@ -31384,6 +31388,10 @@ export default {
     '样品加工研发项目支持手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.description':
     '新建样品加工申请时，研发项目可从系统项目选择，也可直接输入项目代号，不再因项目主数据未建档而无法保存。',
+  'pages.dashboard.updateLog.entries.field-mask-decimal-sales-order-list-r01.title':
+    '字段脱敏后销售订单列表不再 500',
+  'pages.dashboard.updateLog.entries.field-mask-decimal-sales-order-list-r01.description':
+    '角色对销售金额等字段配置为脱敏展示时，列表与详情接口返回可解析的零值金额，不再生成星号字符串导致「获取销售订单列表失败」；报价单等同构金额字段一并生效。',
   'pages.dashboard.updateLog.entries.kuaiplm-business-file-upload-delete-r01.title':
     '产品固件等业务附件上传删除与单据权限对齐',
   'pages.dashboard.updateLog.entries.kuaiplm-business-file-upload-delete-r01.description':

@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'field-mask-decimal-sales-order-list-r01',
+    date: '2026-10-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.field-mask-decimal-sales-order-list-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.field-mask-decimal-sales-order-list-r01.description',
+  },
+  {
     id: 'kuaiplm-sample-process-manual-project-r01',
     date: '2026-10-14',
     type: 'improvement',

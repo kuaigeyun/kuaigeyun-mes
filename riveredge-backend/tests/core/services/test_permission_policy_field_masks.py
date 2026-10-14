@@ -1,11 +1,25 @@
 """字段权限 effective masks：默认 full 与显式收敛合并。"""
 
 import asyncio
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from core.models.field_permission_policy import FieldMaskLevel, FieldPermissionPolicy
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 INVENTORY_RESOURCE = "kuaizhizao:warehouse-management-inventory"
+
+
+def test_apply_single_mask_decimal_returns_zero_not_star_string():
+    assert PermissionPolicyService._apply_single_mask(
+        Decimal("100000.50"), FieldMaskLevel.MASKED
+    ) == Decimal("0")
+    assert PermissionPolicyService._apply_single_mask(
+        "100000.50", FieldMaskLevel.MASKED
+    ) == Decimal("0")
+    assert PermissionPolicyService._apply_single_mask(42, FieldMaskLevel.MASKED) == 0
+    assert PermissionPolicyService._apply_single_mask(
+        "客户名称甲", FieldMaskLevel.MASKED
+    ) != Decimal("0")
 
 
 def test_merge_field_mask_levels_picks_strictest():
