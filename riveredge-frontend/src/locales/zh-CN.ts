@@ -31452,6 +31452,10 @@ export default {
     '样品加工研发项目支持手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.description':
     '新建样品加工申请时，研发项目可从系统项目选择，也可直接输入项目代号，不再因项目主数据未建档而无法保存。',
+  'pages.dashboard.updateLog.entries.finance-menu-manifest-disk-source-r01.title':
+    '财务管理菜单同步只认后端清单文件',
+  'pages.dashboard.updateLog.entries.finance-menu-manifest-disk-source-r01.description':
+    '同步菜单时以服务器上的后端应用清单为准并写回库内配置，纠正快财务收款管理、付款管理仍按旧平铺结构落库的问题。',
   'pages.dashboard.updateLog.entries.finance-menu-single-source-r01.title':
     '财务管理侧栏本地与生产同一套结构',
   'pages.dashboard.updateLog.entries.finance-menu-single-source-r01.description':

@@ -1965,7 +1965,13 @@ class MenuService:
             int: 同步的菜单数量
         """
         from loguru import logger
-        
+
+        # 唯一源：本节点后端 manifest；有包则回写库内 menu_config，禁止用过期 jsonb 写侧栏树
+        menu_config = await ApplicationService.bind_menu_config_to_disk_manifest(
+            tenant_id,
+            str(application_uuid),
+            menu_config,
+        )
         if not menu_config:
             logger.info(f"应用 {application_uuid} 没有菜单配置，跳过同步")
             return 0

@@ -1,5 +1,7 @@
 """菜单同步状态检测。"""
 
+import pytest
+
 from core.services.application.application_service import ApplicationService
 
 
@@ -151,3 +153,74 @@ def test_collect_manifest_leaf_immediate_parent_titles_flat_finance_differs():
     assert grouped_parents["/apps/kuaizhizao/finance-management/receivables"] != flat_parents[
         "/apps/kuaizhizao/finance-management/receivables"
     ]
+
+
+@pytest.mark.asyncio
+async def test_bind_menu_config_prefers_disk_manifest_over_stale_db_snapshot():
+    """有磁盘 manifest 时，不得用库内平铺 menu_config 作为同步真源。"""
+    from unittest.mock import AsyncMock, patch
+
+    flat = {
+        "title": "app.kuaicaiwu.name",
+        "path": "/apps/kuaicaiwu",
+        "children": [
+            {
+                "title": "app.kuaicaiwu.menu.finance-management",
+                "children": [
+                    {
+                        "title": "app.kuaicaiwu.menu.finance-management.receivables",
+                        "path": "/apps/kuaizhizao/finance-management/receivables",
+                    },
+                ],
+            },
+        ],
+    }
+    disk = {
+        "code": "kuaicaiwu",
+        "menu_config": {
+            "title": "app.kuaicaiwu.name",
+            "path": "/apps/kuaicaiwu",
+            "children": [
+                {
+                    "title": "app.kuaicaiwu.menu.finance-management",
+                    "children": [
+                        {
+                            "title": "app.kuaicaiwu.menu.group.finance-receipts",
+                            "children": [
+                                {
+                                    "title": "app.kuaicaiwu.menu.finance-management.receivables",
+                                    "path": "/apps/kuaizhizao/finance-management/receivables",
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+    }
+    conn = AsyncMock()
+    conn.execute = AsyncMock()
+    conn.close = AsyncMock()
+
+    with (
+        patch.object(ApplicationService, "_get_manifest_by_code", return_value=disk),
+        patch(
+            "core.services.application.application_service.get_db_connection",
+            new_callable=AsyncMock,
+            return_value=conn,
+        ),
+    ):
+        bound = await ApplicationService.bind_menu_config_to_disk_manifest(
+            tenant_id=1,
+            application_uuid="00000000-0000-0000-0000-0000000000aa",
+            menu_config=flat,
+            app_code="kuaicaiwu",
+        )
+
+    assert bound is not None
+    parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(bound)
+    assert (
+        parents["/apps/kuaizhizao/finance-management/receivables"]
+        == "app.kuaicaiwu.menu.group.finance-receipts"
+    )
+    conn.execute.assert_awaited()

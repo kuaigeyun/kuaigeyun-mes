@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'finance-menu-manifest-disk-source-r01',
+    date: '2026-10-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-menu-manifest-disk-source-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-menu-manifest-disk-source-r01.description',
+  },
+  {
     id: 'finance-menu-single-source-r01',
     date: '2026-10-14',
     type: 'fix',

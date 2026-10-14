@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-07T06:04:21Z",
-  "updated_at": "2026-10-12T23:24:37Z",
+  "updated_at": "2026-10-14T12:14:47Z",
   "files": {
     ".cursor/rules/ai-memory.mdc": {
       "role": "index",
@@ -83,9 +83,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "ec08e26a00dee9d088368d37d96250b1f52ed434260022ebaf02e4254e2c493e",
-      "size": 1005060,
-      "normalized_sha256": "ec08e26a00dee9d088368d37d96250b1f52ed434260022ebaf02e4254e2c493e"
+      "sha256": "8e481ebe8c0c25f173445f39e22e9f93aa5c0d09423496357f05c38ca31ca241",
+      "size": 996130,
+      "normalized_sha256": "8e481ebe8c0c25f173445f39e22e9f93aa5c0d09423496357f05c38ca31ca241"
     },
     "aoci.meta.txt": {
       "role": "index",

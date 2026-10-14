@@ -1067,83 +1067,12 @@ audit_actor.py[CC3T]: F:审计操作人统一写入 | R:code:riveredge-backend/s
 base_service.py[CB4S]: F:应用级服务基类 | R:code:riveredge-backend/src/apps/common/audit_actor.py | A:AppBaseService | S:txn decorator; 342L
 bulk_import.py[CC2T]: F:批量导入公共Schema | R:code:riveredge-backend/src/apps/common/base_service.py | A:BulkCreateResponse | S:per-item fail collect; 64L
 
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_electronics/===
-extension_hooks.py[DE3T]: F:行业包扩展钩子 | R:code:riveredge-backend/src/apps/ind_electronics/api/router.py | A:esd apply/revert | S:deepcopy seed; 34L
-manifest.json[FG5S]: F:电子行业包应用清单 | R:- | A:4 extensions | S:profile replace; 112L
-orm_models.py[PC2T]: F:行业包ORM占位 | R:code:riveredge-backend/src/apps/ind_electronics/manifest.json | A:no tables | S:3L; empty list
-profiles.py[DB7L]: F:电子行业包document/profile种子 | R:- | A:seed dicts | S:~559L; ESD等多类型profile; 经industry_extensions挂载勿写进基础默认
-
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_electronics/api/===
-__init__.py[AA2T]: F:行业包API包初始化 | R:code:riveredge-backend/src/apps/ind_electronics/__init__.py | A:api pkg | S:1L; empty
-router.py[AE5S]: F:电子行业包API路由 | R:code:riveredge-backend/src/apps/ind_electronics/api/__init__.py | A:12 endpoints | S:entry:read perm; 309L
-
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_electronics/seeds/===
-annual_supplier_audit_clauses.py[KC4T]: F:供方年度审核条款种子 | R:code:riveredge-backend/src/apps/ind_electronics/profiles.py | A:87 clauses | S:0-3 score; 97L
-phase1_signoff_templates.py[KC5M]: F:Funide一期会签模板种子数据 | R:code:riveredge-backend/src/apps/ind_electronics/services/signoff_template_seed_service.py | A:FUNIDE_PHASE1_SIGNOFF_TEMPLATES | S:含material_issue等business_type; show_in_menu多为false由ensure写入OA
-phase2_templates.py[KC7L]: F:第二阶段行业包种子 | R:code:riveredge-backend/src/apps/ind_electronics/seeds/phase1_signoff_templates.py | A:6 seed groups | S:license 15 items; 546L
-
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_electronics/services/===
-__init__.py[AA2T]: F:行业包服务包初始化 | R:code:riveredge-backend/src/apps/ind_electronics/seeds/phase2_templates.py | A:services pkg | S:1L; docstring
-calibration_notify_seed_service.py[DE3T]: F:外校提醒行业预置 | R:code:riveredge-backend/src/apps/ind_electronics/services/__init__.py | A:2 notify rules | S:30d advance; 49L
-esd_seed_service.py[DE4M]: F:ESD行业包种子服务 | R:code:riveredge-backend/src/apps/ind_electronics/services/calibration_notify_seed_service.py | A:esd catalog | S:16 item types; 243L
-label_oem_seed_service.py[DE4S]: F:OEM签样包种子服务 | R:code:riveredge-backend/src/apps/ind_electronics/services/esd_seed_service.py | A:4 oem packs | S:alnum validator; 170L
-license_catalog_seed_service.py[DE3S]: F:证照合规清单行业预置 | R:code:riveredge-backend/src/apps/ind_electronics/services/label_oem_seed_service.py | A:15 license items | S:30d reminder; 143L
-production_daily_seed_service.py[DE2T]: F:生产日报行业预置 | R:code:riveredge-backend/src/apps/ind_electronics/services/license_catalog_seed_service.py | A:3 daily templates | S:is_system flag; 79L
-production_file_checklist_seed_service.py[DE2S]: F:生产文件清单行业预置 | R:code:riveredge-backend/src/apps/ind_electronics/services/production_daily_seed_service.py | A:checklist items | S:OA上线对照; 89L
-supplier_eval_seed_service.py[DE4S]: F:供应商评价行业预置 | R:code:riveredge-backend/src/apps/ind_electronics/services/production_file_checklist_seed_service.py | A:2 eval templates | S:quarterly+annual; 176L
-training_template_seed_service.py[DE3S]: F:培训模板行业预置 | R:code:riveredge-backend/src/apps/ind_electronics/services/supplier_eval_seed_service.py | A:training templates | S:ESD考核试卷; 132L
-signoff_template_seed_service.py[SB5T]: F:租户缺省时ensure一期会签OA模板 | R:code:riveredge-backend/src/apps/ind_electronics/seeds/phase1_signoff_templates.py, code:riveredge-backend/src/apps/kuaioa/models/form_template.py | A:ensure_project_signoff_templates | S:按template_code幂等创建/更新; schema经normalize_fields_schema
-
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_foreign_trade/===
-__init__.py[AA2T]: F:外贸行业包模块根 | R:code:riveredge-backend/src/apps/ind_electronics/services/training_template_seed_service.py | A:ind_foreign_trade | S:1L; empty pkg
-manifest.json[FG3T]: F:外贸行业包应用清单 | R:code:riveredge-backend/src/apps/ind_foreign_trade/api/router.py | A:4 menu items | S:inquiry import; 64L
-
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_foreign_trade/api/===
-__init__.py[AA2T]: F:外贸包API包初始化 | R:code:riveredge-backend/src/apps/ind_foreign_trade/__init__.py | A:api pkg | S:1L; empty
-router.py[AE7L]: F:外贸行业包API路由 | R:code:riveredge-backend/src/apps/ind_foreign_trade/api/__init__.py | A:inquiry+followup | S:200 row import; 475L
-
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_mold/===
-__init__.py[AA2T]: F:模具行业包模块根 | R:code:riveredge-backend/src/apps/ind_foreign_trade/manifest.json | A:ind_mold | S:1L; empty pkg
-manifest.json[FG2T]: F:模具行业包应用清单 | R:code:riveredge-backend/src/apps/ind_mold/api/router.py | A:2 menu items | S:program sheet; 42L
-orm_models.py[PC1T]: F:模具行业包ORM模块 | R:code:riveredge-backend/src/apps/ind_mold/models/program_sheet.py | A:2 model modules | S:6L; registry list
-
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_mold/api/===
-__init__.py[AA2T]: F:模具包API包初始化 | R:code:riveredge-backend/src/apps/ind_mold/__init__.py | A:api pkg | S:1L; empty
-router.py[AE5M]: F:模具行业包API路由 | R:code:riveredge-backend/src/apps/ind_mold/api/__init__.py | A:program+arrival | S:CRUD endpoints; 220L
-
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_mold/models/===
-material_arrival.py[PC2T]: F:模具到料单ORM | R:code:riveredge-backend/src/apps/ind_mold/manifest.json | A:MoldMaterialArrival | S:pending/arrived/void; 21L
-program_sheet.py[PC2T]: F:模具程序单ORM | R:code:riveredge-backend/src/apps/ind_mold/models/material_arrival.py | A:MoldProgramSheet | S:nc_file_path; 20L
-
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_relay/===
-__init__.py[AA2T]: F:继电器行业包模块根 | R:code:riveredge-backend/src/apps/ind_mold/orm_models.py | A:ind_relay | S:1L; empty pkg
-extension_hooks.py[DE3S]: F:继电器启停钩子 | R:code:riveredge-backend/src/apps/ind_relay/api/router.py | A:host defaults | S:snapshot once; 123L
-manifest.json[FG3T]: F:继电器行业包清单 | R:code:riveredge-backend/src/apps/ind_relay/extension_hooks.py | A:4 menu items | S:takt/changeover; 78L
-orm_models.py[PC1T]: F:继电器ORM模块 | R:code:riveredge-backend/src/apps/ind_relay/models/line_capacity.py | A:2 model modules | S:6L; registry
-
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_relay/api/===
-__init__.py[AA2T]: F:继电器包API包初始化 | R:code:riveredge-backend/src/apps/ind_relay/__init__.py | A:api pkg | S:1L; empty
-router.py[AE7L]: F:继电器行业包API路由 | R:- | A:capacity+changeover | S:takt/plan rate; 558L
-
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_relay/models/===
-__init__.py[AA2T]: F:继电器models包 | R:code:riveredge-backend/src/apps/ind_relay/manifest.json | A:models pkg | S:1L; docstring
-changeover_matrix.py[PC2T]: F:换型矩阵ORM | R:code:riveredge-backend/src/apps/ind_relay/models/__init__.py | A:RelayChangeoverMatrix | S:from/to family; 27L
-line_capacity.py[PC2T]: F:产线产能ORM | R:code:riveredge-backend/src/apps/ind_relay/models/changeover_matrix.py | A:RelayLineCapacity | S:takt/qty/cap; 34L
-auto_report.py[PB5S]: F:Implements auto_report.py | R:- | A:- | S:110L
-
-===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_relay/services/===
-__init__.py[AA2T]: F:继电器services包 | R:code:riveredge-backend/src/apps/ind_relay/orm_models.py | A:services pkg | S:1L; docstring
-changeover_lookup.py[DE3S]: F:换型查找服务 | R:code:riveredge-backend/src/apps/ind_relay/services/__init__.py | A:matrix lookup | S:family prefix; 118L
-auto_report_math.py[SB5S]: F:Implements auto_report_math.py | R:- | A:- | S:136L
-auto_report_service.py[SB5L]: F:Implements auto_report_service.py | R:- | A:- | S:1225L
-
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/industry_pack/===
 manifest.json[FG2T]: F:行业包索引清单 | R:code:riveredge-backend/src/apps/ind_relay/services/changeover_lookup.py | A:pack registry | S:all industry packs; 28L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/===
 __init__.py[AA2T]: F:快财务模块根 | R:code:riveredge-backend/src/apps/industry_pack/manifest.json | A:kuaicaiwu | S:5L; docstring
 bootstrap.py[AA1T]: F:快财务启动注册 | R:code:riveredge-backend/src/apps/kuaicaiwu/api/tax.py | A:register() | S:9L; ref display
-manifest.json[AG8L]: F:快财务APP清单 | R:code:riveredge-backend/src/apps/kuaicaiwu/constants/price_settlement.py | A:22 menu items | S:656L; workflow nodes
 orm_models.py[AA2T]: F:快财务ORM注册表 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/voucher_summary.py | A:ORM_MODEL_MODULES | S:38L; runtime load
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/api/===
@@ -8192,9 +8121,6 @@ form_request_confirmation.py[KB3T]: F:确认单kind/附件/销售回复校验 | 
 form_request_issue_access.py[DI5M]: F:会签下发可见性与能力位计算 | R:code:riveredge-backend/src/apps/kuaioa/constants/form_request_issue.py, code:riveredge-backend/src/apps/kuaioa/models/form_request_issue.py | A:compute_form_request_capabilities,user_can_view_form_request_row | S:issue范围类型非维护人须命中grant才可见
 form_request_material_issue.py[KB3T]: F:发料单提交内容与会签目标校验 | R:code:riveredge-backend/src/apps/kuaioa/utils/form_request_review_sheet.py | A:validate_material_issue_on_submit | S:须purpose+lines; 会签复用countersign
 form_request_review_sheet.py[KB3T]: F:评审单会签人解析与提交校验 | R:- | A:countersign_user_ids | S:从form_data解析正整数user id列表
-
-===D:/kuaigeyun-pro/kuaigeyun/.cursor/skills/new-document-page/===
-SKILL.md[SG7M]: F:新建业务单据页与主数据/设置类列表的唯一交付清单 | R:code:.cursor/skills/unitable-list/SKILL.md,code:.cursor/skills/detail-drawer/SKILL.md,code:.cursor/skills/form-modal/SKILL.md | A:新页或收口不规范列表前先读本 Skill 再写代码 | S:主数据列表试点 finance-misc-categories/fa masters；禁止裸新建/缺行缓存/onTableDataChange 契约
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/===
 MiscVoucherListPage.tsx[AU6M]: F:其他费用收入/支出共享列表+FormModal+DetailDrawer | R:code:riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/other-incomes/index.tsx,code:riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/other-expenses/index.tsx | A:明细类别 MiscCategoryQuickSelect 走 UniDropdown+QuickCreateModal | S:行缓存仅 onTableDataChange；UniTable 标准工具栏与三桶列；禁止 request 写 tableRowsRef

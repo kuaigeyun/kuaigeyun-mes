@@ -1799,6 +1799,67 @@ class ApplicationService:
         )
 
     @staticmethod
+    async def bind_menu_config_to_disk_manifest(
+        tenant_id: int,
+        application_uuid: str,
+        menu_config: Any,
+        *,
+        app_code: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        菜单同步唯一源：本节点可读的后端 ``src/apps/{code}/manifest.json``。
+
+        有磁盘 menu_config 时必须用它写 ``core_menus``，并回写 ``core_applications.menu_config``。
+        本节点未部署该包时，才使用调用方传入的库内快照；禁止用过期库内 JSON 覆盖磁盘真源。
+        """
+        code = str(app_code or "").strip()
+        if not code:
+            app_row = await ApplicationService.get_application_by_uuid_optional(
+                tenant_id, str(application_uuid)
+            )
+            code = str((app_row or {}).get("code") or "").strip()
+        if not code:
+            return ApplicationService._normalize_menu_config_field(menu_config)
+
+        manifest = ApplicationService._get_manifest_by_code(code)
+        if not manifest:
+            return ApplicationService._normalize_menu_config_field(menu_config)
+
+        disk_menu = ApplicationService._normalize_menu_config_field(manifest.get("menu_config"))
+        if not disk_menu:
+            return ApplicationService._normalize_menu_config_field(menu_config)
+
+        incoming = ApplicationService._normalize_menu_config_field(menu_config)
+        if (
+            ApplicationService.stable_menu_config_digest(incoming)
+            == ApplicationService.stable_menu_config_digest(disk_menu)
+        ):
+            return disk_menu
+
+        conn = await get_db_connection()
+        try:
+            await conn.execute(
+                """
+                UPDATE core_applications
+                SET menu_config = $3::jsonb, updated_at = NOW()
+                WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
+                """,
+                tenant_id,
+                str(application_uuid),
+                json.dumps(disk_menu, ensure_ascii=False),
+            )
+        finally:
+            await conn.close()
+
+        logger.info(
+            "menu_config_bound_to_disk_manifest tenant={} app={} code={}",
+            tenant_id,
+            application_uuid,
+            code,
+        )
+        return disk_menu
+
+    @staticmethod
     async def sync_all_manifests_and_menus(tenant_id: int) -> Dict[str, Any]:
         """
         批量从 manifest.json 刷新已安装应用清单，再一次性写入 core_menus。
