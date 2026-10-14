@@ -1328,7 +1328,7 @@ async def _dispatch_other_income(
     user_id: int,
     reason: Optional[str],
 ) -> Any:
-    from apps.kuaicaiwu.services.other_income_service import OtherIncomeService
+    from apps.kuaizhizao.services.other_income_service import OtherIncomeService
 
     svc = OtherIncomeService()
     if action == "submit":
@@ -1360,7 +1360,7 @@ async def _dispatch_other_expense(
     user_id: int,
     reason: Optional[str],
 ) -> Any:
-    from apps.kuaicaiwu.services.other_expense_service import OtherExpenseService
+    from apps.kuaizhizao.services.other_expense_service import OtherExpenseService
 
     svc = OtherExpenseService()
     if action == "submit":

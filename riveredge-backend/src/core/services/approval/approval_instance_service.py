@@ -243,6 +243,14 @@ class ApprovalInstanceService:
         if not process:
             raise NotFoundError("审批流程不存在")
 
+        # 先清掉非当前节点残留 pending，再计数/补齐，避免上一节点待办干扰推进与门禁文案
+        if approval_instance.current_node:
+            await ApprovalTask.filter(
+                tenant_id=tenant_id,
+                approval_instance_id=approval_instance.id,
+                status="pending",
+            ).exclude(node_id=str(approval_instance.current_node)).update(status="cancelled")
+
         pending_count = await ApprovalTask.filter(
             tenant_id=tenant_id,
             approval_instance_id=approval_instance.id,
@@ -794,6 +802,13 @@ class ApprovalInstanceService:
         tasks: List[ApprovalTask] = []
         history: List[ApprovalHistory] = []
         if entity_instances:
+            if instance and instance.status == "pending" and instance.current_node:
+                # 须在 bootstrap 之前：否则 pending_count 会把上一节点残留算进去
+                await ApprovalTask.filter(
+                    tenant_id=tenant_id,
+                    approval_instance_id=instance.id,
+                    status="pending",
+                ).exclude(node_id=str(instance.current_node)).update(status="cancelled")
             if instance and instance.status == "pending":
                 try:
                     await ApprovalInstanceService.bootstrap_instance_workflow(
@@ -807,6 +822,13 @@ class ApprovalInstanceService:
                         exc,
                     )
             instance_ids = [inst.id for inst in entity_instances]
+            if instance and instance.status == "pending" and instance.current_node:
+                # bootstrap 可能推进节点，再清一次非当前残留
+                await ApprovalTask.filter(
+                    tenant_id=tenant_id,
+                    approval_instance_id=instance.id,
+                    status="pending",
+                ).exclude(node_id=str(instance.current_node)).update(status="cancelled")
             tasks = await ApprovalTask.filter(
                 tenant_id=tenant_id,
                 approval_instance_id__in=instance_ids,
@@ -874,6 +896,26 @@ class ApprovalInstanceService:
                         )
                     except Exception:
                         eligible_ids = []
+                if eligible_ids:
+                    # 当前节点上不在可审名单的残留 pending（非加签）会导致按钮文案仍指向上一节点人
+                    expected = {int(x) for x in eligible_ids}
+                    stale_pending = [
+                        t
+                        for t in tasks
+                        if t.status == "pending"
+                        and str(t.node_id or "") == str(instance.current_node or "")
+                        and t.approver_id is not None
+                        and int(t.approver_id) not in expected
+                        and getattr(t, "sign_type", None) not in ("before", "after")
+                    ]
+                    if stale_pending:
+                        await ApprovalTask.filter(
+                            id__in=[t.id for t in stale_pending]
+                        ).update(status="cancelled")
+                        tasks = await ApprovalTask.filter(
+                            tenant_id=tenant_id,
+                            approval_instance_id__in=[inst.id for inst in entity_instances],
+                        ).order_by("-created_at").all()
                 if int(viewer_id) in {int(x) for x in eligible_ids}:
                     if not viewer_has_pending_task_on_instance(
                         viewer_id=int(viewer_id),
@@ -881,7 +923,7 @@ class ApprovalInstanceService:
                         tasks=tasks,
                     ):
                         await ApprovalInstanceService._sync_node_approver_tasks(
-                            tenant_id, instance, current_node_obj
+                            tenant_id, instance, current_node_obj, approvers=eligible_ids
                         )
                         tasks = await ApprovalTask.filter(
                             tenant_id=tenant_id,
@@ -1115,23 +1157,32 @@ class ApprovalInstanceService:
                 )
             raise NotFoundError(f"实体 {entity_type}:{entity_id} 未找到待审批的流程实例")
 
-        task = await ApprovalTask.filter(
-            tenant_id=tenant_id,
-            approval_instance_id=instance.id,
-            approver_id=approver_id,
-            status="pending",
-        ).first()
+        async def _pending_task_for_approver() -> Optional[ApprovalTask]:
+            q = ApprovalTask.filter(
+                tenant_id=tenant_id,
+                approval_instance_id=instance.id,
+                approver_id=approver_id,
+                status="pending",
+            )
+            current = str(instance.current_node or "").strip()
+            if current:
+                q = q.filter(node_id=current)
+            return await q.first()
+
+        task = await _pending_task_for_approver()
 
         if not task:
             await ApprovalInstanceService.bootstrap_instance_workflow(
                 tenant_id, instance
             )
-            task = await ApprovalTask.filter(
-                tenant_id=tenant_id,
-                approval_instance_id=instance.id,
-                approver_id=approver_id,
-                status="pending",
-            ).first()
+            await instance.refresh_from_db()
+            if instance.current_node:
+                await ApprovalTask.filter(
+                    tenant_id=tenant_id,
+                    approval_instance_id=instance.id,
+                    status="pending",
+                ).exclude(node_id=str(instance.current_node)).update(status="cancelled")
+            task = await _pending_task_for_approver()
 
         if not task:
             raise ValidationError("您没有该审批任务或任务已处理")

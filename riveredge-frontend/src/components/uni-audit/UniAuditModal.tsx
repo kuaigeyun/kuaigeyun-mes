@@ -726,27 +726,28 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
             flowPending: true,
           },
         );
+        const liveBlockReason =
+          flowPerm.blockReason
+          || viewerActions?.block_reason
+          || (() => {
+              const currentNode = (flowStatus.nodes_overview ?? []).find((n) => n.is_current);
+              const names = (currentNode?.eligible_approvers ?? [])
+                .map((u) => String(u.name || '').trim())
+                .filter(Boolean);
+              return names.length
+                ? t('components.uniAudit.notNodeAssigneeWithNames', { names: names.join('、') })
+                : t('components.uniAudit.notNodeAssignee');
+            })();
         if (!flowPerm.canExecute && rbacAllowed && !assigneeBlockHint) {
-          assigneeBlockHint =
-            flowPerm.blockReason
-            || viewerActions?.block_reason
-            || (() => {
-                const currentNode = (flowStatus.nodes_overview ?? []).find((n) => n.is_current);
-                const names = (currentNode?.eligible_approvers ?? [])
-                  .map((u) => String(u.name || '').trim())
-                  .filter(Boolean);
-                return names.length
-                  ? t('components.uniAudit.notNodeAssigneeWithNames', { names: names.join('、') })
-                  : t('components.uniAudit.notNodeAssignee');
-              })();
+          assigneeBlockHint = liveBlockReason;
         }
         return {
           ...item,
           canExecute: flowPerm.canExecute,
-          disabledReason:
-            rbacAllowed && !flowPerm.canExecute
-              ? flowPerm.blockReason || assigneeBlockHint
-              : item.disabledReason,
+          // 流程已加载时禁止沿用列表态旧 block_reason（节点推进后会误显示上一节点待办人）
+          disabledReason: !rbacAllowed
+            ? t('components.uniAudit.missingReviewPermission')
+            : (flowPerm.canExecute ? undefined : liveBlockReason),
         };
       });
       // 列表若曾裁掉 approve/reject，弹窗在待办补齐后仍须给出审核按钮

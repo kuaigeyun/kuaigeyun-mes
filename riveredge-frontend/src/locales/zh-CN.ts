@@ -31452,6 +31452,14 @@ export default {
     '样品加工研发项目支持手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.description':
     '新建样品加工申请时，研发项目可从系统项目选择，也可直接输入项目代号，不再因项目主数据未建档而无法保存。',
+  'pages.dashboard.updateLog.entries.finance-misc-categories-kuaizhizao-api-r01.title':
+    '其他费用收支类别接口改挂快制造主仓',
+  'pages.dashboard.updateLog.entries.finance-misc-categories-kuaizhizao-api-r01.description':
+    '收支类别与其他费用收入/支出 API 迁入快制造主仓路由，新建类别不再报接口不存在；过账挂账仍衔接轻财务应收应付。',
+  'pages.dashboard.updateLog.entries.audit-block-reason-current-node-r01.title':
+    '审核按钮待办人提示与当前节点一致',
+  'pages.dashboard.updateLog.entries.audit-block-reason-current-node-r01.description':
+    '节点推进后取消上一节点残留待办；不可审提示优先按当前节点待办/可审名单展示，不再出现流程图已到节点2、按钮仍提示节点1的情况。',
   'pages.dashboard.updateLog.entries.audit-hub-stale-list-gate-click-r01.title':
     '当前待办人点审核不再被列表态误拦',
   'pages.dashboard.updateLog.entries.audit-hub-stale-list-gate-click-r01.description':
@@ -43173,6 +43181,8 @@ export default {
   'components.uniAudit.phaseRejected': '已驳回',
   'components.uniAudit.phaseNone': '—',
   'components.uniAudit.noPermission': '您没有该操作权限',
+  'components.uniAudit.missingReviewPermission':
+    '您的角色未开通本单据的审核权限（部门负责人指派与审核权限须同时满足）',
   'components.uniAudit.notNodeAssignee': '您不是当前节点的待办审批人，无法审核或驳回',
   'components.uniAudit.notNodeAssigneeWithNames':
     '当前节点待办人为：{{names}}，您无权在此节点审核或驳回',
