@@ -15,7 +15,11 @@ def apply_viewer_actions_to_audit_and_capabilities(
     viewer_actions: Optional[Dict[str, Any]],
 ) -> Tuple[Optional[Dict[str, Any]], Any]:
     """
-    当存在 pending 流程实例且 ``viewer_actions`` 时，裁剪 approve/reject（audit + capabilities）。
+    pending 流程下挂上 ``viewer_actions``，并按待办裁剪 capabilities。
+
+    不从 ``allowed_actions`` 删除 approve/reject：可见性仍由阶段动作决定，
+    能否执行由 ``viewer_actions`` / capabilities 门控。否则列表把动作裁掉后，
+    审核弹窗即使补齐待办也不会再出现审核/驳回按钮。
     """
     if not audit or not isinstance(audit, dict):
         return audit, capabilities
@@ -26,11 +30,7 @@ def apply_viewer_actions_to_audit_and_capabilities(
 
     flow_allows = bool(viewer_actions.get("approve"))
     block_reason = viewer_actions.get("block_reason")
-
-    allowed = list(audit.get("allowed_actions") or [])
-    if not flow_allows:
-        allowed = [a for a in allowed if a not in _FLOW_GATED_ACTIONS]
-    audit = {**audit, "viewer_actions": viewer_actions, "allowed_actions": allowed}
+    audit = {**audit, "viewer_actions": viewer_actions}
 
     if capabilities is None:
         return audit, capabilities

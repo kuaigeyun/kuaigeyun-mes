@@ -85,6 +85,12 @@ export interface UniAuditHubAction {
   /** 不可执行时的原因（如非当前节点待办人）；优先于通用「无权限」提示 */
   disabledReason?: string;
 
+  /**
+   * 模块 RBAC 是否允许该动作。弹窗内用 live viewer_actions 再裁剪执行权。
+   * 缺省回退 canExecute（兼容旧调用）。
+   */
+  rbacAllowed?: boolean;
+
 }
 
 
@@ -705,16 +711,17 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         if (item.action !== 'approve' && item.action !== 'reject') {
           return item;
         }
+        const rbacAllowed = item.rbacAllowed ?? item.canExecute;
         const flowPerm = resolveAuditFlowExecutePermission(
           item.action === 'approve' ? 'approve' : 'reject',
           {
             adminBypass: adminOpen,
-            rbacAllowed: item.canExecute,
+            rbacAllowed,
             liveViewerActions: viewerActions ?? null,
             flowPending: true,
           },
         );
-        if (!flowPerm.canExecute && item.canExecute && !assigneeBlockHint) {
+        if (!flowPerm.canExecute && rbacAllowed && !assigneeBlockHint) {
           assigneeBlockHint =
             flowPerm.blockReason
             || viewerActions?.block_reason
@@ -732,11 +739,32 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
           ...item,
           canExecute: flowPerm.canExecute,
           disabledReason:
-            item.canExecute && !flowPerm.canExecute
+            rbacAllowed && !flowPerm.canExecute
               ? flowPerm.blockReason || assigneeBlockHint
               : item.disabledReason,
         };
       });
+      // 列表若曾裁掉 approve/reject，弹窗在待办补齐后仍须给出审核按钮
+      const liveCanApprove = adminOpen || Boolean(viewerActions?.approve) || hasMyPendingTask;
+      const liveCanReject = adminOpen || Boolean(viewerActions?.reject) || hasMyPendingTask;
+      if (liveCanApprove && !items.some((item) => item.action === 'approve')) {
+        items.push({
+          action: 'approve',
+          title: t('components.uniAudit.approveAction'),
+          canExecute: true,
+          rbacAllowed: true,
+          primary: true,
+        });
+      }
+      if (liveCanReject && !items.some((item) => item.action === 'reject')) {
+        items.push({
+          action: 'reject',
+          title: t('components.uniAudit.rejectAction'),
+          canExecute: true,
+          rbacAllowed: true,
+          danger: true,
+        });
+      }
       if ((hasMyPendingTask || adminOpen) && caps.allow_transfer) {
         items.push({ action: 'transfer', title: t('components.uniAudit.transfer'), canExecute: true });
       }

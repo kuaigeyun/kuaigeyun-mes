@@ -342,7 +342,9 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
       items.push({
         action: 'approve',
         title: approveLabel,
+        // 列表态可能尚无待办；弹窗 getApprovalStatus 会补齐并用 live viewer_actions 再裁
         canExecute: canExecuteByAction.approve,
+        rbacAllowed: canReview,
         disabledReason: flowApprove.blockReason,
         primary: true,
       });
@@ -352,6 +354,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
         action: 'reject',
         title: '驳回',
         canExecute: canExecuteByAction.reject,
+        rbacAllowed: canReview,
         disabledReason: flowReject.blockReason,
         danger: true,
       });
@@ -367,6 +370,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     canExecuteByAction.withdraw,
     canExecuteByAction.approve,
     canExecuteByAction.reject,
+    canReview,
     flowApprove.blockReason,
     flowReject.blockReason,
     approveLabel,

@@ -31452,6 +31452,10 @@ export default {
     '样品加工研发项目支持手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.description':
     '新建样品加工申请时，研发项目可从系统项目选择，也可直接输入项目代号，不再因项目主数据未建档而无法保存。',
+  'pages.dashboard.updateLog.entries.audit-hub-approve-button-visible-r01.title':
+    '当前可审人打开审核弹窗可见审核按钮',
+  'pages.dashboard.updateLog.entries.audit-hub-approve-button-visible-r01.description':
+    '待审阶段仍保留审核/驳回动作入口，是否可点由待办 viewer_actions 控制；可审名单内缺任务时打开弹窗补齐待办后即可审核，不再只剩委托。',
   'pages.dashboard.updateLog.entries.finance-menu-manifest-disk-source-r01.title':
     '财务管理菜单改由快制造唯一维护',
   'pages.dashboard.updateLog.entries.finance-menu-manifest-disk-source-r01.description':
@@ -43168,6 +43172,8 @@ export default {
   'components.uniAudit.notNodeAssignee': '您不是当前节点的待办审批人，无法审核或驳回',
   'components.uniAudit.notNodeAssigneeWithNames':
     '当前节点待办人为：{{names}}，您无权在此节点审核或驳回',
+  'components.uniAudit.approveAction': '审核',
+  'components.uniAudit.rejectAction': '驳回',
   'components.uniAudit.transfer': '转交',
   'components.uniAudit.addSign': '加签',
   'components.uniAudit.delegate': '委托',
