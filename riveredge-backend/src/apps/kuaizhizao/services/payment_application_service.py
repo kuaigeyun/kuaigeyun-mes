@@ -28,6 +28,8 @@ from apps.kuaizhizao.services.document_action_policy.payment_application import 
 from apps.kuaizhizao.services.payable_open_amount_service import PayableOpenAmountService
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
+from loguru import logger
 
 
 PAYMENT_APPLICATION_SORTABLE = frozenset({
@@ -45,6 +47,7 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
     def __init__(self) -> None:
         super().__init__(PaymentApplication)
         self._open_amount = PayableOpenAmountService()
+        self.business_config_service = BusinessConfigService()
 
     async def _generate_code(self, tenant_id: int) -> str:
         return await self.generate_code(tenant_id, "PAYMENT_APPLICATION_CODE", prefix="FKSQ")
@@ -92,11 +95,25 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
             tenant_id=app.tenant_id, application_id=app.id
         ).order_by("line_no")
         caps = derive_payment_application_capabilities(app)
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        payment_rels = await DocumentRelation.filter(
+            tenant_id=app.tenant_id,
+            source_type="payment_application",
+            source_id=int(app.id),
+            target_type="payment",
+        ).all()
+        linked_payments = [
+            {"id": int(r.target_id), "code": str(r.target_code or "")}
+            for r in payment_rels
+            if r.target_id
+        ]
         resp = PaymentApplicationResponse.model_validate(app, from_attributes=True)
         resp = resp.model_copy(
             update={
                 "items": [PaymentApplicationLineResponse.model_validate(row) for row in lines],
                 "capabilities": {k: v.model_dump() for k, v in caps.items()},
+                "linked_payments": linked_payments,
             }
         )
         from core.services.approval.audit_record_enricher import enrich_record
@@ -306,7 +323,13 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         await app.save()
 
     async def submit_application(
-        self, tenant_id: int, application_id: int, submitted_by: int
+        self,
+        tenant_id: int,
+        application_id: int,
+        submitted_by: int,
+        *,
+        selected_approver_user_ids: Optional[List[int]] = None,
+        selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
     ) -> PaymentApplicationResponse:
         app = await PaymentApplication.get_or_none(
             tenant_id=tenant_id, id=application_id, deleted_at__isnull=True
@@ -314,9 +337,48 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         if not app:
             raise NotFoundError(f"付款申请单不存在: {application_id}")
         assert_payment_application_capability(app, "submit")
+
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "payment_application"
+        )
         user = await self.get_user_info(submitted_by)
-        app.status = "待审核"
-        app.review_status = ReviewStatus.PENDING.value
+
+        if audit_required:
+            from core.services.approval.audit_flow_guard import (
+                approval_instance_finished_on_submit,
+                start_document_approval_or_raise,
+            )
+
+            instance = await start_document_approval_or_raise(
+                tenant_id=tenant_id,
+                user_id=submitted_by,
+                node_key="payment_application",
+                entity_type="payment_application",
+                entity_id=int(app.id),
+                entity_uuid=str(app.uuid),
+                title=f"付款申请审批: {app.application_code}",
+                content=f"供应商: {app.supplier_name or '—'}",
+                doc_label="付款申请",
+                selected_approver_user_ids=selected_approver_user_ids,
+                selected_approver_by_node=selected_approver_by_node,
+            )
+            app.status = "待审核"
+            app.review_status = ReviewStatus.PENDING.value
+            app.updated_by = submitted_by
+            app.updated_by_name = user["name"]
+            await app.save()
+            if approval_instance_finished_on_submit(instance):
+                return await self.approve_application(
+                    tenant_id,
+                    application_id,
+                    approved=True,
+                    approved_by=submitted_by,
+                    is_auto_approve=True,
+                )
+            return await self.get_by_id(tenant_id, application_id)
+
+        app.status = "已批准"
+        app.review_status = ReviewStatus.APPROVED.value
         app.updated_by = submitted_by
         app.updated_by_name = user["name"]
         await app.save()
@@ -332,6 +394,17 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
             raise NotFoundError(f"付款申请单不存在: {application_id}")
         if not is_pending_review_status(app.status or ""):
             raise BusinessLogicError("payment_application.withdraw.not_allowed")
+        try:
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+            await ApprovalInstanceService.cancel_approval(
+                tenant_id=tenant_id,
+                entity_type="payment_application",
+                entity_id=application_id,
+                operator_id=withdrawn_by,
+            )
+        except Exception as e:
+            logger.warning("取消付款申请审批流程失败或无需取消: {}", e)
         user = await self.get_user_info(withdrawn_by)
         app.status = "草稿"
         app.review_status = ReviewStatus.PENDING.value
@@ -348,6 +421,7 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         approved: bool,
         approved_by: int,
         review_remarks: Optional[str] = None,
+        is_auto_approve: bool = False,
     ) -> PaymentApplicationResponse:
         app = await PaymentApplication.get_or_none(
             tenant_id=tenant_id, id=application_id, deleted_at__isnull=True
@@ -355,21 +429,81 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         if not app:
             raise NotFoundError(f"付款申请单不存在: {application_id}")
         assert_payment_application_capability(app, "approve")
-        user = await self.get_user_info(approved_by)
-        app.reviewer_id = approved_by
-        app.reviewer_name = user["name"]
-        app.review_time = resolve_business_datetime()
-        app.review_remarks = review_remarks
+
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "payment_application"
+        )
+        if not is_auto_approve:
+            from core.services.approval.audit_flow_guard import assert_pending_approval_instance
+
+            await assert_pending_approval_instance(
+                tenant_id=tenant_id,
+                entity_type="payment_application",
+                entity_id=application_id,
+                audit_required=audit_required,
+                doc_label="付款申请",
+                verb="审核" if approved else "驳回",
+            )
+
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        async def _do_decide() -> PaymentApplicationResponse:
+            row = await PaymentApplication.get_or_none(
+                tenant_id=tenant_id, id=application_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"付款申请单不存在: {application_id}")
+            user = await self.get_user_info(approved_by)
+            row.reviewer_id = approved_by
+            row.reviewer_name = user["name"]
+            row.review_time = resolve_business_datetime()
+            row.review_remarks = review_remarks
+            if approved:
+                row.status = "已批准"
+                row.review_status = ReviewStatus.APPROVED.value
+            else:
+                row.status = "已驳回"
+                row.review_status = ReviewStatus.REJECTED.value
+            row.updated_by = approved_by
+            row.updated_by_name = user["name"]
+            await row.save()
+            return await self.get_by_id(tenant_id, application_id)
+
+        sync_after_flow = False
+        if audit_required and approved_by and not is_auto_approve:
+            from core.services.approval.audit_flow_guard import (
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="payment_application",
+                entity_id=application_id,
+            )
+            sync_after_flow = should_sync_doc_after_flow_completed(gate, approve=approved)
+
+        if is_auto_approve or not approved_by or sync_after_flow:
+            return await _do_decide()
+
         if approved:
-            app.status = "已批准"
-            app.review_status = ReviewStatus.APPROVED.value
+            result = await UniAuditService.approve_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type="payment_application",
+                entity_id=application_id,
+                approver_id=approved_by,
+                flow_approve=_do_decide,
+            )
         else:
-            app.status = "已驳回"
-            app.review_status = ReviewStatus.REJECTED.value
-        app.updated_by = approved_by
-        app.updated_by_name = user["name"]
-        await app.save()
-        return await self.get_by_id(tenant_id, application_id)
+            result = await UniAuditService.reject_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type="payment_application",
+                entity_id=application_id,
+                approver_id=approved_by,
+                reason=review_remarks,
+                flow_reject=lambda _reason: _do_decide(),
+            )
+        return result if result is not None else await self.get_by_id(tenant_id, application_id)
 
     async def record_line_paid(
         self,

@@ -825,7 +825,13 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         return await self.get_requisition_by_id(tenant_id, requisition_id)
 
     async def submit_requisition(
-        self, tenant_id: int, requisition_id: int, submitted_by: int
+        self,
+        tenant_id: int,
+        requisition_id: int,
+        submitted_by: int,
+        *,
+        selected_approver_user_ids: Optional[List[int]] = None,
+        selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
     ) -> PurchaseRequisitionResponse:
         """提交采购申请（启动审批或直接通过）"""
         req = await PurchaseRequisition.get_or_none(
@@ -856,6 +862,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 title=f"采购申请审批: {req.requisition_code}",
                 content=f"申请人: {req.applicant_name or '—'}",
                 doc_label="采购申请",
+                selected_approver_user_ids=selected_approver_user_ids,
+                selected_approver_by_node=selected_approver_by_node,
             )
             req.status = DocumentStatus.PENDING_REVIEW.value
             req.review_status = ReviewStatus.PENDING.value
@@ -889,6 +897,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         approved_by: int = None,
         *,
         is_auto_approve: bool = False,
+        instance_data_patch: Optional[Dict[str, Any]] = None,
     ) -> PurchaseRequisitionResponse:
         """审核采购申请（通过或驳回）"""
         from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, normalize_status
@@ -967,6 +976,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 entity_id=requisition_id,
                 approver_id=approved_by,
                 flow_approve=_do_decide,
+                instance_data_patch=instance_data_patch,
             )
         else:
             result = await UniAuditService.reject_with_flow_fallback(

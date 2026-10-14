@@ -5,7 +5,11 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { ProFormDatePicker, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, Descriptions, Form, InputNumber, Row, Select, Space, Table } from 'antd';
+import { App, Button, Col, Descriptions, Form, InputNumber, Modal, Row, Select, Space, Table } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import type { FormListFieldData } from 'antd/es/form/FormList';
 import dayjs from '../../../../../config/dayjs';
 import { useTranslation } from 'react-i18next';
@@ -55,6 +59,15 @@ const RESOURCE = 'kuaizhizao:payment-application';
 const PaymentApplicationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const linkedDetail = useLinkedDocumentDetail();
+  const [pullPayableOpen, setPullPayableOpen] = useState(false);
+  const [pullPayableSupplierId, setPullPayableSupplierId] = useState<number | null>(null);
+  const [pullPayableRows, setPullPayableRows] = useState<
+    Array<{ payableId: number; payableCode: string; maxRequestAmount: number }>
+  >([]);
+  const [pullPayableSelected, setPullPayableSelected] = useState<number[]>([]);
+  const [pullPayableLoading, setPullPayableLoading] = useState(false);
+  const [pullPayableSubmitting, setPullPayableSubmitting] = useState(false);
   const actionRef = useRef<ActionType>();
   const tableRowsRef = useRef<PaymentApplication[]>([]);
   const perms = useResourcePermissions(RESOURCE);
@@ -415,9 +428,24 @@ const PaymentApplicationsPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.menu.purchase-management.payment-applications')}
           rowKey="id"
           columns={columns}
-          showCreateButton={perms.canCreate}
-          createButtonText={t('app.kuaizhizao.paymentApplication.create')}
-          onCreate={() => void openCreate()}
+          showCreateButton={false}
+          headerActions={
+            perms.canCreate ? (
+              <UniPullCreateToolbar
+                compactKey="create-payment-application-with-pull"
+                createIcon={<PlusOutlined />}
+                createLabel={t('app.kuaizhizao.paymentApplication.create')}
+                onCreate={() => void openCreate()}
+                menuItems={[
+                  {
+                    key: 'pull-from-payable',
+                    label: resolveKuaizhizaoDocumentAction(t, 'payment_application.pull_from_payable').label,
+                    onClick: () => setPullPayableOpen(true),
+                  },
+                ]}
+              />
+            ) : undefined
+          }
           enableRowSelection={
             perms.canDelete ||
             Boolean(perms.canAction?.('submit')) ||
@@ -515,12 +543,60 @@ const PaymentApplicationsPage: React.FC = () => {
                 {formatCurrencyAmount(detail.remainingAmount)}
               </Descriptions.Item>
             </Descriptions>
+            {detail.linkedPayments && detail.linkedPayments.length > 0 ? (
+              <Descriptions column={1} size="small" style={{ marginTop: 16 }}>
+                <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.linkedPayments')}>
+                  <Space wrap size={[8, 4]}>
+                    {detail.linkedPayments.map((p) => (
+                      <Button
+                        key={p.id}
+                        type="link"
+                        size="small"
+                        style={{ padding: 0, height: 'auto' }}
+                        onClick={() => linkedDetail?.openLinkedDocumentDetail('payment', p.id)}
+                      >
+                        {p.code || p.id}
+                      </Button>
+                    ))}
+                  </Space>
+                </Descriptions.Item>
+              </Descriptions>
+            ) : null}
             <Table
               size="small"
               pagination={false}
               rowKey="id"
+              style={{ marginTop: 16 }}
               dataSource={detail.items}
               columns={[
+                {
+                  title: t('app.kuaizhizao.paymentApplication.sourceDocuments'),
+                  key: 'source',
+                  render: (_, row) => {
+                    const st = String(row.sourceType ?? '').trim();
+                    const sid = row.sourceId;
+                    const code = row.sourceCode || row.payableCode;
+                    if (!st || sid == null) return code || '—';
+                    const docType =
+                      st === 'purchase_order'
+                        ? 'purchase_order'
+                        : st === 'purchase_receipt'
+                          ? 'purchase_receipt'
+                          : st === 'payable'
+                            ? 'payable'
+                            : st;
+                    return (
+                      <Button
+                        type="link"
+                        size="small"
+                        style={{ padding: 0, height: 'auto' }}
+                        onClick={() => linkedDetail?.openLinkedDocumentDetail(docType, Number(sid))}
+                      >
+                        {code || sid}
+                      </Button>
+                    );
+                  },
+                },
                 { title: t('app.kuaizhizao.paymentApplication.payableCode'), dataIndex: 'payableCode' },
                 {
                   title: t('app.kuaizhizao.paymentApplication.requestAmount'),
@@ -653,6 +729,98 @@ const PaymentApplicationsPage: React.FC = () => {
           </Col>
         </Row>
       </FormModalTemplate>
+
+      <Modal
+        open={pullPayableOpen}
+        title={resolveKuaizhizaoDocumentAction(t, 'payment_application.pull_from_payable').label}
+        width={720}
+        confirmLoading={pullPayableSubmitting}
+        onCancel={() => {
+          setPullPayableOpen(false);
+          setPullPayableSelected([]);
+        }}
+        onOk={async () => {
+          if (!pullPayableSupplierId || pullPayableSelected.length === 0) {
+            messageApi.warning(t('common.required'));
+            return;
+          }
+          setPullPayableSubmitting(true);
+          try {
+            const supplier = supplierOptions.find((s) => s.id === pullPayableSupplierId);
+            const items: PaymentApplicationLine[] = pullPayableSelected.map((payableId, index) => {
+              const opt = pullPayableRows.find((p) => p.payableId === payableId);
+              return {
+                sourceType: 'payable',
+                sourceId: payableId,
+                sourceCode: opt?.payableCode,
+                payableId,
+                payableCode: opt?.payableCode,
+                lineKind: 'goods',
+                requestAmount: opt?.maxRequestAmount ?? 0,
+                lineNo: index + 1,
+              };
+            });
+            await createPaymentApplication({
+              supplierId: pullPayableSupplierId,
+              supplierName: supplier?.name,
+              items,
+            });
+            messageApi.success(t('common.createSuccess'));
+            setPullPayableOpen(false);
+            setPullPayableSelected([]);
+            actionRef.current?.reload();
+          } catch (e) {
+            messageApi.error(getApiErrorMessage(e, t('app.kuaizhizao.paymentApplication.createFailed')));
+          } finally {
+            setPullPayableSubmitting(false);
+          }
+        }}
+      >
+        <Select
+          style={{ width: '100%', marginBottom: 12 }}
+          placeholder={t('app.kuaizhizao.paymentApplication.supplierName')}
+          options={supplierOptions.map((s) => ({ label: s.name, value: s.id }))}
+          value={pullPayableSupplierId ?? undefined}
+          showSearch
+          optionFilterProp="label"
+          onChange={async (supplierId: number) => {
+            setPullPayableSupplierId(supplierId);
+            setPullPayableSelected([]);
+            setPullPayableLoading(true);
+            try {
+              const res = await listPayablesForPaymentApplication(supplierId, { limit: 200 });
+              setPullPayableRows(
+                (res.data ?? []).map((row) => ({
+                  payableId: Number(row.payable_id),
+                  payableCode: String(row.payable_code ?? ''),
+                  maxRequestAmount: Number(row.max_request_amount ?? 0),
+                })),
+              );
+            } finally {
+              setPullPayableLoading(false);
+            }
+          }}
+        />
+        <Table
+          size="small"
+          loading={pullPayableLoading}
+          rowKey="payableId"
+          pagination={false}
+          dataSource={pullPayableRows}
+          rowSelection={{
+            selectedRowKeys: pullPayableSelected,
+            onChange: (keys) => setPullPayableSelected(keys.map((k) => Number(k))),
+          }}
+          columns={[
+            { title: t('app.kuaizhizao.paymentApplication.payableCode'), dataIndex: 'payableCode' },
+            {
+              title: t('app.kuaizhizao.paymentApplication.requestAmount'),
+              dataIndex: 'maxRequestAmount',
+              render: (v) => formatCurrencyAmount(v),
+            },
+          ]}
+        />
+      </Modal>
     </>
   );
 };

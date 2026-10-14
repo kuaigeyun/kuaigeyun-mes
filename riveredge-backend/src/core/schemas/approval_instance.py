@@ -71,6 +71,10 @@ class ApprovalInstanceAction(BaseModel):
     action: str = Field(..., description="操作类型（approve、reject、cancel、transfer）")
     comment: Optional[str] = Field(None, description="审批意见")
     transfer_to_user_id: Optional[int] = Field(None, description="转交目标用户ID（仅转交时使用）")
+    instance_data_patch: Optional[Dict[str, Any]] = Field(
+        None,
+        description="当前节点 decisionOnApprove 允许的 instance.data 写入（分支决策）",
+    )
     
     @field_validator('action')
     @classmethod

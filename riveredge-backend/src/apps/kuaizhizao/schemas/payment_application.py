@@ -99,6 +99,7 @@ class PaymentApplicationResponse(UuidStrCoerceMixin, BaseSchema):
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
     items: List[PaymentApplicationLineResponse] = []
+    linked_payments: Optional[List[Dict[str, Any]]] = Field(None, alias="linkedPayments")
     capabilities: Optional[Dict[str, Any]] = None
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")

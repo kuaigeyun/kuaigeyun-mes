@@ -31,6 +31,7 @@ import {
   Flex,
 
   Alert,
+  Switch,
 
 } from 'antd';
 
@@ -683,6 +684,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
   const [flowStatus, setFlowStatus] = useState<ApprovalStatusResponse | null>(null);
 
   const [advancedAction, setAdvancedAction] = useState<AdvancedActionState | null>(null);
+  const [branchDecision, setBranchDecision] = useState(false);
 
   const sessionUser = resolveUserForMenuPermission(getSessionCurrentUser());
   const adminOpen = isAdminBypass(sessionUser);
@@ -806,7 +808,24 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
   }, [open, entityType, entityId]);
 
+  const nodeDecision = flowStatus?.current_node_decision;
 
+  useEffect(() => {
+    if (nodeDecision) {
+      setBranchDecision(Boolean(nodeDecision.defaultValue));
+    } else {
+      setBranchDecision(false);
+    }
+  }, [nodeDecision?.field, open]);
+
+  const buildApprovePayload = (): Record<string, unknown> | undefined => {
+    if (!nodeDecision?.field) return undefined;
+    return {
+      instance_data_patch: {
+        [nodeDecision.field]: branchDecision,
+      },
+    };
+  };
 
   const handleOk = async () => {
 
@@ -840,10 +859,12 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     setBusyAction(item.action);
 
     try {
-
+      const payload =
+        item.action === 'approve' ? buildApprovePayload() : undefined;
       await onAction(
         item.action,
         item.action === 'reject' || item.action === 'urge' ? reason.trim() || undefined : undefined,
+        payload,
       );
 
     } finally {
@@ -960,7 +981,12 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
         ) : null}
 
-
+        {nodeDecision && effectiveHubActions.some((a) => a.action === 'approve' && a.canExecute) ? (
+          <Flex align="center" justify="space-between" style={{ marginBottom: 12 }}>
+            <Text>{nodeDecision.label}</Text>
+            <Switch checked={branchDecision} onChange={setBranchDecision} />
+          </Flex>
+        ) : null}
 
         {effectiveHubActions.length > 0 ? (
 

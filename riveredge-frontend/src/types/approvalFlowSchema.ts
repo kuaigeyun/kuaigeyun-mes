@@ -21,6 +21,14 @@ export interface ApprovalNodeData {
   allowTransfer?: boolean;
   allowAddSign?: boolean;
   emptyApproverPolicy?: 'block' | 'auto_pass' | 'fallback_user' | 'escalate_admin';
+  /** multi_level_manager：沿部门树向上第 N 个负责人（≥2） */
+  managerLevel?: number;
+  /** 本节点审批通过时写入 instance.data，供后续条件分支 */
+  decisionOnApprove?: { field: string; label: string; defaultValue?: boolean };
+  decisionOnApproveEnabled?: boolean;
+  decisionOnApproveField?: string;
+  decisionOnApproveLabel?: string;
+  decisionOnApproveDefault?: boolean;
   editableFields?: string[] | '*';
   conditions?: ConditionItem[];
   [key: string]: unknown;
@@ -61,6 +69,28 @@ export function normalizeNodeData(nodeType: string, data: ApprovalNodeData = {})
         out.departmentScope = scope === 'specified' ? 'specified' : 'submitter';
         delete out.department_scope;
       }
+      if (out.approverType === 'multi_level_manager') {
+        const raw = out.managerLevel ?? out.manager_level;
+        const level = raw == null ? 2 : Number(raw);
+        out.managerLevel = Number.isFinite(level) && level >= 2 ? level : 2;
+        delete out.manager_level;
+      }
+      if (out.decisionOnApproveEnabled && (out.decisionOnApproveField || out.decisionOnApprove?.field)) {
+        const field = String(out.decisionOnApproveField || out.decisionOnApprove?.field || '').trim();
+        if (field) {
+          out.decisionOnApprove = {
+            field,
+            label: String(out.decisionOnApproveLabel || out.decisionOnApprove?.label || field).trim(),
+            defaultValue: Boolean(out.decisionOnApproveDefault ?? out.decisionOnApprove?.defaultValue),
+          };
+        }
+      } else {
+        delete out.decisionOnApprove;
+      }
+      delete out.decisionOnApproveEnabled;
+      delete out.decisionOnApproveField;
+      delete out.decisionOnApproveLabel;
+      delete out.decisionOnApproveDefault;
       out.allowEditDuringApproval = Boolean(out.allowEditDuringApproval);
       out.refreshContextOnEdit = out.refreshContextOnEdit !== false;
       out.allowTransfer = Boolean(out.allowTransfer);
@@ -138,6 +168,12 @@ export function validateFlowGraph(graph: FlowGraph): string[] {
 /** 表单 approverIds ↔ UI 分字段 */
 export function nodeDataToFormValues(data: ApprovalNodeData): ApprovalNodeData {
   const v = { ...data };
+  if (v.decisionOnApprove?.field) {
+    v.decisionOnApproveEnabled = true;
+    v.decisionOnApproveField = v.decisionOnApprove.field;
+    v.decisionOnApproveLabel = v.decisionOnApprove.label;
+    v.decisionOnApproveDefault = Boolean(v.decisionOnApprove.defaultValue);
+  }
   if (v.approverType === 'user') v.approvers = v.approverIds ?? [];
   if (v.approverType === 'role') v.roles = v.approverIds ?? [];
   if (v.approverType === 'department') {

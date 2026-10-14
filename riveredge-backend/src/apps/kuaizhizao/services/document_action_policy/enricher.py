@@ -271,12 +271,18 @@ def enrich_inbound_hub_list_capabilities(
     quantity_sums: Optional[Dict[int, float]] = None,
     item_previews: Optional[Dict[int, List[Dict[str, Any]]]] = None,
     quantity_units: Optional[Dict[int, Optional[str]]] = None,
+    push_payment_application_open: Optional[Dict[int, bool]] = None,
 ) -> List[T]:
     out: List[T] = []
     for record, resp in zip(records, responses):
-        caps = derive_inbound_hub_capabilities(record, receipt_type=receipt_type)
-        update: Dict[str, Any] = {"capabilities": caps}
         rid = int(getattr(record, "id", 0) or 0)
+        payable_open = bool((push_payment_application_open or {}).get(rid))
+        caps = derive_inbound_hub_capabilities(
+            record,
+            receipt_type=receipt_type,
+            payable_request_open=payable_open,
+        )
+        update: Dict[str, Any] = {"capabilities": caps}
         if item_counts is not None:
             update["total_items"] = item_counts.get(rid, 0)
         if quantity_sums is not None:

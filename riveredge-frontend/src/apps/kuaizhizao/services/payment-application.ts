@@ -40,6 +40,7 @@ export interface PaymentApplication {
   notes?: string;
   attachments?: Array<Record<string, unknown>>;
   items: PaymentApplicationLine[];
+  linkedPayments?: Array<{ id: number; code: string }>;
   capabilities?: Record<string, { allowed: boolean; reason?: string }>;
   audit?: {
     phase?: string;
@@ -125,5 +126,25 @@ export async function pullPaymentApplicationFromPurchaseReceipt(payload: {
   return apiRequest<PaymentApplication>(`${BASE}/pull-from-purchase-receipt`, {
     method: 'POST',
     data: payload,
+  });
+}
+
+export async function pullPaymentApplicationFromPurchaseOrder(payload: {
+  purchaseOrderId: number;
+  amount?: number;
+}) {
+  return apiRequest<PaymentApplication>(`${BASE}/pull-from-purchase-order`, {
+    method: 'POST',
+    data: {
+      purchase_order_id: payload.purchaseOrderId,
+      amount: payload.amount,
+    },
+  });
+}
+
+export async function previewPullPaymentApplicationFromPurchaseOrder(purchaseOrderId: number) {
+  return apiRequest<Record<string, unknown>>(`${BASE}/pull-from-purchase-order/preview`, {
+    method: 'GET',
+    params: { purchase_order_id: purchaseOrderId },
   });
 }

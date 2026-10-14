@@ -145,6 +145,38 @@ class PaymentApplicationPullService:
         )
         return await self._apps.create_application(tenant_id, create, created_by)
 
+    async def push_payment_application_open_by_receipt_ids(
+        self, tenant_id: int, receipt_ids: List[int]
+    ) -> Dict[int, bool]:
+        result: Dict[int, bool] = {int(rid): False for rid in receipt_ids}
+        if not receipt_ids:
+            return result
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="purchase_receipt",
+            source_id__in=receipt_ids,
+            target_type="payable",
+        ).all()
+        payable_ids = {int(r.target_id) for r in rels if r.target_id}
+        if not payable_ids:
+            return result
+        payables = await Payable.filter(
+            tenant_id=tenant_id, id__in=list(payable_ids), deleted_at__isnull=True
+        ).all()
+        payable_by_id = {int(p.id): p for p in payables}
+        for rel in rels:
+            rid = int(rel.source_id or 0)
+            pid = int(rel.target_id or 0)
+            payable = payable_by_id.get(pid)
+            if not payable or rid not in result:
+                continue
+            max_req = await self._open.max_request_for_payable(tenant_id, payable)
+            if max_req > 0:
+                result[rid] = True
+        return result
+
     async def _payable_for_receipt(self, tenant_id: int, receipt_id: int) -> Payable:
         from apps.kuaizhizao.models.document_relation import DocumentRelation
 

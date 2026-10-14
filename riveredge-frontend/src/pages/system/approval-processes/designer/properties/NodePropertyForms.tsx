@@ -34,6 +34,7 @@ const APPROVER_OPTIONS = (t: (k: string) => string) => [
   { label: t('pages.approval.designer.approverTypeRole'), value: 'role' },
   { label: t('pages.approval.designer.approverTypeDept'), value: 'department' },
   { label: t('pages.approval.designer.approverTypeManager'), value: 'manager' },
+  { label: t('pages.approval.designer.approverTypeMultiLevelManager'), value: 'multi_level_manager' },
   { label: t('pages.approval.designer.approverTypeOptional'), value: 'initiator_select' },
 ];
 
@@ -85,6 +86,18 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
                 label={t('pages.approval.designer.selectRole')}
                 request={async () => (await getRoleList({})).items.map((r) => ({ label: r.name, value: r.uuid }))}
                 mode="multiple"
+              />
+            );
+          }
+          if (approverType === 'multi_level_manager') {
+            return (
+              <ProFormDigit
+                name="managerLevel"
+                label={t('pages.approval.designer.managerLevel')}
+                min={2}
+                initialValue={2}
+                fieldProps={{ precision: 0, style: { width: '100%' } }}
+                rules={[{ required: true, message: t('pages.approval.designer.managerLevelRequired') }]}
               />
             );
           }
@@ -171,6 +184,34 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
         fieldProps={{ precision: 0, style: { width: '100%' } }}
         tooltip={t('pages.approval.designer.timeoutHoursTip')}
       />
+      <ProFormSwitch
+        name="decisionOnApproveEnabled"
+        label={t('pages.approval.designer.decisionOnApproveEnabled')}
+      />
+      <ProFormDependency name={['decisionOnApproveEnabled']}>
+        {({ decisionOnApproveEnabled }) =>
+          decisionOnApproveEnabled ? (
+            <>
+              <ProFormText
+                name="decisionOnApproveField"
+                label={t('pages.approval.designer.decisionOnApproveField')}
+                rules={[{ required: true, message: t('pages.approval.designer.decisionOnApproveFieldRequired') }]}
+                initialValue="require_gm_special_approval"
+              />
+              <ProFormText
+                name="decisionOnApproveLabel"
+                label={t('pages.approval.designer.decisionOnApproveLabel')}
+                rules={[{ required: true, message: t('pages.approval.designer.decisionOnApproveLabelRequired') }]}
+                initialValue={t('pages.approval.designer.decisionOnApproveLabelDefault')}
+              />
+              <ProFormSwitch
+                name="decisionOnApproveDefault"
+                label={t('pages.approval.designer.decisionOnApproveDefault')}
+              />
+            </>
+          ) : null
+        }
+      </ProFormDependency>
     </>
   );
 };
@@ -231,6 +272,7 @@ export const ConditionNodeForm: React.FC<ConditionNodeFormProps> = ({ branchCoun
   const opOptions = [
     { label: t('pages.approval.designer.opEqual'), value: '==' },
     { label: t('pages.approval.designer.opNotEqual'), value: '!=' },
+    { label: t('pages.approval.designer.opStrictGreater'), value: '>' },
     { label: t('pages.approval.designer.opGreater'), value: '>=' },
     { label: t('pages.approval.designer.opLess'), value: '<' },
     { label: t('pages.approval.designer.opContains'), value: 'contains' },

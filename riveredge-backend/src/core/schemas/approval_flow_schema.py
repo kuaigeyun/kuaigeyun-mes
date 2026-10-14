@@ -44,6 +44,21 @@ def normalize_node_data(node_type: str, data: Optional[Dict[str, Any]]) -> Dict[
                 scope = str(out.get("departmentScope") or out.get("department_scope") or "submitter").strip().lower()
                 out["departmentScope"] = "specified" if scope == "specified" else "submitter"
                 out.pop("department_scope", None)
+            if (out.get("approverType") or "") == "multi_level_manager":
+                raw_level = out.get("managerLevel")
+                if raw_level is None:
+                    raw_level = out.pop("manager_level", None)
+                if raw_level is None:
+                    out["managerLevel"] = 2
+                else:
+                    try:
+                        level = int(raw_level)
+                    except (TypeError, ValueError) as exc:
+                        raise ValidationError(f"审批节点 managerLevel 非法: {raw_level!r}") from exc
+                    if level < 2:
+                        raise ValidationError("multi_level_manager 的 managerLevel 须 ≥ 2")
+                    out["managerLevel"] = level
+                out.pop("manager_level", None)
             out.setdefault("allowEditDuringApproval", bool(out.get("allowEditDuringApproval", False)))
             out.setdefault("refreshContextOnEdit", bool(out.get("refreshContextOnEdit", True)))
             out.setdefault("allowTransfer", bool(out.get("allowTransfer", False)))
@@ -54,6 +69,24 @@ def normalize_node_data(node_type: str, data: Optional[Dict[str, Any]]) -> Dict[
             else:
                 out["emptyApproverPolicy"] = str(policy).strip().lower() or "block"
             out.pop("empty_approver_policy", None)
+            raw_decision = out.get("decisionOnApprove") or out.pop("decision_on_approve", None)
+            if isinstance(raw_decision, dict) and raw_decision.get("field"):
+                field = str(raw_decision.get("field") or "").strip()
+                if not field:
+                    out.pop("decisionOnApprove", None)
+                else:
+                    label = str(raw_decision.get("label") or "").strip() or field
+                    default_raw = raw_decision.get("defaultValue")
+                    if default_raw is None:
+                        default_raw = raw_decision.get("default_value")
+                    default_value = bool(default_raw) if default_raw is not None else False
+                    out["decisionOnApprove"] = {
+                        "field": field,
+                        "label": label,
+                        "defaultValue": default_value,
+                    }
+            else:
+                out.pop("decisionOnApprove", None)
             timeout = out.get("timeoutHours")
             if timeout is None and out.get("timeout_hours") is not None:
                 timeout = out.get("timeout_hours")

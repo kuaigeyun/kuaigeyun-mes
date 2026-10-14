@@ -14,6 +14,22 @@ _DEFAULT_FIELDS: Dict[str, List[Dict[str, Any]]] = {
         {"field": "total_amount", "label": "采购总金额", "type": "number", "operators": [">=", ">", "<", "<=", "=="]},
         {"field": "supplier_id", "label": "供应商", "type": "number", "operators": ["==", "!="]},
     ],
+    "purchase_request": [
+        {
+            "field": "require_gm_special_approval",
+            "label": "需要总经理特殊情况审批",
+            "type": "boolean",
+            "operators": ["==", "!="],
+        },
+    ],
+    "payment_application": [
+        {
+            "field": "total_request_amount",
+            "label": "申请总金额",
+            "type": "number",
+            "operators": [">=", ">", "<", "<=", "=="],
+        },
+    ],
     "quotation": [
         {"field": "total_amount", "label": "报价总金额", "type": "number", "operators": [">=", ">", "<", "<=", "=="]},
     ],

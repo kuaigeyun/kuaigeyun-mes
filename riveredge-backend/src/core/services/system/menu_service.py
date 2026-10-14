@@ -110,7 +110,7 @@ class MenuService:
         candidates: List[Menu],
         leaf: Menu,
     ) -> Optional[Menu]:
-        """同应用下多个同名分组时，优先与叶子当前错误父级同级的文件夹（快财务平铺修复）。"""
+        """同 parent_id + name 唯一；若库内出现同名多条且无法与叶子当前父级对齐，直接失败暴露。"""
         if not candidates:
             return None
         if len(candidates) == 1:
@@ -118,7 +118,11 @@ class MenuService:
         for folder in candidates:
             if folder.parent_id == leaf.parent_id:
                 return folder
-        return candidates[0]
+        folder_name = (candidates[0].name or "").strip()
+        raise ValidationError(
+            f"菜单分组 {folder_name} 在 core_menus 中存在 {len(candidates)} 条重复行，"
+            "无法确定挂载点，请删除重复分组后重新同步应用菜单"
+        )
 
     @staticmethod
     async def _realign_application_menu_leaf_parents(
@@ -163,7 +167,12 @@ class MenuService:
                 continue
             candidates = folders_by_name.get(expected_parent_name, [])
             target = MenuService._pick_manifest_folder_parent(candidates, leaf)
-            if not target or leaf.parent_id == target.id:
+            if not target:
+                raise ValidationError(
+                    f"manifest 声明路由 {path} 的父级为 {expected_parent_name!r}，"
+                    "但 core_menus 中缺少对应无 path 分组行；请先执行应用菜单同步"
+                )
+            if leaf.parent_id == target.id:
                 continue
             leaf.parent_id = target.id
             await leaf.save(update_fields=["parent_id", "updated_at"])
@@ -178,6 +187,118 @@ class MenuService:
                 fixed,
             )
         return fixed
+
+    @staticmethod
+    async def _ensure_manifest_intermediate_folders(
+        tenant_id: int,
+        application_uuid: str,
+        menu_config: Any,
+        *,
+        is_active: bool = True,
+    ) -> int:
+        """
+        按 manifest 补齐无 path 的中间分组行（parent_id + group meta），避免叶子直接挂在文件夹下平铺。
+        """
+        if not menu_config:
+            return 0
+
+        rows = await Menu.filter(
+            tenant_id=tenant_id,
+            application_uuid=str(application_uuid),
+            deleted_at__isnull=True,
+        ).all()
+        by_path: Dict[str, Menu] = {
+            str(m.path).strip(): m for m in rows if m.path and str(m.path).strip()
+        }
+        by_parent_name: Dict[Tuple[Optional[int], str], Menu] = {}
+        for menu in rows:
+            if menu.name:
+                by_parent_name.setdefault((menu.parent_id, menu.name), menu)
+
+        ensured = 0
+
+        async def ensure_folder(
+            node: Dict[str, Any],
+            parent_id: Optional[int],
+        ) -> Optional[int]:
+            nonlocal ensured
+            title = str(node.get("title") or "").strip()
+            path_raw = node.get("path")
+            path = str(path_raw).strip() if path_raw else ""
+            children = node.get("children") if isinstance(node.get("children"), list) else []
+            has_children = len(children) > 0
+
+            if path:
+                existing = by_path.get(path)
+                return existing.id if existing else None
+
+            if not title or not has_children:
+                return parent_id
+
+            meta = MenuService._merge_manifest_folder_meta(
+                title,
+                node.get("meta") if isinstance(node.get("meta"), dict) else None,
+                has_children=True,
+                menu_path=None,
+            )
+            folder = by_parent_name.get((parent_id, title))
+            if folder is None:
+                folder = await Menu.create(
+                    tenant_id=tenant_id,
+                    name=title,
+                    path=None,
+                    icon=node.get("icon"),
+                    component=node.get("component"),
+                    permission_code=None,
+                    application_uuid=str(application_uuid),
+                    parent_id=parent_id,
+                    sort_order=0,
+                    is_active=is_active,
+                    is_external=bool(node.get("is_external", False)),
+                    external_url=node.get("external_url"),
+                    meta=meta,
+                )
+                rows.append(folder)
+                ensured += 1
+            else:
+                folder.icon = node.get("icon") or folder.icon
+                folder.meta = merge_menu_meta_for_sync(folder.meta, meta)
+                if not (folder.meta or {}).get(META_TENANT_PARENT_OVERRIDE):
+                    folder.parent_id = parent_id
+                await folder.save()
+            by_parent_name[(folder.parent_id, title)] = folder
+
+            for child in children:
+                if isinstance(child, dict):
+                    await ensure_folder(child, folder.id)
+            return folder.id
+
+        async def walk_config(config: Any) -> None:
+            if isinstance(config, dict):
+                root_path = str(config.get("path") or "").strip()
+                root_id: Optional[int] = None
+                if root_path:
+                    root_row = by_path.get(root_path)
+                    root_id = root_row.id if root_row else None
+                for child in config.get("children") or []:
+                    if isinstance(child, dict):
+                        await ensure_folder(child, root_id)
+            elif isinstance(config, list):
+                for item in config:
+                    if isinstance(item, dict):
+                        await ensure_folder(item, None)
+
+        await walk_config(menu_config)
+        if ensured:
+            from loguru import logger
+
+            logger.info(
+                "menu_folder_ensure tenant={} app={} created={}",
+                tenant_id,
+                application_uuid,
+                ensured,
+            )
+        return ensured
 
     @staticmethod
     def _should_repair_orphaned_manifest_parent(
@@ -2047,6 +2168,12 @@ class MenuService:
             f"应用 {application_uuid} 菜单配置同步完成，处理 {synced_count} 个菜单（新建 {created_count} 个）"
         )
 
+        await MenuService._ensure_manifest_intermediate_folders(
+            tenant_id,
+            application_uuid,
+            menu_config,
+            is_active=is_active,
+        )
         await MenuService._realign_application_menu_leaf_parents(
             tenant_id, application_uuid, menu_config
         )

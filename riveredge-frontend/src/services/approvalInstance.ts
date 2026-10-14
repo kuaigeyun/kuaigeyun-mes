@@ -135,6 +135,12 @@ export interface ApprovalStatusResponse {
     allow_add_sign?: boolean;
     allow_edit_during_approval?: boolean;
   };
+  /** 当前节点配置了 decisionOnApprove 时，审核通过前须由待办人勾选 */
+  current_node_decision?: {
+    field: string;
+    label: string;
+    defaultValue: boolean;
+  } | null;
   tasks?: Array<{
     uuid: string;
     node_id?: string;

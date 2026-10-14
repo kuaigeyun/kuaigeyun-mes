@@ -4425,7 +4425,10 @@ export default {
   'app.kuaicaiwu.otherIncome.rejectConfirmTitle': '驳回其他费用收入',
   'app.kuaicaiwu.otherIncome.rejectConfirmDesc': '确定驳回单号 {{code}} 吗？',
   'app.kuaicaiwu.otherIncome.confirmPostTitle': '确认过账',
-  'app.kuaicaiwu.otherIncome.confirmPostDesc': '确定对单号 {{code}} 确认过账并写入银行流水吗？',
+  'app.kuaicaiwu.otherIncome.confirmPostDesc': '确定对单号 {{code}} 确认过账并生成收款单核销应收吗？',
+  'app.kuaicaiwu.otherIncome.pushReceipt': '下推收款单',
+  'app.kuaicaiwu.otherIncome.finance.receivable': '应收单',
+  'app.kuaicaiwu.otherIncome.finance.receipt': '收款单',
   'app.kuaicaiwu.otherIncome.unconfirm': '撤回确认',
   'app.kuaicaiwu.otherIncome.unconfirmTitle': '撤回确认过账',
   'app.kuaicaiwu.otherIncome.unconfirmDesc': '确定撤回单号 {{code}} 的确认过账吗？将冲回银行流水。',
@@ -4483,7 +4486,10 @@ export default {
   'app.kuaicaiwu.otherExpense.rejectConfirmTitle': '驳回其他费用支出',
   'app.kuaicaiwu.otherExpense.rejectConfirmDesc': '确定驳回单号 {{code}} 吗？',
   'app.kuaicaiwu.otherExpense.confirmPostTitle': '确认过账',
-  'app.kuaicaiwu.otherExpense.confirmPostDesc': '确定对单号 {{code}} 确认过账并写入银行流水吗？',
+  'app.kuaicaiwu.otherExpense.confirmPostDesc': '确定对单号 {{code}} 确认过账并生成付款单核销应付吗？',
+  'app.kuaicaiwu.otherExpense.pushPayment': '下推付款单',
+  'app.kuaicaiwu.otherExpense.finance.payable': '应付单',
+  'app.kuaicaiwu.otherExpense.finance.payment': '付款单',
   'app.kuaicaiwu.otherExpense.unconfirm': '撤回确认',
   'app.kuaicaiwu.otherExpense.unconfirmTitle': '撤回确认过账',
   'app.kuaicaiwu.otherExpense.unconfirmDesc': '确定撤回单号 {{code}} 的确认过账吗？将冲回银行流水。',
@@ -9068,6 +9074,8 @@ export default {
     '该供应商暂无已审核且可请款的应付单（须有余额且未被付款/申请占满）',
   'app.kuaizhizao.paymentApplication.requestAmount': '申请金额',
   'app.kuaizhizao.paymentApplication.paidAmount': '已付金额',
+  'app.kuaizhizao.paymentApplication.linkedPayments': '已下推付款单',
+  'app.kuaizhizao.paymentApplication.sourceDocuments': '来源单据',
   'app.kuaizhizao.paymentApplication.pushPayment': '下推付款单',
   'app.kuaizhizao.paymentApplication.pushPaymentSuccess': '已生成付款单 {{code}}',
   'app.kuaizhizao.paymentApplication.pushFromPurchaseOrder': '下推付款申请',
@@ -15607,6 +15615,12 @@ export default {
   'app.kuaizhizao.documentAction.purchase_invoice.pull_from_purchase_order.label': '从采购订单创建采购发票',
   'app.kuaizhizao.documentAction.purchase_invoice.pull_from_purchase_order.source': '采购订单',
   'app.kuaizhizao.documentAction.purchase_invoice.pull_from_purchase_order.target': '采购发票',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_payable.label': '从应付单创建付款申请单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_payable.source': '应付单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_payable.target': '付款申请单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_order.label': '从采购订单预付创建付款申请单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_order.source': '采购订单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_order.target': '付款申请单',
   'app.kuaizhizao.documentAction.payment.pull_from_purchase_order.label': '从采购订单创建预付付款单',
   'app.kuaizhizao.documentAction.payment.pull_from_purchase_order.source': '采购订单',
   'app.kuaizhizao.documentAction.payment.pull_from_purchase_order.target': '预付付款单',
@@ -31438,6 +31452,26 @@ export default {
     '样品加工研发项目支持手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.description':
     '新建样品加工申请时，研发项目可从系统项目选择，也可直接输入项目代号，不再因项目主数据未建档而无法保存。',
+  'pages.dashboard.updateLog.entries.finance-misc-create-document-relation-filter-r01.title':
+    '其他费用收入新建不再报错',
+  'pages.dashboard.updateLog.entries.finance-misc-create-document-relation-filter-r01.description':
+    '修复单据关联查询误用软删除字段导致新建其他费用收入失败的问题。',
+  'pages.dashboard.updateLog.entries.finance-misc-ar-ap-chain-r01.title':
+    '其他费用收支挂账应收应付并走收付款核销',
+  'pages.dashboard.updateLog.entries.finance-misc-ar-ap-chain-r01.description':
+    '其他费用收入、支出在审核通过且往来为客户或供应商时自动生成应收或应付；确认过账经收款单或付款单核销并写入银行流水，不再直写其他费用单流水。',
+  'pages.dashboard.updateLog.entries.payment-application-pull-chain-r01.title':
+    '付款申请上拉选单与入库下推门禁',
+  'pages.dashboard.updateLog.entries.payment-application-pull-chain-r01.description':
+    '付款申请列表支持从应付或采购预付上拉创建；采购入库下推付款申请按应付可请款额度与 capabilities 门禁，详情可查看来源行与已下推付款单。',
+  'pages.dashboard.updateLog.entries.approval-prior-node-branch-decision-r01.title':
+    '上一审批节点可决定是否走特批分支',
+  'pages.dashboard.updateLog.entries.approval-prior-node-branch-decision-r01.description':
+    '审批节点可配置「审批通过时分支决策」：待办人审核通过前勾选是否开启后续条件（如总经理特批）。采购申请典型为二级上级勾选后，条件节点决定是否进入总经理节点。',
+  'pages.dashboard.updateLog.entries.approval-flow-lzh-scenarios-r01.title':
+    '审批流补齐多级上级、自选与付款条件',
+  'pages.dashboard.updateLog.entries.approval-flow-lzh-scenarios-r01.description':
+    '设计器可配多级上级与发起人自选节点；提交时可勾选审批人，可选节点允许跳过。付款申请接入审批实例，条件分支支持申请总金额大于阈值。配置示例：采购申请 直属主管→二级上级→自选总经理(可跳过)→采购副总；采购订单 采购主管；付款申请 采购主管→财务副总→金额大于5万总经理→采购副总。',
   'pages.dashboard.updateLog.entries.supplier-import-payment-account-r01.title':
     '供应商导入补上付款账号',
   'pages.dashboard.updateLog.entries.supplier-import-payment-account-r01.description':
@@ -31450,6 +31484,10 @@ export default {
     '导入预检可选重复行更新或跳过',
   'pages.dashboard.updateLog.entries.uni-import-duplicate-strategy-r01.description':
     'UniImport 预检确认前可按编码/单号选择更新已有、仅新建或遇重复失败，并展示预计新建与覆盖条数；客商导入已接入。',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-hierarchy-auto-repair-r02.title':
+    '轻财务财务管理菜单自动补齐收款/付款分组',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-hierarchy-auto-repair-r02.description':
+    '应用菜单同步时会按 manifest 补齐收款管理、付款管理分组行，并将应收应付等叶子的 parent_id 写回 manifest 声明的父级；层级仍不对时同步会明确报错，而非侧栏读时静默改库。',
   'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-group-realign-r01.title':
     '轻财务财务管理菜单恢复收款/付款分组',
   'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-group-realign-r01.description':
@@ -40195,6 +40233,20 @@ export default {
   'pages.approval.designer.approverTypeUser': '指定用户 (从用户列表中选择)',
   'pages.approval.designer.approverTypeRole': '指定角色 (该角色下所有用户均可审批)',
   'pages.approval.designer.approverTypeManager': '直属主管 (发起人的直接领导)',
+  'pages.approval.designer.approverTypeMultiLevelManager': '多级上级 (沿部门树向上第 N 级负责人)',
+  'pages.approval.designer.managerLevel': '上级级数',
+  'pages.approval.designer.managerLevelRequired': '请填写上级级数（至少 2）',
+  'pages.approval.submitInitiatorOptionalHint': '标记为可选的节点可不选人，流程将按空审批人策略跳过该节点。',
+  'pages.approval.submitInitiatorOptional': '可选',
+  'pages.approval.submitInitiatorRequired': '请为「{{node}}」选择审批人',
+  'pages.approval.submitInitiatorPlaceholder': '选择{{entity}}审批人',
+  'pages.approval.designer.decisionOnApproveEnabled': '审批通过时由本节点决定后续分支',
+  'pages.approval.designer.decisionOnApproveField': '分支字段名',
+  'pages.approval.designer.decisionOnApproveFieldRequired': '请填写分支字段名',
+  'pages.approval.designer.decisionOnApproveLabel': '审核页开关文案',
+  'pages.approval.designer.decisionOnApproveLabelRequired': '请填写审核页开关文案',
+  'pages.approval.designer.decisionOnApproveLabelDefault': '需要总经理审批(特殊情况)',
+  'pages.approval.designer.decisionOnApproveDefault': '默认开启该分支',
   'pages.approval.designer.approverTypeDept': '部门负责人',
   'pages.approval.designer.departmentScope': '部门负责人范围',
   'pages.approval.designer.departmentScopeSubmitter': '发起人所属部门负责人（沿父部门向上查找）',
@@ -40217,7 +40269,8 @@ export default {
   'pages.approval.designer.fieldCustom': '自定义路径',
   'pages.approval.designer.opEqual': '等于',
   'pages.approval.designer.opNotEqual': '不等于',
-  'pages.approval.designer.opGreater': '大于',
+  'pages.approval.designer.opStrictGreater': '大于',
+  'pages.approval.designer.opGreater': '大于等于',
   'pages.approval.designer.opLess': '小于',
   'pages.approval.designer.opContains': '包含',
   'pages.approval.designer.addNodeHint': '从开始节点添加下一节点，新节点将自动连线并垂直居中对齐。',

@@ -437,12 +437,21 @@ async def _dispatch_payment_application(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.kuaizhizao.services.payment_application_service import PaymentApplicationService
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     svc = PaymentApplicationService()
     if action == "submit":
-        return await svc.submit_application(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_application(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "approve":
         return await svc.approve_application(
             tenant_id,
@@ -471,15 +480,32 @@ async def _dispatch_purchase_request(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     svc = PurchaseRequisitionService()
     if action == "submit":
-        return await svc.submit_requisition(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_requisition(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
+    patch = None
+    if payload and isinstance(payload.get("instance_data_patch"), dict):
+        patch = payload.get("instance_data_patch")
     if action == "approve":
         return await svc.approve_requisition(
-            tenant_id, entity_id, True, review_remarks=reason, approved_by=user_id
+            tenant_id,
+            entity_id,
+            True,
+            review_remarks=reason,
+            approved_by=user_id,
+            instance_data_patch=patch,
         )
     if action == "reject":
         return await svc.approve_requisition(

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { App, Button, Space } from 'antd';
 import { AuditOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../services/api';
@@ -14,6 +14,8 @@ import { useGlobalStore } from '../../stores';
 import { hasModulePermission, hasReviewPermission } from '../../utils/permissionContract';
 import { isAdminBypass, resolveUserForMenuPermission } from '../../utils/permission';
 import UniAuditModal, { type UniAuditHubAction } from './UniAuditModal';
+import UniAuditInitiatorSubmitModal from './UniAuditInitiatorSubmitModal';
+import { fetchSubmitInitiatorNodes, type SubmitInitiatorNodeHint } from '../../services/uniAudit';
 import type { UniAuditAction, UniAuditActionsMap, UniAuditEndpointMap, WorkflowStatus } from './types';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
@@ -195,6 +197,9 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const [loadingAction, setLoadingAction] = useState<UniAuditAction | null>(null);
   const [activeAction, setActiveAction] = useState<UniAuditAction | null>(null);
   const [auditHubOpen, setAuditHubOpen] = useState(false);
+  const [initiatorSubmitOpen, setInitiatorSubmitOpen] = useState(false);
+  const [initiatorNodes, setInitiatorNodes] = useState<SubmitInitiatorNodeHint[]>([]);
+  const [initiatorLoading, setInitiatorLoading] = useState(false);
   const rawCurrentUser = useCurrentUser();
   const currentUser = useMemo(() => resolveUserForMenuPermission(rawCurrentUser), [rawCurrentUser]);
   const adminOpen = isAdminBypass(currentUser);
@@ -404,6 +409,28 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   const openActionModal = (action: UniAuditAction) => setActiveAction(action);
 
+  const beginSubmit = useCallback(async () => {
+    if (!auditFeatureEnabled || !resolvedEntityType) {
+      openActionModal('submit');
+      return;
+    }
+    setInitiatorLoading(true);
+    try {
+      const nodes = await fetchSubmitInitiatorNodes(resolvedEntityType);
+      if (nodes.length > 0) {
+        setInitiatorNodes(nodes);
+        setInitiatorSubmitOpen(true);
+      } else {
+        openActionModal('submit');
+      }
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      message.error(`加载提交审批选项失败: ${errMsg}`);
+    } finally {
+      setInitiatorLoading(false);
+    }
+  }, [auditFeatureEnabled, resolvedEntityType, message]);
+
   const getActionTitle = (action: UniAuditAction): string => {
     if (action === 'submit') return effectiveSubmitLabel;
     if (action === 'approve') return approveLabel;
@@ -528,9 +555,9 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
         key: 'audit-submit',
         label: effectiveSubmitLabel,
         labelKeep: submitUsesCustomLabel,
-        loading: loadingAction === 'submit',
-        disabled: isBusy && loadingAction !== 'submit',
-        onClick: () => openActionModal('submit'),
+        loading: loadingAction === 'submit' || initiatorLoading,
+        disabled: (isBusy && loadingAction !== 'submit') || initiatorLoading,
+        onClick: () => void beginSubmit(),
       }),
     );
   }
@@ -609,6 +636,21 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
           canExecute={canExecuteByAction[activeAction]}
           onCancel={() => setActiveAction(null)}
           onConfirm={handleConfirm}
+        />
+      )}
+
+      {initiatorSubmitOpen && (
+        <UniAuditInitiatorSubmitModal
+          open
+          entityName={entityName}
+          submitTitle={effectiveSubmitLabel}
+          nodes={initiatorNodes}
+          loading={loadingAction === 'submit'}
+          onCancel={() => setInitiatorSubmitOpen(false)}
+          onConfirm={async (selectedByNode) => {
+            await runAction('submit', undefined, { selected_approver_by_node: selectedByNode });
+            setInitiatorSubmitOpen(false);
+          }}
         />
       )}
     </>

@@ -263,3 +263,43 @@ class TestResolveNodeApproversFailClosed:
         with pytest.raises(ValidationError, match="不支持的审批人类型"):
             await ApprovalInstanceService._resolve_node_approvers(node, instance)
 
+    @pytest.mark.asyncio
+    async def test_multi_level_manager_level_two(self):
+        instance = MagicMock()
+        instance.tenant_id = 1
+        instance.submitter_id = 10
+        instance.data = {}
+        node = {
+            "id": "n2",
+            "data": {"approverType": "multi_level_manager", "managerLevel": 2},
+        }
+
+        with patch.object(
+            ApprovalInstanceService,
+            "_resolve_submitter_department_manager_at_level",
+            new_callable=AsyncMock,
+            return_value=[42],
+        ) as mock_level:
+            ids = await ApprovalInstanceService._resolve_node_approvers(node, instance)
+        mock_level.assert_awaited_once_with(1, 10, 2)
+        assert ids == [42]
+
+
+class TestEvaluateConditionsNumeric:
+    def test_gt_with_string_actual_and_numeric_threshold(self):
+        instance = MagicMock()
+        instance.data = {"total_request_amount": "60000"}
+        conditions = [{"field": "total_request_amount", "operator": ">", "value": 50000}]
+        idx = ApprovalInstanceService._evaluate_conditions(instance, conditions)
+        assert idx == 0
+
+    def test_gt_skips_to_next_branch_when_below_threshold(self):
+        instance = MagicMock()
+        instance.data = {"total_request_amount": 40000}
+        conditions = [
+            {"field": "total_request_amount", "operator": ">", "value": 50000},
+            {"field": "total_request_amount", "operator": "<", "value": 50000},
+        ]
+        idx = ApprovalInstanceService._evaluate_conditions(instance, conditions)
+        assert idx == 1
+

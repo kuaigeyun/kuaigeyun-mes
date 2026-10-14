@@ -90,6 +90,7 @@ export interface InboundHubOrder {
     print?: { allowed?: boolean; reason?: string };
     delete?: { allowed?: boolean; reason?: string };
     update?: { allowed?: boolean; reason?: string };
+    push_payment_application?: { allowed?: boolean; reason?: string };
   };
   [key: string]: unknown;
 }

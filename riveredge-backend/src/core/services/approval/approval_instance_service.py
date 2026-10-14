@@ -922,6 +922,21 @@ class ApprovalInstanceService:
                     "allow_edit_during_approval": bool(nd.get("allowEditDuringApproval")),
                 }
 
+        current_node_decision = None
+        if instance and instance.status == "pending" and process:
+            from core.schemas.approval_flow_schema import get_node_config, normalize_flow_graph
+
+            graph = normalize_flow_graph(process.nodes or {})
+            cur = get_node_config(graph, instance.current_node)
+            if cur and cur.get("type") == "approval":
+                spec = (cur.get("data") or {}).get("decisionOnApprove")
+                if isinstance(spec, dict) and spec.get("field"):
+                    current_node_decision = {
+                        "field": str(spec.get("field")),
+                        "label": str(spec.get("label") or spec.get("field")),
+                        "defaultValue": bool(spec.get("defaultValue", False)),
+                    }
+
         return {
             "has_flow": bool(process or instance),
             "has_instance": bool(instance),
@@ -966,6 +981,7 @@ class ApprovalInstanceService:
             "editable_fields": editable_fields,
             "has_my_pending_task": bool(viewer_actions.get("has_my_pending_task")),
             "viewer_actions": viewer_actions,
+            "current_node_decision": current_node_decision,
         }
 
     @staticmethod
@@ -1054,6 +1070,7 @@ class ApprovalInstanceService:
         approver_id: int,
         approved: bool,
         comment: Optional[str] = None,
+        instance_data_patch: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         按 entity 执行审批（统一入口）
@@ -1122,6 +1139,7 @@ class ApprovalInstanceService:
         action = ApprovalInstanceAction(
             action="approve" if approved else "reject",
             comment=comment,
+            instance_data_patch=instance_data_patch,
         )
         updated = await ApprovalInstanceService.perform_task_action(
             tenant_id=tenant_id,
@@ -1685,7 +1703,16 @@ class ApprovalInstanceService:
 
         if action_data.action not in ("approve", "reject"):
             raise ValidationError(f"任务操作不支持: {action_data.action}")
-            
+
+        process = instance.process if instance else None
+        if process and action_data.action == "approve":
+            await ApprovalInstanceService._apply_decision_on_approve(
+                instance,
+                task.node_id,
+                process.nodes,
+                action_data,
+            )
+
         # 更新任务状态
         task.status = "approved" if action_data.action == "approve" else "rejected"
         task.action_at = resolve_business_datetime()
@@ -2092,6 +2119,86 @@ class ApprovalInstanceService:
         return []
 
     @staticmethod
+    async def _apply_decision_on_approve(
+        instance: ApprovalInstance,
+        node_id: Optional[str],
+        process_nodes: Any,
+        action_data: ApprovalInstanceAction,
+    ) -> None:
+        """审批通过时写入节点配置的 decisionOnApprove 字段，供后续条件分支评估。"""
+        from core.schemas.approval_flow_schema import get_node_config, normalize_flow_graph
+
+        if not node_id:
+            return
+        graph = normalize_flow_graph(process_nodes or {})
+        node = get_node_config(graph, str(node_id))
+        if not node or node.get("type") != "approval":
+            return
+        spec = (node.get("data") or {}).get("decisionOnApprove")
+        if not isinstance(spec, dict):
+            return
+        field = str(spec.get("field") or "").strip()
+        if not field:
+            raise ValidationError("审批节点 decisionOnApprove 未配置 field")
+        patch = action_data.instance_data_patch if isinstance(action_data.instance_data_patch, dict) else {}
+        if field in patch:
+            value = patch[field]
+        else:
+            value = spec.get("defaultValue", False)
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in ("true", "1", "yes", "on"):
+                value = True
+            elif lowered in ("false", "0", "no", "off", ""):
+                value = False
+            else:
+                raise ValidationError(f"审批分支决策 {field!r} 须为布尔值")
+        data = dict(instance.data or {})
+        data[field] = bool(value)
+        instance.data = data
+        await instance.save(update_fields=["data", "updated_at"])
+
+    @staticmethod
+    async def _resolve_submitter_department_manager_at_level(
+        tenant_id: int,
+        submitter_id: int,
+        level: int,
+    ) -> List[int]:
+        """
+        沿发起人部门向上，按出现顺序取第 level 个有效部门负责人（level=1 为链上第一个负责人）。
+        """
+        if level < 1:
+            return []
+        submitter = await User.filter(
+            id=submitter_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        dept_id = getattr(submitter, "department_id", None) if submitter else None
+        visited: set[int] = set()
+        found = 0
+        while dept_id and int(dept_id) not in visited:
+            visited.add(int(dept_id))
+            dept = await Department.filter(
+                id=int(dept_id),
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                is_active=True,
+            ).first()
+            if not dept:
+                break
+            if getattr(dept, "manager_id", None) and int(dept.manager_id) > 0:
+                active = await ApprovalInstanceService._filter_active_user_ids(
+                    tenant_id, [int(dept.manager_id)]
+                )
+                if active:
+                    found += 1
+                    if found == level:
+                        return active
+            dept_id = getattr(dept, "parent_id", None)
+        return []
+
+    @staticmethod
     async def _resolve_node_approvers(node: dict, instance: ApprovalInstance) -> List[int]:
         """
         解析节点审批人。兼容前端 camelCase（approverType, approverIds）与后端 snake_case。
@@ -2245,6 +2352,31 @@ class ApprovalInstanceService:
             except Exception as e:
                 logger.error("解析直属上级失败: {}", e)
                 raise ValidationError(f"解析直属上级失败: {e}") from e
+
+        if approver_type == "multi_level_manager":
+            try:
+                raw_level = node_data.get("managerLevel") or node_data.get("manager_level") or 2
+                try:
+                    level = int(raw_level)
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError(
+                        f"审批节点 managerLevel 非法: {raw_level!r}"
+                    ) from exc
+                if level < 2:
+                    raise ValidationError("multi_level_manager 的 managerLevel 须 ≥ 2")
+                managers = await ApprovalInstanceService._resolve_submitter_department_manager_at_level(
+                    tenant_id, submitter_id, level
+                )
+                if managers:
+                    return managers
+                raise ValidationError(
+                    f"提交人向上第 {level} 级部门未配置可用负责人，无法提交审核"
+                )
+            except ValidationError:
+                raise
+            except Exception as e:
+                logger.error("解析多级上级失败: {}", e)
+                raise ValidationError(f"解析多级上级失败: {e}") from e
 
         raise ValidationError(
             f"不支持的审批人类型 {approver_type!r}，无法提交审核"
@@ -2777,6 +2909,20 @@ class ApprovalInstanceService:
     
 
     @staticmethod
+    def _coerce_condition_pair(actual: Any, expected: Any) -> tuple[Any, Any] | None:
+        """数字条件统一按 Decimal 比较，避免 str/float 混用导致分支永不命中。"""
+        from decimal import Decimal, InvalidOperation
+
+        if actual is None or expected is None:
+            return actual, expected
+        try:
+            left = Decimal(str(actual).strip())
+            right = Decimal(str(expected).strip())
+            return left, right
+        except (InvalidOperation, ValueError, TypeError, AttributeError):
+            return actual, expected
+
+    @staticmethod
     def _evaluate_conditions(instance: ApprovalInstance, conditions: List[Dict[str, Any]]) -> int:
         """
         按顺序评估条件，返回第一条满足条件的下标；若无满足则返回 0（默认第一条出边）。
@@ -2801,34 +2947,18 @@ class ApprovalInstanceService:
                 elif operator == "!=" or operator == "ne":
                     if actual != value and str(actual) != str(value):
                         return i
-                elif operator in (">", "gt"):
-                    if actual is not None and value is not None:
-                        if (isinstance(actual, (int, float)) and isinstance(value, (int, float))) or (
-                            isinstance(actual, str) and isinstance(value, str)
-                        ):
-                            if actual > value:
-                                return i
-                elif operator in ("<", "lt"):
-                    if actual is not None and value is not None:
-                        if (isinstance(actual, (int, float)) and isinstance(value, (int, float))) or (
-                            isinstance(actual, str) and isinstance(value, str)
-                        ):
-                            if actual < value:
-                                return i
-                elif operator in (">=", "gte"):
-                    if actual is not None and value is not None:
-                        if (isinstance(actual, (int, float)) and isinstance(value, (int, float))) or (
-                            isinstance(actual, str) and isinstance(value, str)
-                        ):
-                            if actual >= value:
-                                return i
-                elif operator in ("<=", "lte"):
-                    if actual is not None and value is not None:
-                        if (isinstance(actual, (int, float)) and isinstance(value, (int, float))) or (
-                            isinstance(actual, str) and isinstance(value, str)
-                        ):
-                            if actual <= value:
-                                return i
+                elif operator in (">", "gt", "<", "lt", ">=", "gte", "<=", "lte"):
+                    left, right = ApprovalInstanceService._coerce_condition_pair(actual, value)
+                    if left is None or right is None:
+                        continue
+                    if operator in (">", "gt") and left > right:
+                        return i
+                    if operator in ("<", "lt") and left < right:
+                        return i
+                    if operator in (">=", "gte") and left >= right:
+                        return i
+                    if operator in ("<=", "lte") and left <= right:
+                        return i
                 elif operator == "contains":
                     if value is not None and actual is not None and str(value) in str(actual):
                         return i

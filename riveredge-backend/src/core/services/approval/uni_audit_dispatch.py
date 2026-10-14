@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import Any, Optional, Dict
 
 from core.config.audit_registry import all_entries, entry_by_entity_type
@@ -459,13 +460,16 @@ async def execute_uni_audit(
     if handler is None:
         raise ValidationError(f"实体 {entity_type} 尚未接入统一执行入口")
 
-    result = await handler(
-        act,
-        tenant_id=tenant_id,
-        entity_id=entity_id,
-        user_id=user_id,
-        reason=reason,
-    )
+    call_kwargs: Dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "entity_id": entity_id,
+        "user_id": user_id,
+        "reason": reason,
+    }
+    if body and "payload" in inspect.signature(handler).parameters:
+        call_kwargs["payload"] = body
+
+    result = await handler(act, **call_kwargs)
     from core.services.integration.document_push_silent import maybe_silent_push_after_audit
 
     await maybe_silent_push_after_audit(

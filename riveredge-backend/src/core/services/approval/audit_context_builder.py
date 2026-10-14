@@ -40,6 +40,17 @@ async def build_audit_context(tenant_id: int, entity_type: str, entity_id: int) 
                 return {}
             total = getattr(q, "total_amount", None)
             return {"total_amount": float(total or 0)}
+        if et == "payment_application":
+            from apps.kuaizhizao.models.payment_application import PaymentApplication
+
+            app = await PaymentApplication.get_or_none(
+                tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+            )
+            if not app:
+                return {}
+            return {
+                "total_request_amount": float(app.total_request_amount or 0),
+            }
     except Exception as e:
         logger.warning("构建审核上下文失败 entity_type={} entity_id={}: {}", et, entity_id, e)
     return {}

@@ -2042,7 +2042,8 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           record.receipt_type === 'purchase' &&
           posted &&
           record.id &&
-          paymentApplicationPerms.canCreate
+          paymentApplicationPerms.canCreate &&
+          record.capabilities?.push_payment_application?.allowed === true
         ) {
           nodes.push(
             <Button

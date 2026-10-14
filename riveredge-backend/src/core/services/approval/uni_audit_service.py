@@ -36,6 +36,7 @@ class UniAuditService:
         entity_id: int,
         approver_id: int,
         flow_approve: ActionCallback,
+        instance_data_patch: Optional[Dict[str, Any]] = None,
     ) -> Any:
         """
         审核通过统一入口。
@@ -57,6 +58,7 @@ class UniAuditService:
                 approver_id=approver_id,
                 approved=True,
                 comment=None,
+                instance_data_patch=instance_data_patch,
             )
             return None
         return await flow_approve()

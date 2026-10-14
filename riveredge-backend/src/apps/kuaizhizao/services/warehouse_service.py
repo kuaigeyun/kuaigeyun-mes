@@ -10391,9 +10391,21 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         quantity_units = await batch_document_item_homogeneous_units(
             tenant_id, PurchaseReceiptItem, "receipt_id", receipt_ids
         )
+        from apps.kuaizhizao.services.payment_application_pull_service import (
+            PaymentApplicationPullService,
+        )
+
+        push_pa_open = await PaymentApplicationPullService().push_payment_application_open_by_receipt_ids(
+            tenant_id, receipt_ids
+        )
         enriched = enrich_inbound_hub_list_capabilities(
-            receipts, out, "purchase", item_counts=item_counts, item_previews=item_previews,
-            quantity_units=quantity_units
+            receipts,
+            out,
+            "purchase",
+            item_counts=item_counts,
+            item_previews=item_previews,
+            quantity_units=quantity_units,
+            push_payment_application_open=push_pa_open,
         )
         return enriched, total
 

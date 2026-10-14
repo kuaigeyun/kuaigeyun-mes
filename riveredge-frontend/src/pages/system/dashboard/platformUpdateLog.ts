@@ -44,6 +44,53 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'finance-misc-create-document-relation-filter-r01',
+    date: '2026-10-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-misc-create-document-relation-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-misc-create-document-relation-filter-r01.description',
+  },
+  {
+    id: 'finance-misc-ar-ap-chain-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-misc-ar-ap-chain-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-misc-ar-ap-chain-r01.description',
+  },
+  {
+    id: 'payment-application-pull-chain-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-pull-chain-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.payment-application-pull-chain-r01.description',
+  },
+  {
+    id: 'approval-prior-node-branch-decision-r01',
+    date: '2026-10-14',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-prior-node-branch-decision-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-prior-node-branch-decision-r01.description',
+  },
+  {
+    id: 'kuaicaiwu-finance-menu-hierarchy-auto-repair-r02',
+    date: '2026-10-14',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-hierarchy-auto-repair-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-hierarchy-auto-repair-r02.description',
+  },
+  {
+    id: 'approval-flow-lzh-scenarios-r01',
+    date: '2026-10-14',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-flow-lzh-scenarios-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-flow-lzh-scenarios-r01.description',
+  },
+  {
     id: 'uni-import-failure-reason-modal-r01',
     date: '2026-10-14',
     type: 'improvement',

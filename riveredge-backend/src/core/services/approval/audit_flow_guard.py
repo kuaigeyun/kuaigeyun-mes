@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
@@ -19,6 +19,8 @@ async def start_document_approval_or_raise(
     content: str,
     doc_label: str,
     send_notification: bool = True,
+    selected_approver_user_ids: Optional[List[int]] = None,
+    selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
 ) -> Any:
     """审核已开时必须创建审批实例；失败即暴露，禁止空壳待审。"""
     from core.services.approval.approval_instance_service import ApprovalInstanceService
@@ -33,6 +35,8 @@ async def start_document_approval_or_raise(
         title=title,
         content=content,
         send_notification=send_notification,
+        selected_approver_user_ids=selected_approver_user_ids,
+        selected_approver_by_node=selected_approver_by_node,
     )
     if not instance:
         raise BusinessLogicError(

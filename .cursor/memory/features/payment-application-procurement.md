@@ -19,3 +19,6 @@ keywords: payment-application, payment_application, 付款申请, PayableOpenAmo
 
 - 来源：PO 预付、入库货款（绑定应付）、往来对账应付行、手工拉应付
 - 采购订单 capabilities：`push_payment_application`
+- 采购入库 Hub capabilities：`push_payment_application`（`PaymentApplicationPullService.push_payment_application_open_by_receipt_ids` + `warehouse_inbound_hub`）
+- 列表上拉：`payment_application.pull_from_payable`（UniPullCreateToolbar + `GET /payment-applications/pull/payables`）
+- 详情：`linked_payments`（DocumentRelation payment_application→payment）；行 `sourceType` 可点关联单
