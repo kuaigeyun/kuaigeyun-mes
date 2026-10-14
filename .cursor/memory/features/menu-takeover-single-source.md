@@ -10,7 +10,7 @@ keywords:
   - is_manifest_deployed_on_node
   - finance-receipts
   - kuaicaiwu
-standard: 侧栏接管只认库内应用已启用与 MENU_TAKEOVER_RULES；导航请求禁止按本机磁盘写 core_menus
+standard: 宿主 manifest 唯一维护菜单子树；consumer 只声明接管挂载点，启用状态只认库内应用状态
 ---
 
 # 菜单接管单一真源
@@ -30,9 +30,12 @@ standard: 侧栏接管只认库内应用已启用与 MENU_TAKEOVER_RULES；导�
 |----|------|
 | 启用 | `core_applications.is_installed` 且 `is_active`。`is_consumer_effective` 只查这一行 |
 | 规则 | `core/config/menu_takeover.py` 的 `MENU_TAKEOVER_RULES` |
+| 结构真源 | 财务管理只认 `kuaizhizao/manifest.json`；`kuaicaiwu` 的接管节点不得重复声明 children |
+| 派生 | `ApplicationService._materialize_takeover_manifest` 在同步前从宿主清单复制接管子树 |
 | 侧栏 | `MenuService._exclude_taken_over_source_menus`：consumer 在已启用列表中时，隐藏 source 路径及其子节点。不写库 |
 | 写库 | 仅应用启用/停用 `sync_for_application_lifecycle`，以及菜单同步后的 `reapply_after_source_menu_sync` |
 | 父级 | `core_menus.parent_id`，由 manifest 同步写入 |
+| 防旧节点覆盖 | `core_applications` 菜单结构变更必须同时提升语义版本；数据库触发器拒绝同版本或降版本覆盖 |
 
 ## 关键文件
 
@@ -45,3 +48,5 @@ standard: 侧栏接管只认库内应用已启用与 MENU_TAKEOVER_RULES；导�
 ## 踩坑
 
 导航缓存键曾带本机 manifest 指纹。生产磁盘不变时会一直命中旧树。规则变更后缓存版本为 `v9`，且不再带指纹。生产进程必须跑到这份后端，旧进程仍会在每次打开侧栏时按本机磁盘改 `is_active`。
+
+专业应用真源在 `kuaigeyun-pro`。主仓 `src/apps/kuaicaiwu` 是忽略的组装目录，直接改该目录不会进入远程，也不会改变生产组装结果。

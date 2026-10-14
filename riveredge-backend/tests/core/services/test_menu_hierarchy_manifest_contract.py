@@ -14,34 +14,34 @@ from core.services.system.menu_service import MenuService
 from infra.exceptions.exceptions import ValidationError
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]
-_KUAICAIWU_MANIFEST = _BACKEND_ROOT / "src" / "apps" / "kuaicaiwu" / "manifest.json"
+_KUAIZHIZAO_MANIFEST = _BACKEND_ROOT / "src" / "apps" / "kuaizhizao" / "manifest.json"
 
 
-def _load_kuaicaiwu_menu_config() -> dict:
-    assert _KUAICAIWU_MANIFEST.is_file(), f"缺少 manifest: {_KUAICAIWU_MANIFEST}"
-    manifest = json.loads(_KUAICAIWU_MANIFEST.read_text(encoding="utf-8"))
+def _load_kuaizhizao_menu_config() -> dict:
+    assert _KUAIZHIZAO_MANIFEST.is_file(), f"缺少 manifest: {_KUAIZHIZAO_MANIFEST}"
+    manifest = json.loads(_KUAIZHIZAO_MANIFEST.read_text(encoding="utf-8"))
     menu_config = manifest.get("menu_config")
     assert isinstance(menu_config, dict)
     return menu_config
 
 
-def test_kuaicaiwu_manifest_finance_receivables_parent_is_receipts_group():
-    menu_config = _load_kuaicaiwu_menu_config()
+def test_kuaizhizao_manifest_finance_receivables_parent_is_receipts_group():
+    menu_config = _load_kuaizhizao_menu_config()
     parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(menu_config)
     path = "/apps/kuaizhizao/finance-management/receivables"
     assert parents[path] == "app.kuaicaiwu.menu.group.finance-receipts"
 
 
-def test_kuaicaiwu_manifest_finance_payables_parent_is_payments_group():
-    menu_config = _load_kuaicaiwu_menu_config()
+def test_kuaizhizao_manifest_finance_payables_parent_is_payments_group():
+    menu_config = _load_kuaizhizao_menu_config()
     parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(menu_config)
     path = "/apps/kuaizhizao/finance-management/payables"
     assert parents[path] == "app.kuaicaiwu.menu.group.finance-payments"
 
 
-def test_kuaicaiwu_manifest_finance_grouped_paths_not_direct_under_finance_folder():
+def test_kuaizhizao_manifest_finance_grouped_paths_not_direct_under_finance_folder():
     """分组 manifest 下，应收/应付等不得声明为 finance-management 的直接子节点。"""
-    menu_config = _load_kuaicaiwu_menu_config()
+    menu_config = _load_kuaizhizao_menu_config()
     parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(menu_config)
     finance_folder = "app.kuaicaiwu.menu.finance-management"
     grouped_paths = [
@@ -54,6 +54,61 @@ def test_kuaicaiwu_manifest_finance_grouped_paths_not_direct_under_finance_folde
         assert path in parents
         assert parents[path] != finance_folder
         assert ".menu.group." in parents[path]
+
+
+def test_kuaicaiwu_takeover_children_are_materialized_from_kuaizhizao_manifest():
+    consumer = {
+        "code": "kuaicaiwu",
+        "menu_config": {
+            "children": [
+                {
+                    "title": "app.kuaicaiwu.menu.finance-management",
+                    "meta": {"menu_takeover": "kuaizhizao-finance-management"},
+                    "children": [],
+                },
+            ],
+        },
+    }
+    source = {
+        "code": "kuaizhizao",
+        "menu_config": {
+            "children": [
+                {
+                    "title": "app.kuaicaiwu.menu.finance-management",
+                    "children": [
+                        {
+                            "title": "app.kuaicaiwu.menu.group.finance-receipts",
+                            "children": [
+                                {
+                                    "title": "app.kuaicaiwu.menu.finance-management.receivables",
+                                    "path": "/apps/kuaizhizao/finance-management/receivables",
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+    }
+
+    with patch.object(
+        ApplicationService,
+        "_get_raw_manifest_by_code",
+        return_value=source,
+    ):
+        materialized = ApplicationService._materialize_takeover_manifest(
+            "kuaicaiwu",
+            consumer,
+        )
+
+    parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(
+        materialized["menu_config"]
+    )
+    assert (
+        parents["/apps/kuaizhizao/finance-management/receivables"]
+        == "app.kuaicaiwu.menu.group.finance-receipts"
+    )
+    assert consumer["menu_config"]["children"][0]["children"] == []
 
 
 def test_hierarchy_stale_true_when_leaf_parent_name_differs_from_manifest():

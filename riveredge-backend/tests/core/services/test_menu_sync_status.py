@@ -177,6 +177,7 @@ async def test_bind_menu_config_prefers_disk_manifest_over_stale_db_snapshot():
     }
     disk = {
         "code": "kuaicaiwu",
+        "version": "1.0.1",
         "menu_config": {
             "title": "app.kuaicaiwu.name",
             "path": "/apps/kuaicaiwu",
@@ -224,3 +225,4 @@ async def test_bind_menu_config_prefers_disk_manifest_over_stale_db_snapshot():
         == "app.kuaicaiwu.menu.group.finance-receipts"
     )
     conn.execute.assert_awaited()
+    assert conn.execute.await_args.args[-1] == "1.0.1"

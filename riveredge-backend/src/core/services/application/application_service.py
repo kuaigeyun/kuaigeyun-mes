@@ -8,6 +8,7 @@
 import hashlib
 import json
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Set
 from uuid import UUID, uuid4
@@ -1501,9 +1502,9 @@ class ApplicationService:
         return ApplicationService._get_manifest_by_code(code) is not None
 
     @staticmethod
-    def _get_manifest_by_code(code: str) -> Optional[Dict[str, Any]]:
+    def _get_raw_manifest_by_code(code: str) -> Optional[Dict[str, Any]]:
         """
-        根据应用 code 读取 manifest.json，用于获取 is_pro 等字段。
+        根据应用 code 读取未经派生的 manifest.json。
         
         Args:
             code: 应用代码
@@ -1538,6 +1539,83 @@ class ApplicationService:
             except (json.JSONDecodeError, IOError):
                 continue
         return None
+
+    @staticmethod
+    def _find_manifest_menu_node_by_title(
+        menu_config: Any,
+        title: str,
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(menu_config, dict):
+            return None
+        if str(menu_config.get("title") or "").strip() == title:
+            return menu_config
+        for child in menu_config.get("children") or []:
+            found = ApplicationService._find_manifest_menu_node_by_title(child, title)
+            if found:
+                return found
+        return None
+
+    @staticmethod
+    def _find_manifest_takeover_node(
+        menu_config: Any,
+        takeover_key: str,
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(menu_config, dict):
+            return None
+        meta = menu_config.get("meta")
+        if isinstance(meta, dict) and str(meta.get("menu_takeover") or "").strip() == takeover_key:
+            return menu_config
+        for child in menu_config.get("children") or []:
+            found = ApplicationService._find_manifest_takeover_node(child, takeover_key)
+            if found:
+                return found
+        return None
+
+    @staticmethod
+    def _materialize_takeover_manifest(
+        code: str,
+        manifest: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """接管应用只声明挂载点，菜单子树从宿主 manifest 唯一真源派生。"""
+        from core.config.menu_takeover import MENU_TAKEOVER_RULES
+
+        rule = MENU_TAKEOVER_RULES.get(code)
+        if not rule or not rule.source_menu_title or not rule.consumer_takeover_key:
+            return manifest
+
+        source_manifest = ApplicationService._get_raw_manifest_by_code(rule.source_app_code)
+        if not source_manifest:
+            raise ValidationError(
+                f"应用 {code} 的菜单接管宿主 {rule.source_app_code} manifest 不存在"
+            )
+        source_node = ApplicationService._find_manifest_menu_node_by_title(
+            source_manifest.get("menu_config"),
+            rule.source_menu_title,
+        )
+        if not source_node:
+            raise ValidationError(
+                f"应用 {code} 的菜单接管宿主缺少节点 {rule.source_menu_title}"
+            )
+
+        materialized = deepcopy(manifest)
+        takeover_node = ApplicationService._find_manifest_takeover_node(
+            materialized.get("menu_config"),
+            rule.consumer_takeover_key,
+        )
+        if not takeover_node:
+            raise ValidationError(
+                f"应用 {code} manifest 缺少接管声明 {rule.consumer_takeover_key}"
+            )
+        takeover_node["children"] = deepcopy(source_node.get("children") or [])
+        return materialized
+
+    @staticmethod
+    def _get_manifest_by_code(code: str) -> Optional[Dict[str, Any]]:
+        """读取 manifest；接管菜单由宿主 manifest 唯一真源派生。"""
+        manifest = ApplicationService._get_raw_manifest_by_code(code)
+        if not manifest:
+            return None
+        return ApplicationService._materialize_takeover_manifest(code, manifest)
 
     @staticmethod
     def resolve_market_category_for_code(code: str) -> Optional[str]:
@@ -1780,6 +1858,9 @@ class ApplicationService:
 
     @staticmethod
     def _build_manifest_sync_update(app: ApplicationDict, manifest: Dict[str, Any]) -> ApplicationUpdate:
+        app_code = str(app.get("code") or "").strip()
+        if app_code:
+            manifest = ApplicationService._materialize_takeover_manifest(app_code, manifest)
         menu_config = manifest.get("menu_config")
         version = manifest.get("version", app.get("version", "1.0.0"))
         app_name = app.get("name")
@@ -1828,6 +1909,9 @@ class ApplicationService:
         disk_menu = ApplicationService._normalize_menu_config_field(manifest.get("menu_config"))
         if not disk_menu:
             return ApplicationService._normalize_menu_config_field(menu_config)
+        disk_version = str(manifest.get("version") or "").strip()
+        if not disk_version:
+            raise ValidationError(f"应用 {code} 的 manifest 缺少 version，不能同步菜单")
 
         incoming = ApplicationService._normalize_menu_config_field(menu_config)
         if (
@@ -1841,12 +1925,13 @@ class ApplicationService:
             await conn.execute(
                 """
                 UPDATE core_applications
-                SET menu_config = $3::jsonb, updated_at = NOW()
+                SET menu_config = $3::jsonb, version = $4, updated_at = NOW()
                 WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
                 """,
                 tenant_id,
                 str(application_uuid),
                 json.dumps(disk_menu, ensure_ascii=False),
+                disk_version,
             )
         finally:
             await conn.close()
