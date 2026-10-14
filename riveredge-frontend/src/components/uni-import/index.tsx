@@ -38,6 +38,13 @@ import {
   UniImportPreviewModal,
   type ImportPrecheckResult,
 } from './uni-import-preview-modal';
+import {
+  analyzeImportDuplicatePlan,
+  normalizeDuplicateStrategies,
+  type UniImportCommitContext,
+  type UniImportDuplicateConfig,
+  type UniImportDuplicateStrategy,
+} from './uni-import-duplicate-types';
 import { getImportDataRows } from './import-preview-utils';
 import { readImportSheetStringMatrix, mergeLiveImportRowsWithPrecisionCache } from './read-import-sheet-matrix';
 import { translatePathTitle } from '../../utils/menuTranslation';
@@ -98,7 +105,10 @@ export interface UniImportProps {
    * @param data - 导入的数据（二维数组格式）
    * @returns false 表示未成功，保留预检/导入弹窗
    */
-  onConfirm: (data: any[][]) => void | boolean | Promise<void | boolean>;
+  onConfirm: (
+    data: any[][],
+    context?: UniImportCommitContext,
+  ) => void | boolean | Promise<void | boolean>;
   /**
    * 弹窗标题（默认：'导入数据'）
    */
@@ -211,7 +221,13 @@ export interface UniImportProps {
    * 入库前服务端/业务预检（返回 errors 时将阻止确认入库）
    */
   onImportPrecheck?: (data: any[][]) => Promise<ImportPrecheckResult | void>;
+  /**
+   * 按唯一键（编码/单号）处理库内重复：预检弹窗可选更新 / 跳过 / 遇重复失败
+   */
+  importDuplicateConfig?: UniImportDuplicateConfig;
 }
+
+export type { UniImportCommitContext, UniImportDuplicateConfig, UniImportDuplicateStrategy };
 
 /**
  * Univer Import 导入弹窗组件
@@ -247,6 +263,7 @@ export const UniImport: React.FC<UniImportProps> = ({
   importPreviewMaxRows = 10,
   importDataStartRow = 2,
   onImportPrecheck,
+  importDuplicateConfig,
 }) => {
   const { t } = useTranslation();
   const resolvedTitle = title ?? t('components.uniImport.defaultTitle');
@@ -276,6 +293,9 @@ export const UniImport: React.FC<UniImportProps> = ({
   const [previewData, setPreviewData] = useState<any[][]>([]);
   const [precheckLoading, setPrecheckLoading] = useState(false);
   const [precheckResult, setPrecheckResult] = useState<ImportPrecheckResult | null>(null);
+  const [duplicateStrategy, setDuplicateStrategy] = useState<UniImportDuplicateStrategy>(
+    importDuplicateConfig?.defaultStrategy ?? 'upsert',
+  );
   const [commitLoading, setCommitLoading] = useState(false);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const univerInstanceRef = useRef<UniverSheetInstance | null>(null);
@@ -783,6 +803,56 @@ export const UniImport: React.FC<UniImportProps> = ({
     ],
   );
 
+  const translateDuplicatePrecheckToken = useCallback(
+    (token: string): string => {
+      const [kind, countRaw] = token.split(':');
+      const count = Number(countRaw) || 0;
+      if (kind === 'duplicate_in_file') {
+        return t('components.uniImport.duplicateInFile', { count });
+      }
+      if (kind === 'duplicate_fail_blocked') {
+        return t('components.uniImport.duplicateFailBlocked', { count });
+      }
+      if (kind === 'duplicate_skip_hint') {
+        return t('components.uniImport.duplicateSkipHint', { count });
+      }
+      return token;
+    },
+    [t],
+  );
+
+  const mergeDuplicatePrecheck = useCallback(
+    async (data: any[][], base: ImportPrecheckResult | null): Promise<ImportPrecheckResult> => {
+      if (!importDuplicateConfig) {
+        return base ?? { canImport: true };
+      }
+      const dup = await analyzeImportDuplicatePlan({
+        data,
+        dataStartRow: importDataStartRow,
+        config: importDuplicateConfig,
+        importFieldMap: importFieldMapRef.current,
+        strategy: duplicateStrategy,
+      });
+      const errors = [...(base?.errors ?? [])];
+      const warnings = [...(base?.warnings ?? [])];
+      dup.errors.forEach((token) => errors.push(translateDuplicatePrecheckToken(token)));
+      dup.warnings.forEach((token) => warnings.push(translateDuplicatePrecheckToken(token)));
+      const hasErrors = errors.length > 0;
+      return {
+        canImport: base?.canImport !== false && !hasErrors,
+        errors: hasErrors ? errors : undefined,
+        warnings: warnings.length ? warnings : undefined,
+        duplicateSummary: dup.summary,
+      };
+    },
+    [
+      importDuplicateConfig,
+      importDataStartRow,
+      duplicateStrategy,
+      translateDuplicatePrecheckToken,
+    ],
+  );
+
   const runImportPrecheck = useCallback(
     async (data: any[][]) => {
       const asStringRows = projectImportSheetRows(
@@ -822,16 +892,15 @@ export const UniImport: React.FC<UniImportProps> = ({
         }
         return;
       }
-      if (!onImportPrecheck) {
-        setPrecheckResult(null);
-        setPrecheckLoading(false);
-        return;
-      }
       setPrecheckLoading(true);
       setPrecheckResult(null);
       try {
-        const result = await onImportPrecheck(data);
-        setPrecheckResult(result ?? null);
+        let result: ImportPrecheckResult | null = null;
+        if (onImportPrecheck) {
+          result = (await onImportPrecheck(data)) ?? null;
+        }
+        result = await mergeDuplicatePrecheck(data, result);
+        setPrecheckResult(result);
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
         setPrecheckResult({
@@ -848,6 +917,7 @@ export const UniImport: React.FC<UniImportProps> = ({
       customWriteStrategy,
       onRelationImportPrecheck,
       onImportPrecheck,
+      mergeDuplicatePrecheck,
       projectImportSheetRows,
       resolveEffectiveRelationEntities,
       resolveHeaderFieldKeys,
@@ -864,9 +934,49 @@ export const UniImport: React.FC<UniImportProps> = ({
     }
     setPreviewData(data);
     setPrecheckResult(null);
+    setDuplicateStrategy(importDuplicateConfig?.defaultStrategy ?? 'upsert');
     setPreviewModalOpen(true);
     void runImportPrecheck(data);
   };
+
+  const handleDuplicateStrategyChange = useCallback(
+    (strategy: UniImportDuplicateStrategy) => {
+      setDuplicateStrategy(strategy);
+      if (previewModalOpen && previewData.length) {
+        setPrecheckLoading(true);
+        void (async () => {
+          try {
+            let result: ImportPrecheckResult | null = null;
+            if (onImportPrecheck) {
+              result = (await onImportPrecheck(previewData)) ?? null;
+            }
+            const merged = await mergeDuplicatePrecheck(previewData, result);
+            setPrecheckResult(merged);
+          } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            setPrecheckResult({
+              canImport: false,
+              errors: [t('components.uniImport.previewPrecheckFailed', { message: msg })],
+            });
+          } finally {
+            setPrecheckLoading(false);
+          }
+        })();
+      }
+    },
+    [
+      previewModalOpen,
+      previewData,
+      onImportPrecheck,
+      mergeDuplicatePrecheck,
+      t,
+    ],
+  );
+
+  const duplicateKeyLabel = useMemo(() => {
+    if (!importDuplicateConfig?.keyLabelKey) return undefined;
+    return t(importDuplicateConfig.keyLabelKey);
+  }, [importDuplicateConfig?.keyLabelKey, t]);
 
   const commitImport = async (data: any[][]) => {
     if (commitLoading) return;
@@ -909,7 +1019,10 @@ export const UniImport: React.FC<UniImportProps> = ({
         return;
       }
 
-      const result = await Promise.resolve(onConfirm(data));
+      const commitContext: UniImportCommitContext | undefined = importDuplicateConfig
+        ? { duplicateStrategy }
+        : undefined;
+      const result = await Promise.resolve(onConfirm(data, commitContext));
       if (result === false) {
         return;
       }
@@ -1257,6 +1370,16 @@ export const UniImport: React.FC<UniImportProps> = ({
         precheckLoading={precheckLoading}
         commitLoading={commitLoading}
         precheckResult={precheckResult}
+        duplicateStrategy={importDuplicateConfig ? duplicateStrategy : undefined}
+        supportedDuplicateStrategies={
+          importDuplicateConfig
+            ? normalizeDuplicateStrategies(importDuplicateConfig.supportedStrategies)
+            : undefined
+        }
+        duplicateKeyLabel={duplicateKeyLabel}
+        onDuplicateStrategyChange={
+          importDuplicateConfig ? handleDuplicateStrategyChange : undefined
+        }
         onCancel={() => setPreviewModalOpen(false)}
         onConfirmImport={handlePreviewConfirmImport}
       />

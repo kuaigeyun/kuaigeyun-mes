@@ -44,6 +44,38 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'uni-import-failure-reason-modal-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-import-failure-reason-modal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-import-failure-reason-modal-r01.description',
+  },
+  {
+    id: 'supplier-import-payment-account-r01',
+    date: '2026-10-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.supplier-import-payment-account-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.supplier-import-payment-account-r01.description',
+  },
+  {
+    id: 'uni-import-duplicate-strategy-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-import-duplicate-strategy-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-import-duplicate-strategy-r01.description',
+  },
+  {
+    id: 'kuaicaiwu-finance-menu-group-realign-r01',
+    date: '2026-10-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-group-realign-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-group-realign-r01.description',
+  },
+  {
     id: 'field-mask-decimal-sales-order-list-r01',
     date: '2026-10-14',
     type: 'fix',

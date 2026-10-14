@@ -54,7 +54,11 @@ import {
   partnerSettlementMethodLabel,
   partnerTaxpayerTypeLabel,
 } from '../../../utils/partner-static-labels';
-import { importInChunks } from '../../../../../utils/chunkedBulkImport';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
+import type {
+  UniImportCommitContext,
+  UniImportDuplicateConfig,
+} from '../../../../../components/uni-import/uni-import-duplicate-types';
 import { downloadFile } from '../../../../../utils';
 import {
   CustomerFollowUpFormModal,
@@ -247,6 +251,25 @@ const CustomersPage: React.FC = () => {
     [t, i18n.language, dictLabelMaps],
   );
 
+  const customerImportDuplicateConfig = useMemo<UniImportDuplicateConfig>(
+    () => ({
+      keyField: 'code',
+      keyLabelKey: 'field.customer.code',
+      defaultStrategy: 'upsert',
+      resolveExistingKeys: async (keys) => {
+        if (!keys.length) return new Set<string>();
+        const rows = await fetchAllListItems((p) => customerApi.list({ ...p, page_size: 500 }));
+        const existing = new Set<string>();
+        rows.forEach((row) => {
+          const code = String(row.code ?? '').trim();
+          if (code) existing.add(code);
+        });
+        return existing;
+      },
+    }),
+    [],
+  );
+
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
@@ -412,7 +435,8 @@ const CustomersPage: React.FC = () => {
   /**
    * 处理批量导入客户（分片 bulkCreate）
    */
-  const handleImport = async (data: any[][]) => {
+  const handleImport = async (data: any[][], context?: UniImportCommitContext) => {
+    const duplicateStrategy = context?.duplicateStrategy ?? 'upsert';
     if (!data || data.length === 0) {
       messageApi.warning(t('app.master-data.importEmpty'));
       return;
@@ -580,18 +604,35 @@ const CustomersPage: React.FC = () => {
     }
 
     try {
-      const CHUNK = 100;
-      const result = await importInChunks({
+      const codeToUuid = new Map<string, string>();
+      const existingRows = await fetchAllListItems((p) =>
+        customerApi.list({ ...p, page_size: 500 }),
+      );
+      existingRows.forEach((row) => {
+        const code = String(row.code ?? '').trim();
+        if (code && row.uuid) codeToUuid.set(code, row.uuid);
+      });
+
+      const result = await importInChunksViaPerItemCreate({
         items: importData,
-        chunkSize: CHUNK,
+        chunkSize: 50,
+        concurrency: 4,
         title: t('app.master-data.customers.importTitle'),
         showResultModal: false,
-        importChunk: async (chunk) => {
-          const res = await customerApi.bulkCreate(chunk);
-          return {
-            createdCount: res.createdCount,
-            failedItems: res.failedItems,
-          };
+        createOne: async (item) => {
+          const code = String(item.code ?? '').trim();
+          const existingUuid = code ? codeToUuid.get(code) : undefined;
+          if (existingUuid) {
+            if (duplicateStrategy === 'skip') {
+              return;
+            }
+            await customerApi.update(existingUuid, item);
+            return;
+          }
+          const created = await customerApi.create(item);
+          if (code && created?.uuid) {
+            codeToUuid.set(code, created.uuid);
+          }
         },
       });
 
@@ -1100,6 +1141,7 @@ const CustomersPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         showImportButton={true}
         onImport={handleImport}
+        importDuplicateConfig={customerImportDuplicateConfig}
         showSyncButton={canCreate}
         onSync={() => setSyncModalVisible(true)}
         syncToolbarExtra={

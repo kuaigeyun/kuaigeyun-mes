@@ -1,12 +1,18 @@
 import React, { useMemo } from 'react';
-import { Modal, Table, Alert, Space, Typography, Spin, Button } from 'antd';
+import { Modal, Table, Alert, Space, Typography, Spin, Button, Radio } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { buildImportPreviewTableSource } from './import-preview-utils';
+import type {
+  ImportDuplicateSummary,
+  UniImportDuplicateStrategy,
+} from './uni-import-duplicate-types';
+import { normalizeDuplicateStrategies } from './uni-import-duplicate-types';
 
 export type ImportPrecheckResult = {
   canImport?: boolean;
   errors?: string[];
   warnings?: string[];
+  duplicateSummary?: ImportDuplicateSummary | null;
 };
 
 export interface UniImportPreviewModalProps {
@@ -19,6 +25,11 @@ export interface UniImportPreviewModalProps {
   precheckLoading?: boolean;
   commitLoading?: boolean;
   precheckResult?: ImportPrecheckResult | null;
+  /** 启用重复键策略时展示 */
+  duplicateStrategy?: UniImportDuplicateStrategy;
+  supportedDuplicateStrategies?: UniImportDuplicateStrategy[];
+  duplicateKeyLabel?: string;
+  onDuplicateStrategyChange?: (strategy: UniImportDuplicateStrategy) => void;
   onCancel: () => void;
   onConfirmImport: () => void;
 }
@@ -32,10 +43,23 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
   precheckLoading = false,
   commitLoading = false,
   precheckResult,
+  duplicateStrategy = 'upsert',
+  supportedDuplicateStrategies,
+  duplicateKeyLabel,
+  onDuplicateStrategyChange,
   onCancel,
   onConfirmImport,
 }) => {
   const { t } = useTranslation();
+  const strategyOptions = useMemo(
+    () =>
+      normalizeDuplicateStrategies(supportedDuplicateStrategies).map((value) => ({
+        value,
+        label: t(`components.uniImport.duplicateStrategy.${value}`),
+      })),
+    [supportedDuplicateStrategies, t],
+  );
+  const showDuplicateStrategy = strategyOptions.length > 0 && !!onDuplicateStrategyChange;
 
   const preview = useMemo(
     () =>
@@ -161,6 +185,30 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
             title={t('components.uniImport.previewPrecheckWarningTitle')}
             description={renderAlertLines(warningMessages)}
           />
+        )}
+
+        {showDuplicateStrategy && (
+          <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+            <Typography.Text strong>
+              {t('components.uniImport.duplicateStrategyTitle', {
+                key: duplicateKeyLabel || t('components.uniImport.duplicateStrategyKeyFallback'),
+              })}
+            </Typography.Text>
+            <Radio.Group
+              options={strategyOptions}
+              value={duplicateStrategy}
+              onChange={(e) => onDuplicateStrategyChange?.(e.target.value)}
+            />
+            {precheckResult?.duplicateSummary && !precheckLoading && (
+              <Typography.Text type="secondary">
+                {t('components.uniImport.duplicateSummary', {
+                  total: precheckResult.duplicateSummary.totalRows,
+                  newCount: precheckResult.duplicateSummary.newCount,
+                  updateCount: precheckResult.duplicateSummary.updateCount,
+                })}
+              </Typography.Text>
+            )}
+          </Space>
         )}
 
         <Table

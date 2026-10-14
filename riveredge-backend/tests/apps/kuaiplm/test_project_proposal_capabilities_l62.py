@@ -58,6 +58,20 @@ def test_validate_on_submit():
         validate_sales_content_on_submit(row)
 
 
+def test_supplier_assessment_optional_for_def():
+    row = SimpleNamespace(
+        dev_req_types=["D"],
+        supplier_name="",
+        summary="概述",
+        supplier_assessment_lines=[
+            {"material_key": "plastic_shell", "suppliers_text": ""},
+        ],
+    )
+    assert not supplier_fill_ready(row)
+    assert supplier_fill_ready(row, supplier_assessment_optional=True)
+    validate_supplier_on_submit(row, supplier_assessment_optional=True)
+
+
 def test_capabilities_progression():
     row = SimpleNamespace(
         project_code="P01",

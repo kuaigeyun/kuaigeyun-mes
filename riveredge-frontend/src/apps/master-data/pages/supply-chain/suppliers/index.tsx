@@ -54,7 +54,11 @@ import {
   partnerSettlementMethodLabel,
   partnerTaxpayerTypeLabel,
 } from '../../../utils/partner-static-labels';
-import { importInChunks } from '../../../../../utils/chunkedBulkImport';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
+import type {
+  UniImportCommitContext,
+  UniImportDuplicateConfig,
+} from '../../../../../components/uni-import/uni-import-duplicate-types';
 import { downloadFile } from '../../../../../utils';
 import {
   buildFactoryImportTemplate,
@@ -187,6 +191,9 @@ const SuppliersPage: React.FC = () => {
           { field: 'enterpriseTypeCode', labelKey: 'field.partner.enterpriseType' , options: buildPartnerEnterpriseTypeImportOptions(t) },
           { field: 'paymentTermsDays', labelKey: 'field.partner.paymentTermsDays' },
           { field: 'settlementMethodCode', labelKey: 'field.partner.settlementMethod' , options: buildPartnerSettlementMethodImportOptions(t) },
+          { field: 'paymentAccountName', labelKey: 'field.supplier.paymentAccountName', aliases: ['户名'] },
+          { field: 'paymentBankName', labelKey: 'field.supplier.paymentBankName', aliases: ['开户银行'] },
+          { field: 'paymentBankAccount', labelKey: 'field.supplier.paymentBankAccount', aliases: ['银行账号', '付款银行账号'] },
           { field: 'deliveryContactName', labelKey: 'field.partner.deliveryContactName' },
           { field: 'deliveryContactPhone', labelKey: 'field.partner.deliveryContactPhone' },
           { field: 'deliveryAddress', labelKey: 'field.partner.deliveryAddress' },
@@ -203,10 +210,29 @@ const SuppliersPage: React.FC = () => {
           t('app.master-data.suppliers.importExample.address'),
           '是',
           '', '', '', '', '', '', '', '',
-          '', '', '', '', '', '', '', '', '', '', '',
+          '', '', '', '', '', '', '', '', '', '', '', '', '',
         ],
       ),
     [t, i18n.language, dictLabelMaps],
+  );
+
+  const supplierImportDuplicateConfig = useMemo<UniImportDuplicateConfig>(
+    () => ({
+      keyField: 'code',
+      keyLabelKey: 'field.supplier.code',
+      defaultStrategy: 'upsert',
+      resolveExistingKeys: async (keys) => {
+        if (!keys.length) return new Set<string>();
+        const rows = await fetchAllListItems((p) => supplierApi.list({ ...p, page_size: 500 }));
+        const existing = new Set<string>();
+        rows.forEach((row) => {
+          const code = String(row.code ?? '').trim();
+          if (code) existing.add(code);
+        });
+        return existing;
+      },
+    }),
+    [],
   );
 
   useEffect(() => {
@@ -359,7 +385,8 @@ const SuppliersPage: React.FC = () => {
   /**
    * 处理批量导入供应商（分片 bulkCreate）
    */
-  const handleImport = async (data: any[][]) => {
+  const handleImport = async (data: any[][], context?: UniImportCommitContext) => {
+    const duplicateStrategy = context?.duplicateStrategy ?? 'upsert';
     if (!data || data.length === 0) {
       messageApi.warning(t('app.master-data.importEmpty'));
       return;
@@ -484,6 +511,13 @@ const SuppliersPage: React.FC = () => {
           enterpriseTypeCode: parsePartnerEnterpriseTypeImport(cellAt('enterpriseTypeCode'), t),
           paymentTermsDays: parseNum(cellAt('paymentTermsDays')),
           settlementMethodCode: parsePartnerSettlementMethodImport(cellAt('settlementMethodCode'), t),
+          settlementAccounts: (() => {
+            const accountName = cellAt('paymentAccountName') || undefined;
+            const bankName = cellAt('paymentBankName') || undefined;
+            const bankAccount = cellAt('paymentBankAccount') || undefined;
+            if (!accountName && !bankName && !bankAccount) return undefined;
+            return [{ accountName, bankName, bankAccount, isDefault: true }];
+          })(),
           deliveryContactName: cellAt('deliveryContactName') || undefined,
           deliveryContactPhone: cellAt('deliveryContactPhone') || undefined,
           deliveryAddress: cellAt('deliveryAddress') || undefined,
@@ -524,18 +558,35 @@ const SuppliersPage: React.FC = () => {
     }
 
     try {
-      const CHUNK = 100;
-      const result = await importInChunks({
+      const codeToUuid = new Map<string, string>();
+      const existingRows = await fetchAllListItems((p) =>
+        supplierApi.list({ ...p, page_size: 500 }),
+      );
+      existingRows.forEach((row) => {
+        const code = String(row.code ?? '').trim();
+        if (code && row.uuid) codeToUuid.set(code, row.uuid);
+      });
+
+      const result = await importInChunksViaPerItemCreate({
         items: importData,
-        chunkSize: CHUNK,
+        chunkSize: 50,
+        concurrency: 4,
         title: t('app.master-data.suppliers.importTitle'),
         showResultModal: false,
-        importChunk: async (chunk) => {
-          const res = await supplierApi.bulkCreate(chunk);
-          return {
-            createdCount: res.createdCount,
-            failedItems: res.failedItems,
-          };
+        createOne: async (item) => {
+          const code = String(item.code ?? '').trim();
+          const existingUuid = code ? codeToUuid.get(code) : undefined;
+          if (existingUuid) {
+            if (duplicateStrategy === 'skip') {
+              return;
+            }
+            await supplierApi.update(existingUuid, item);
+            return;
+          }
+          const created = await supplierApi.create(item);
+          if (code && created?.uuid) {
+            codeToUuid.set(code, created.uuid);
+          }
         },
       });
 
@@ -1080,6 +1131,7 @@ const SuppliersPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         showImportButton={true}
         onImport={handleImport}
+        importDuplicateConfig={supplierImportDuplicateConfig}
         showSyncButton={canCreate}
         onSync={() => setSyncModalVisible(true)}
         syncToolbarExtra={

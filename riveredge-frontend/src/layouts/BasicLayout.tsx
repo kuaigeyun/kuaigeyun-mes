@@ -1205,6 +1205,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       if (meta.className) menuItem.className = meta.className;
       if (meta.hideInMenu === true) menuItem.hideInMenu = true;
     }
+    if (
+      isAppMenu &&
+      !menu.path &&
+      menu.children?.length &&
+      typeof menuNameKey === 'string' &&
+      menuNameKey.includes('.menu.group.')
+    ) {
+      menuItem.type = 'group';
+      menuItem.className = menuItem.className ?? 'riveredge-menu-group-title';
+    }
 
     return menuItem;
   }, [t]); // 添加 t 作为依赖项，确保翻译函数是最新的

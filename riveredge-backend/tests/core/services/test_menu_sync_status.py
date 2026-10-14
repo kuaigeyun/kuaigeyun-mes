@@ -97,6 +97,22 @@ def test_collect_manifest_leaf_immediate_parent_titles_grouped_finance():
     )
 
 
+def test_pick_manifest_folder_parent_prefers_sibling_under_same_parent():
+    from types import SimpleNamespace
+
+    from core.services.system.menu_service import MenuService
+
+    leaf = SimpleNamespace(id=10, parent_id=100)
+    folder_a = SimpleNamespace(
+        id=20, parent_id=100, name="app.kuaicaiwu.menu.group.finance-receipts"
+    )
+    folder_b = SimpleNamespace(
+        id=21, parent_id=200, name="app.kuaicaiwu.menu.group.finance-receipts"
+    )
+    picked = MenuService._pick_manifest_folder_parent([folder_a, folder_b], leaf)
+    assert picked is folder_a
+
+
 def test_collect_manifest_leaf_immediate_parent_titles_flat_finance_differs():
     grouped = {
         "title": "app.kuaicaiwu.name",

@@ -670,7 +670,14 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 禁止仅用本回调打开第二个导入弹窗。
    */
   /** 返回 false 表示校验/导入未成功，保留导入弹窗 */
-  onImport?: (data: any[][]) => void | boolean | Promise<void | boolean>
+  onImport?: (
+    data: any[][],
+    context?: import('../uni-import/uni-import-duplicate-types').UniImportCommitContext,
+  ) => void | boolean | Promise<void | boolean>
+  /**
+   * 导入重复键策略（编码/单号等）：预检弹窗可选更新、跳过、遇重复失败
+   */
+  importDuplicateConfig?: import('../uni-import/uni-import-duplicate-types').UniImportDuplicateConfig
   /**
    * 导入入库前预检（UniImport 预览弹窗内调用；返回 errors 时禁止确认入库）
    */
@@ -1184,6 +1191,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   showImportButton = true,
   onImport,
   onImportPrecheck,
+  importDuplicateConfig,
   importHeaders,
   importExampleRow,
   importColumnOptions,
@@ -4379,9 +4387,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           <LazyUniImport
             visible={importModalVisible}
             onCancel={() => setImportModalVisible(false)}
-            onConfirm={async (data) => {
+            onConfirm={async (data, context) => {
               // 必须 await：否则校验失败/接口抛错会被当成成功立刻关窗，表现为「点确认无反应」
-              const result = await Promise.resolve(onImport(data))
+              const result = await Promise.resolve(onImport(data, context))
               if (result === false) return false
               setImportModalVisible(false)
               void reloadWithTanstackCacheBust()
@@ -4402,6 +4410,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             onRelationImportSubmit={onRelationImportSubmit}
             templateDocumentName={importTemplateDocumentName}
             onImportPrecheck={onImportPrecheck}
+            importDuplicateConfig={importDuplicateConfig}
           />
         </Suspense>
       )}

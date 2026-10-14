@@ -9,6 +9,27 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-project-proposal-supplier-optional-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-optional-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-optional-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-type-label-r01',
+    date: '2026-10-14',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-label-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-label-r01.description',
+  },
+  {
     id: 'funide-oa-rd-archive-in-deliverables-r01',
     date: '2026-10-14',
     type: 'improvement',

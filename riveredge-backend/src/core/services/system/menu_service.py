@@ -87,6 +87,99 @@ class MenuService:
         return False
 
     @staticmethod
+    def _merge_manifest_folder_meta(
+        menu_name: str,
+        menu_meta: Dict[str, Any] | None,
+        *,
+        has_children: bool,
+        menu_path: Any,
+    ) -> Dict[str, Any] | None:
+        """manifest 无 path 的分组（如收款/付款管理）入库时标记 type=group，侧栏与快制造一致。"""
+        if menu_path or not has_children:
+            return menu_meta
+        name = (menu_name or "").strip()
+        if ".menu.group." not in name:
+            return menu_meta
+        merged: Dict[str, Any] = {**(menu_meta or {})}
+        merged.setdefault("type", "group")
+        merged.setdefault("className", "riveredge-menu-group-title")
+        return merged
+
+    @staticmethod
+    def _pick_manifest_folder_parent(
+        candidates: List[Menu],
+        leaf: Menu,
+    ) -> Optional[Menu]:
+        """同应用下多个同名分组时，优先与叶子当前错误父级同级的文件夹（快财务平铺修复）。"""
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        for folder in candidates:
+            if folder.parent_id == leaf.parent_id:
+                return folder
+        return candidates[0]
+
+    @staticmethod
+    async def _realign_application_menu_leaf_parents(
+        tenant_id: int,
+        application_uuid: str,
+        menu_config: Any,
+    ) -> int:
+        """
+        将叶子菜单挂回 manifest 声明的直接父级（修复中间分组丢失导致的平铺）。
+        """
+        from core.models.menu import Menu
+        from core.services.application.application_service import ApplicationService
+
+        expected = ApplicationService.collect_manifest_leaf_immediate_parent_titles(menu_config)
+        if not expected:
+            return 0
+
+        rows = await Menu.filter(
+            tenant_id=tenant_id,
+            application_uuid=str(application_uuid),
+            deleted_at__isnull=True,
+        ).all()
+        by_path = {str(m.path).strip(): m for m in rows if m.path and str(m.path).strip()}
+        folders_by_name: Dict[str, List[Menu]] = {}
+        for menu in rows:
+            if menu.path:
+                continue
+            name = (menu.name or "").strip()
+            if not name:
+                continue
+            folders_by_name.setdefault(name, []).append(menu)
+
+        fixed = 0
+        for path, expected_parent_name in expected.items():
+            leaf = by_path.get(path)
+            if not leaf or leaf.parent_id is None:
+                continue
+            if (leaf.meta or {}).get(META_TENANT_PARENT_OVERRIDE):
+                continue
+            current_parent = next((m for m in rows if m.id == leaf.parent_id), None)
+            if current_parent and current_parent.name == expected_parent_name:
+                continue
+            candidates = folders_by_name.get(expected_parent_name, [])
+            target = MenuService._pick_manifest_folder_parent(candidates, leaf)
+            if not target or leaf.parent_id == target.id:
+                continue
+            leaf.parent_id = target.id
+            await leaf.save(update_fields=["parent_id", "updated_at"])
+            fixed += 1
+        if fixed:
+            from loguru import logger
+
+            logger.info(
+                "menu_leaf_parent_realign tenant={} app={} fixed={}",
+                tenant_id,
+                application_uuid,
+                fixed,
+            )
+        return fixed
+
+    @staticmethod
     def _should_repair_orphaned_manifest_parent(
         menu: Menu,
         manifest_parent_id: Optional[int],
@@ -1806,6 +1899,12 @@ class MenuService:
             menu_meta = menu_item.get("meta")
             children = menu_item.get("children", [])
             has_children = isinstance(children, list) and len(children) > 0
+            menu_meta = MenuService._merge_manifest_folder_meta(
+                menu_name,
+                menu_meta,
+                has_children=has_children,
+                menu_path=menu_path,
+            )
             is_clickable_leaf = bool(menu_path and str(menu_path).strip()) and (not menu_is_external) and (not has_children)
             if is_clickable_leaf and not menu_permission_code:
                 raise ValidationError(
@@ -1946,6 +2045,10 @@ class MenuService:
         
         logger.info(
             f"应用 {application_uuid} 菜单配置同步完成，处理 {synced_count} 个菜单（新建 {created_count} 个）"
+        )
+
+        await MenuService._realign_application_menu_leaf_parents(
+            tenant_id, application_uuid, menu_config
         )
 
         # 菜单同步后，清除相关缓存，确保前端能立即获取最新菜单

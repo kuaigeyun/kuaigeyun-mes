@@ -2269,6 +2269,16 @@ export default {
   'components.uniImport.previewMoreRowsHint': '另有 {{rest}} 行未在预览中展示，确认后将一并导入',
   'components.uniImport.previewBackEdit': '返回修改',
   'components.uniImport.previewConfirmImport': '确认导入',
+  'components.uniImport.duplicateStrategyTitle': '库内重复（按{{key}}）',
+  'components.uniImport.duplicateStrategyKeyFallback': '唯一编码',
+  'components.uniImport.duplicateStrategy.upsert': '更新已有并新建（推荐）',
+  'components.uniImport.duplicateStrategy.skip': '跳过已有，仅新建',
+  'components.uniImport.duplicateStrategy.fail': '遇重复则失败，不写入',
+  'components.uniImport.duplicateSummary':
+    '预计新建 {{newCount}} 条，覆盖更新 {{updateCount}} 条（共 {{total}} 行有效数据）',
+  'components.uniImport.duplicateInFile': '表格内 {{count}} 行编码/单号与前面行重复，仅首行会生效',
+  'components.uniImport.duplicateFailBlocked': '有 {{count}} 行在系统中已存在，当前策略不允许覆盖',
+  'components.uniImport.duplicateSkipHint': '有 {{count}} 行已存在，确认后将跳过这些行',
   'components.uniImport.previewPrechecking': '正在预检…',
   'components.uniImport.previewPrecheckWarningTitle': '预检提示',
   'components.uniImport.previewPrecheckErrorTitle': '预检未通过',
@@ -5803,6 +5813,32 @@ export default {
   'app.kuaiplm.rdProjects.systemArchive.acceptSuccess': '验收确认成功',
   'app.kuaiplm.rdProjects.systemArchive.clearConfirm': '确定清除该归档条目内容？',
   'app.kuaiplm.rdProjects.systemArchive.templateFieldPlaceholder': '按甲方模板填写',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.project_proposal': '项目建议书',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.design_task_plan': '设计任务计划书',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.product_implementation_plan': '产品实现方案书',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.drawing_design': '图纸设计',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.design_review': '设计评审',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.handboard_prototype_build': '手板样机制作',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.handboard_prototype_review': '手板样机评审',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.t1_prototype_build': 'T1样机制作',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.t1_prototype_verify': 'T1样机验证',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.t1_prototype_review': 'T1样机评审',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.t2_prototype_build': 'T2样机制作',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.t2_prototype_verify': 'T2样机验证',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.t2_prototype_review': 'T2样机评审',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.t3_prototype_build': 'T3样机制作',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.t3_prototype_verify': 'T3样机验证',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.t3_prototype_review': 'T3样机评审',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.customer_confirmation': '客户确认书',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.bom_release': 'BOM制作下发',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.material_confirmation': '物料确认书下发',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.trial_production': '试生产',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.project_summary': '项目总结报告',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.qms_materials': '体系资料',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.product_tech_detail_sheet': '产品技术资料明细表',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.sample_contact': '打样联系单',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.prototype_build_sheet': '样机制作书',
+  'app.kuaiplm.rdProjects.systemArchive.typeNames.test_report': '测试报告',
   'app.kuaiplm.rdProjects.form.projectType': '项目类型',
   'app.kuaiplm.rdProjects.form.gateTemplate': '阶段模板',
   'app.kuaiplm.rdProjects.form.gateTemplatePlaceholder': '请选择阶段门模板',
@@ -6601,7 +6637,7 @@ export default {
   'app.funide-oa.projectProposal.actions.fillSupplierAssessment': '填供应商评审',
   'app.funide-oa.projectProposal.placeholders.suppliersText': '可填多个供应商，用 / 分隔',
   'app.funide-oa.projectProposal.hints.supplierAssessment':
-    '开发要求为 D/E/F 类时提交前须完整填写；A/B/C 类由研发项目负责人另行组织供应商评审。',
+    '可按物料类型填写供应商，提交前非必填；A/B/C 类也可由研发项目负责人另行组织供应商评审。',
   'app.funide-oa.projectProposal.validation.summaryRequired': '请填写开发要求概述',
   'app.funide-oa.projectProposal.status.draft': '草稿',
   'app.funide-oa.projectProposal.status.pending': '待审核',
@@ -22493,6 +22529,9 @@ export default {
   'app.master-data.suppliers.syncField.invoicePhone': '开票电话',
   'app.master-data.suppliers.syncField.invoiceBankName': '开票开户银行',
   'app.master-data.suppliers.syncField.invoiceBankAccount': '开票银行账号',
+  'app.master-data.suppliers.syncField.paymentAccountName': '付款户名',
+  'app.master-data.suppliers.syncField.paymentBankName': '付款开户银行',
+  'app.master-data.suppliers.syncField.paymentBankAccount': '付款账号',
   'app.master-data.suppliers.syncField.legalRepresentative': '法定代表人',
   'app.master-data.suppliers.syncField.paymentTermsDays': '付款账期',
   'app.master-data.suppliers.syncField.settlementMethodCode': '结算方式',
@@ -24421,6 +24460,9 @@ export default {
   'field.partner.settlementBankAccountMaxLength': '银行账号不能超过64个字符',
   'field.partner.settlementAccountDefault': '默认',
   'field.supplier.paymentAccounts': '付款账户',
+  'field.supplier.paymentAccountName': '付款户名',
+  'field.supplier.paymentBankName': '付款开户银行',
+  'field.supplier.paymentBankAccount': '付款账号',
   'field.customer.receiptAccounts': '收款账户',
   'field.partner.tabInvoice': '开票资料',
   'field.partner.tabExtended': '业务与扩展',
@@ -31248,6 +31290,14 @@ export default {
     '样品试流菜单更正为样品加工，资料发布日期固定当天',
   'pages.dashboard.updateLog.entries.funide-oa-sample-process-menu-release-date-r01.description':
     '侧栏「样品检验」更正为「样品加工」，与新建按钮及单据一致（样品检验单为另一单据）。新建时资料发布日期自动取站点当天且不可改选。',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-optional-r01.title':
+    '项目建议书供应商评审改为选填',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-optional-r01.description':
+    'funide-oa 项目建议书在开发要求为 D/E/F 类时，提交审核不再强制完整填写供应商评审表，可按需补填。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-label-r01.title':
+    '体系预置交付物类型列显示中文名称',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-label-r01.description':
+    '研发项目工作台交付物「类型」列不再显示 system_archive 编码，改为展示项目建议书、设计任务计划书等与体系清单一致的中文名称。',
   'pages.dashboard.updateLog.entries.funide-oa-rd-archive-in-deliverables-r01.title':
     '研发项目体系清单并入阶段门交付物',
   'pages.dashboard.updateLog.entries.funide-oa-rd-archive-in-deliverables-r01.description':
@@ -31388,6 +31438,22 @@ export default {
     '样品加工研发项目支持手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.description':
     '新建样品加工申请时，研发项目可从系统项目选择，也可直接输入项目代号，不再因项目主数据未建档而无法保存。',
+  'pages.dashboard.updateLog.entries.supplier-import-payment-account-r01.title':
+    '供应商导入补上付款账号',
+  'pages.dashboard.updateLog.entries.supplier-import-payment-account-r01.description':
+    '供应商表格导入增加付款户名、付款开户银行、付款账号，写入付款账户；同步供应商的字段映射也可对应这三项。',
+  'pages.dashboard.updateLog.entries.uni-import-failure-reason-modal-r01.title':
+    '导入失败展示具体原因',
+  'pages.dashboard.updateLog.entries.uni-import-failure-reason-modal-r01.description':
+    '分片与逐条导入失败时不再每条弹出全局「服务器内部错误」；结果弹窗汇总成功/失败条数并列出各行或同类失败原因，便于对照 Excel 修正。',
+  'pages.dashboard.updateLog.entries.uni-import-duplicate-strategy-r01.title':
+    '导入预检可选重复行更新或跳过',
+  'pages.dashboard.updateLog.entries.uni-import-duplicate-strategy-r01.description':
+    'UniImport 预检确认前可按编码/单号选择更新已有、仅新建或遇重复失败，并展示预计新建与覆盖条数；客商导入已接入。',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-group-realign-r01.title':
+    '轻财务财务管理菜单恢复收款/付款分组',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-group-realign-r01.description':
+    '应用菜单同步后会按 manifest 将应收应付等叶子挂回收款管理、付款管理分组，侧栏层级与快制造托管时一致；分组节点入库为 group 类型便于展示。',
   'pages.dashboard.updateLog.entries.field-mask-decimal-sales-order-list-r01.title':
     '字段脱敏后销售订单列表不再 500',
   'pages.dashboard.updateLog.entries.field-mask-decimal-sales-order-list-r01.description':

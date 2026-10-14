@@ -44,7 +44,50 @@ SUPPLIER_SYNC_STRING_FIELDS = frozenset({
 SUPPLIER_SYNC_BOOL_FIELDS = frozenset({"is_active"})
 SUPPLIER_SYNC_DECIMAL_FIELDS = frozenset({"estimated_annual_purchase", "credit_limit"})
 SUPPLIER_SYNC_INT_FIELDS = frozenset({"payment_terms_days"})
+SUPPLIER_PAYMENT_ACCOUNT_SYNC_FIELDS = (
+    "payment_account_name",
+    "payment_bank_name",
+    "payment_bank_account",
+)
+_PAYMENT_ACCOUNT_COLUMN = {
+    "payment_account_name": "account_name",
+    "payment_bank_name": "bank_name",
+    "payment_bank_account": "bank_account",
+}
 from apps.master_data.services.supply_chain_service import SupplyChainService
+
+
+def apply_supplier_payment_account_sync(record: Supplier, mapped_row: Dict[str, Any]) -> bool:
+    """把同步行里的付款户名、开户银行、付款账号写入默认付款账户。"""
+    present = [key for key in SUPPLIER_PAYMENT_ACCOUNT_SYNC_FIELDS if key in mapped_row]
+    if not present:
+        return False
+    rows = record.settlement_accounts if isinstance(record.settlement_accounts, list) else []
+    accounts = [dict(row) for row in rows if isinstance(row, dict)]
+    target = next((row for row in accounts if row.get("is_default")), None)
+    if target is None and accounts:
+        target = accounts[0]
+    if target is None:
+        target = {
+            "account_name": None,
+            "bank_name": None,
+            "bank_account": None,
+            "is_default": True,
+        }
+        accounts = [target]
+    for key in present:
+        target[_PAYMENT_ACCOUNT_COLUMN[key]] = cell_str(mapped_row.get(key)) or None
+    kept = [
+        row
+        for row in accounts
+        if any(row.get(column) for column in ("account_name", "bank_name", "bank_account"))
+    ]
+    if kept and not any(row.get("is_default") for row in kept):
+        kept[0]["is_default"] = True
+    record.settlement_accounts = kept
+    return True
+
+
 class SupplierSyncService:
     MATCH_KEY = "code"
     def serialize_binding(self, row: Optional[SupplierSyncBinding]) -> MasterDataSyncBindingOut:
@@ -205,6 +248,8 @@ class SupplierSyncService:
                         decimal_fields=SUPPLIER_SYNC_DECIMAL_FIELDS,
                         int_fields=SUPPLIER_SYNC_INT_FIELDS,
                     )
+                    if apply_supplier_payment_account_sync(existing, row):
+                        await existing.save(update_fields=["settlement_accounts", "updated_at"])
                     await mark_external_sync_record(existing)
                     updated += 1
                 else:
@@ -233,6 +278,8 @@ class SupplierSyncService:
                             decimal_fields=SUPPLIER_SYNC_DECIMAL_FIELDS,
                             int_fields=SUPPLIER_SYNC_INT_FIELDS,
                         )
+                        if apply_supplier_payment_account_sync(supplier_row, row):
+                            await supplier_row.save(update_fields=["settlement_accounts", "updated_at"])
                         await mark_external_sync_record(supplier_row)
                     created += 1
             except Exception as exc:
