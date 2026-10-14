@@ -31,7 +31,8 @@ import {
   Flex,
 
   Alert,
-  Switch,
+  Radio,
+  message,
 
 } from 'antd';
 
@@ -695,7 +696,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
   const [flowStatus, setFlowStatus] = useState<ApprovalStatusResponse | null>(null);
 
   const [advancedAction, setAdvancedAction] = useState<AdvancedActionState | null>(null);
-  const [branchDecision, setBranchDecision] = useState(false);
+  /** null=未选择；双分支条件必须显式选是/否，禁止默认跳边 */
+  const [branchDecision, setBranchDecision] = useState<boolean | null>(null);
 
   const sessionUser = resolveUserForMenuPermission(getSessionCurrentUser());
   const adminOpen = isAdminBypass(sessionUser);
@@ -863,15 +865,20 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
   const nodeDecision = flowStatus?.current_node_decision;
 
   useEffect(() => {
-    if (nodeDecision) {
-      setBranchDecision(Boolean(nodeDecision.defaultValue));
-    } else {
-      setBranchDecision(false);
+    if (!nodeDecision?.field) {
+      setBranchDecision(null);
+      return;
     }
-  }, [nodeDecision?.field, open]);
+    // 须显式选择时保持未选；仅当配置了明确默认值时预填
+    if (nodeDecision.requireExplicit !== false && nodeDecision.defaultValue == null) {
+      setBranchDecision(null);
+    } else {
+      setBranchDecision(Boolean(nodeDecision.defaultValue));
+    }
+  }, [nodeDecision?.field, nodeDecision?.defaultValue, nodeDecision?.requireExplicit, open]);
 
   const buildApprovePayload = (): Record<string, unknown> | undefined => {
-    if (!nodeDecision?.field) return undefined;
+    if (!nodeDecision?.field || branchDecision === null) return undefined;
     return {
       instance_data_patch: {
         [nodeDecision.field]: branchDecision,
@@ -905,6 +912,13 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     if (item.action === 'transfer' || item.action === 'add_sign' || item.action === 'delegate') {
       setAdvancedAction({ action: item.action, open: true });
+      return;
+    }
+
+    if (item.action === 'approve' && nodeDecision?.field && branchDecision === null) {
+      message.warning(
+        t('components.uniAudit.branchDecisionRequired', { label: nodeDecision.label }),
+      );
       return;
     }
 
@@ -1034,10 +1048,39 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         ) : null}
 
         {nodeDecision && effectiveHubActions.some((a) => a.action === 'approve' && a.canExecute) ? (
-          <Flex align="center" justify="space-between" style={{ marginBottom: 12 }}>
-            <Text>{nodeDecision.label}</Text>
-            <Switch checked={branchDecision} onChange={setBranchDecision} />
-          </Flex>
+          <div
+            style={{
+              marginBottom: 12,
+              padding: '10px 12px',
+              border: '1px solid rgba(0, 0, 0, 0.06)',
+              borderRadius: 6,
+              background: '#f7f8fa',
+            }}
+          >
+            <Text strong style={{ display: 'block', marginBottom: 8 }}>
+              {nodeDecision.label}
+            </Text>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+              {t('components.uniAudit.branchDecisionHint')}
+            </Text>
+            <Radio.Group
+              value={branchDecision}
+              onChange={(e) => setBranchDecision(Boolean(e.target.value))}
+              optionType="button"
+              buttonStyle="solid"
+            >
+              <Radio.Button value={true}>
+                {t('components.uniAudit.branchDecisionYes', {
+                  name: nodeDecision.trueBranchLabel || t('common.yes'),
+                })}
+              </Radio.Button>
+              <Radio.Button value={false}>
+                {t('components.uniAudit.branchDecisionNo', {
+                  name: nodeDecision.falseBranchLabel || t('common.no'),
+                })}
+              </Radio.Button>
+            </Radio.Group>
+          </div>
         ) : null}
 
         {effectiveHubActions.length > 0 ? (

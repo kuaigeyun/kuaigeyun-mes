@@ -135,11 +135,14 @@ export interface ApprovalStatusResponse {
     allow_add_sign?: boolean;
     allow_edit_during_approval?: boolean;
   };
-  /** 当前节点配置了 decisionOnApprove 时，审核通过前须由待办人勾选 */
+  /** 当前审批下一节点为双分支条件（或显式 decisionOnApprove）时，审核前须显式选边 */
   current_node_decision?: {
     field: string;
     label: string;
-    defaultValue: boolean;
+    trueBranchLabel?: string;
+    falseBranchLabel?: string;
+    requireExplicit?: boolean;
+    defaultValue?: boolean | null;
   } | null;
   tasks?: Array<{
     uuid: string;

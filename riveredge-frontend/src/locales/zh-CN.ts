@@ -31456,10 +31456,14 @@ export default {
     '其他费用收支类别接口改挂快制造主仓',
   'pages.dashboard.updateLog.entries.finance-misc-categories-kuaizhizao-api-r01.description':
     '收支类别与其他费用收入/支出 API 迁入快制造主仓路由，新建类别不再报接口不存在；过账挂账仍衔接轻财务应收应付。',
+  'pages.dashboard.updateLog.entries.finance-ar-ap-audit-writeback-r01.title':
+    '应收应付审核通过后单据一次写回',
+  'pages.dashboard.updateLog.entries.finance-ar-ap-audit-writeback-r01.description':
+    '审批流结束后正确回调应付/应收/进项发票写回，不再因错误服务类名导致流程已通过、单据仍待审而需要再点一次审核。',
   'pages.dashboard.updateLog.entries.audit-condition-branch-decision-r01.title':
     '条件分支须由前序审批人确认后再进入',
   'pages.dashboard.updateLog.entries.audit-condition-branch-decision-r01.description':
-    '下一节点为「是否××」类布尔条件时，审核页自动出现分支开关；未确认时不再默认走进第一条特批支，未命中条件走 else 边，条件节点状态与执行记录一并修正。',
+    '审批节点后接双分支条件（如是否总经理特批）时，审核页必须先选「是→节点3」或「否→节点4」才能通过；禁止默认跳任一分支。',
   'pages.dashboard.updateLog.entries.audit-block-reason-current-node-r01.title':
     '审核按钮待办人提示与当前节点一致',
   'pages.dashboard.updateLog.entries.audit-block-reason-current-node-r01.description':
@@ -43190,6 +43194,10 @@ export default {
   'components.uniAudit.notNodeAssignee': '您不是当前节点的待办审批人，无法审核或驳回',
   'components.uniAudit.notNodeAssigneeWithNames':
     '当前节点待办人为：{{names}}，您无权在此节点审核或驳回',
+  'components.uniAudit.branchDecisionHint': '请先选择后续走向，再点击审核',
+  'components.uniAudit.branchDecisionRequired': '请先选择「{{label}}」后再审核',
+  'components.uniAudit.branchDecisionYes': '是：{{name}}',
+  'components.uniAudit.branchDecisionNo': '否：{{name}}',
   'components.uniAudit.approveAction': '审核',
   'components.uniAudit.rejectAction': '驳回',
   'components.uniAudit.transfer': '转交',
