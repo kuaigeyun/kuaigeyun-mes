@@ -7911,6 +7911,10 @@ export default {
   'app.kuaizhizao.deliveryProject.workbench.tabs.collab': '协同',
   'app.kuaizhizao.deliveryProject.workbench.tabs.related': '关联',
   'app.kuaizhizao.deliveryProject.workbench.tabs.chain': '全链路',
+  'app.kuaizhizao.deliveryProject.workbench.sidePanelTitle': '关联与协同',
+  'app.kuaizhizao.deliveryProject.workbench.collapseRightPanel': '收起右侧栏',
+  'app.kuaizhizao.deliveryProject.workbench.expandRightPanel': '展开右侧栏',
+  'app.kuaizhizao.deliveryProject.workbench.projectGanttTitle': '项目进度甘特图',
   'app.kuaizhizao.deliveryProject.createProcessTemplate': '新建流程模板',
   'app.kuaizhizao.deliveryProject.newTemplateName': '新建流程模板',
   'app.kuaizhizao.deliveryProject.setDefaultTemplate': '设为默认',
@@ -31456,6 +31460,30 @@ export default {
     '其他费用收支类别接口改挂快制造主仓',
   'pages.dashboard.updateLog.entries.finance-misc-categories-kuaizhizao-api-r01.description':
     '收支类别与其他费用收入/支出 API 迁入快制造主仓路由，新建类别不再报接口不存在；过账挂账仍衔接轻财务应收应付。',
+  'pages.dashboard.updateLog.entries.audit-execution-badge-success-color-r01.title':
+    '审核通过徽章改用语义成功色',
+  'pages.dashboard.updateLog.entries.audit-execution-badge-success-color-r01.description':
+    '审核弹窗节点执行记录中「审核通过」等动作徽章改走全站 success/error 语义色，不再使用偏艳的 green/red 预设色。',
+  'pages.dashboard.updateLog.entries.delivery-gantt-progress-bar-r01.title':
+    '交付甘特图进度改为百分比条',
+  'pages.dashboard.updateLog.entries.delivery-gantt-progress-bar-r01.description':
+    '交付项目甘特图「进度%」列改为与下推进度相同的百分比条展示，并按整数百分比显示。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-project-gantt-r01.title':
+    '交付工作台改为项目甘特图',
+  'pages.dashboard.updateLog.entries.delivery-workbench-project-gantt-r01.description':
+    '节点子任务旁的小甘特条已去掉；交付流程节点下方展示整项目进度甘特图，可按日周月切换。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-right-panel-collapse-r01.title':
+    '交付项目工作台右侧栏可收起并记住',
+  'pages.dashboard.updateLog.entries.delivery-workbench-right-panel-collapse-r01.description':
+    '关联、协同事项、最近汇报与问题打包为同一右侧栏；点击可收起腾出主区空间，展开收起状态会记住。',
+  'pages.dashboard.updateLog.entries.audit-condition-route-actor-r01.title':
+    '条件分支执行人记为前序审批人选边人',
+  'pages.dashboard.updateLog.entries.audit-condition-route-actor-r01.description':
+    '节点执行记录中「条件分支」操作人取上一审批节点通过人，不再误显示为整单流程发起人；该记录只挂在条件节点下。',
+  'pages.dashboard.updateLog.entries.audit-modal-flow-preview-layout-r01.title':
+    '审核弹窗加宽且流程图随高度铺满',
+  'pages.dashboard.updateLog.entries.audit-modal-flow-preview-layout-r01.description':
+    '审核/撤销审核弹窗加宽；左侧流程预览随右侧单据区高度拉伸，不再固定小框。',
   'pages.dashboard.updateLog.entries.audit-uni-audit-body-patch-r01.title':
     '审核已选分支走向不再误报请先选择',
   'pages.dashboard.updateLog.entries.audit-uni-audit-body-patch-r01.description':

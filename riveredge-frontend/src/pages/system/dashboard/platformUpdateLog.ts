@@ -44,6 +44,55 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'delivery-gantt-progress-bar-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-gantt-progress-bar-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-gantt-progress-bar-r01.description',
+  },
+  {
+    id: 'delivery-workbench-project-gantt-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-workbench-project-gantt-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-workbench-project-gantt-r01.description',
+  },
+  {
+    id: 'delivery-workbench-right-panel-collapse-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.delivery-workbench-right-panel-collapse-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-workbench-right-panel-collapse-r01.description',
+  },
+  {
+    id: 'audit-execution-badge-success-color-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-execution-badge-success-color-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-execution-badge-success-color-r01.description',
+  },
+  {
+    id: 'audit-condition-route-actor-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-condition-route-actor-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-condition-route-actor-r01.description',
+  },
+  {
+    id: 'audit-modal-flow-preview-layout-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-modal-flow-preview-layout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-modal-flow-preview-layout-r01.description',
+  },
+  {
     id: 'audit-uni-audit-body-patch-r01',
     date: '2026-10-15',
     type: 'fix',

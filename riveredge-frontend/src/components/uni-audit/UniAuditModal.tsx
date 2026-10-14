@@ -53,6 +53,8 @@ import {
 } from '@ant-design/icons';
 
 import { getApprovalStatus, type ApprovalStatusResponse } from '../../services/approvalInstance';
+import { DOCUMENT_STATUS_SEMANTIC_COLOR } from '../../constants/documentStatusColors';
+import { MarkerTag, StatusTag } from '../../constants/statusBadges';
 import { resolveAuditFlowExecutePermission } from '../../utils/auditFlowViewerGate';
 import ApprovalFlowPreview from './ApprovalFlowPreview';
 import UniAuditAdvancedActionModal, { type AdvancedActionState } from './UniAuditAdvancedActionModal';
@@ -161,15 +163,15 @@ const ACTION_TAG_COLOR: Partial<Record<UniAuditAction, string>> = {
 
 const NODE_STATUS_LABEL: Record<string, { color: string; text: string }> = {
 
-  pending: { color: 'processing', text: '进行中' },
+  pending: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.active, text: '进行中' },
 
-  approved: { color: 'success', text: '已通过' },
+  approved: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.success, text: '已通过' },
 
-  rejected: { color: 'error', text: '已驳回' },
+  rejected: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.danger, text: '已驳回' },
 
-  waiting: { color: 'default', text: '待到达' },
+  waiting: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.muted, text: '待到达' },
 
-  skipped: { color: 'warning', text: '已跳过' },
+  skipped: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.pending, text: '已跳过' },
 
 };
 
@@ -227,24 +229,27 @@ const EXECUTION_ACTION_LABEL: Record<string, string> = {
   unknown: '未知操作',
 };
 
+/** 执行动作徽章色：走单据语义色板，禁止 antd 预设 green/red（偏艳） */
 const EXECUTION_ACTION_TAG_COLOR: Record<string, string> = {
-  approve: 'green',
-  approved: 'green',
-  reject: 'red',
-  rejected: 'red',
-  cancel: 'orange',
-  cancelled: 'orange',
-  canceled: 'orange',
-  withdraw: 'orange',
-  withdrawn: 'orange',
-  revoke: 'volcano',
-  revoked: 'volcano',
-  submit: 'blue',
-  submitted: 'blue',
-  transfer: 'cyan',
-  transferred: 'cyan',
-  pending: 'default',
-  unknown: 'default',
+  approve: DOCUMENT_STATUS_SEMANTIC_COLOR.success,
+  approved: DOCUMENT_STATUS_SEMANTIC_COLOR.success,
+  reject: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
+  rejected: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
+  cancel: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  cancelled: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  canceled: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  withdraw: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  withdrawn: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  revoke: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
+  revoked: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
+  submit: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  submitted: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  transfer: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  transferred: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  condition_route: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  condition: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  pending: DOCUMENT_STATUS_SEMANTIC_COLOR.muted,
+  unknown: DOCUMENT_STATUS_SEMANTIC_COLOR.muted,
 };
 
 function formatDateTime(value?: string | null): string {
@@ -345,13 +350,29 @@ function AuditHubDetailPanel({
 
   return (
 
-    <Row gutter={16} wrap={false} style={{ minHeight: 360 }}>
+    <Row gutter={16} wrap={false} align="stretch" style={{ minHeight: 480 }}>
 
-      <Col flex="0 0 42%" style={{ minWidth: 0 }}>
+      <Col
+        flex="0 0 44%"
+        style={{
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignSelf: 'stretch',
+        }}
+      >
 
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
+            minHeight: 420,
+            gap: 12,
+          }}
+        >
 
-          <div>
+          <div style={{ flex: '0 0 auto' }}>
 
             <Text type="secondary" style={{ fontSize: 12 }}>
 
@@ -367,15 +388,23 @@ function AuditHubDetailPanel({
 
           </div>
 
-          <ApprovalFlowPreview
+          <div style={{ flex: 1, minHeight: 420, position: 'relative' }}>
 
-            graph={process?.nodes}
+            <div style={{ position: 'absolute', inset: 0 }}>
 
-            nodesOverview={nodesOverview}
+              <ApprovalFlowPreview
 
-            height={340}
+                graph={process?.nodes}
 
-          />
+                nodesOverview={nodesOverview}
+
+                height="100%"
+
+              />
+
+            </div>
+
+          </div>
 
           {!process?.nodes?.nodes?.length && (
 
@@ -383,7 +412,7 @@ function AuditHubDetailPanel({
 
           )}
 
-        </Space>
+        </div>
 
       </Col>
 
@@ -499,7 +528,7 @@ function AuditHubDetailPanel({
 
                       <Text strong>{node.label}</Text>
 
-                      <Tag color={statusMeta.color} variant="solid">{statusMeta.text}</Tag>
+                      <StatusTag color={statusMeta.color}>{statusMeta.text}</StatusTag>
 
                     </Space>
 
@@ -570,11 +599,11 @@ function AuditHubDetailPanel({
 
                               </Text>
 
-                              <Tag color={getExecutionActionTagColor(ex.action)} variant="filled">
+                              <MarkerTag color={getExecutionActionTagColor(ex.action)}>
 
                                 {formatExecutionAction(ex.action, ex.action_label)}
 
-                              </Tag>
+                              </MarkerTag>
 
                               <Text type="secondary" style={{ marginLeft: 'auto', flexShrink: 0 }}>
 
@@ -975,7 +1004,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
         footer={null}
 
-        width={960}
+        width={1120}
 
         destroyOnHidden
 
@@ -1196,7 +1225,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
       confirmLoading={confirming}
 
-      width={720}
+      width={1120}
 
       destroyOnHidden
 

@@ -1,6 +1,7 @@
 """条件分支：双出边须前序审批显式选边，禁止默认跳节点3/4。"""
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -130,3 +131,34 @@ def test_explicit_decision_on_approve_wins_over_infer():
     }
     spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, graph["nodes"][0])
     assert spec["field"] == "custom_flag"
+
+
+@pytest.mark.asyncio
+async def test_condition_route_action_by_uses_last_approver_not_submitter():
+    instance = SimpleNamespace(id=7, submitter_id=100, current_approver_id=None)
+    last_task = SimpleNamespace(approver_id=22)
+    qs = MagicMock()
+    qs.order_by.return_value.first = AsyncMock(return_value=last_task)
+    with patch(
+        "core.services.approval.approval_instance_service.ApprovalTask.filter",
+        return_value=qs,
+    ):
+        actor = await ApprovalInstanceService._resolve_condition_route_action_by(1, instance)
+    assert actor == 22
+
+
+def test_condition_route_history_belongs_to_condition_node_only():
+    """条件分支履历挂 from_node，不因 to_node 冒到目标审批节点。"""
+    rows = [
+        SimpleNamespace(from_node="cond", to_node="gm", action="condition_route"),
+        SimpleNamespace(from_node="gm", to_node=None, action="approve"),
+    ]
+
+    def belongs(node_id: str, h) -> bool:
+        return h.from_node == node_id or (
+            h.to_node == node_id
+            and ApprovalInstanceService._normalize_execution_action(h.action) != "condition_route"
+        )
+
+    assert [h.action for h in rows if belongs("cond", h)] == ["condition_route"]
+    assert [h.action for h in rows if belongs("gm", h)] == ["approve"]

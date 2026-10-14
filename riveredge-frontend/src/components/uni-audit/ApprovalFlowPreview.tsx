@@ -17,7 +17,9 @@ const { useToken } = theme;
 interface ApprovalFlowPreviewProps {
   graph?: ApprovalProcessGraph | null;
   nodesOverview?: ApprovalNodeOverview[];
-  height?: number;
+  /** 像素或 CSS 高度；填满父级时传 '100%' 并保证父级为定高/flex 子项 */
+  height?: number | string;
+  style?: React.CSSProperties;
 }
 
 function nodeTypesFactory() {
@@ -36,6 +38,7 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
   graph,
   nodesOverview = [],
   height = 320,
+  style,
 }) => {
   const { token } = useToken();
 
@@ -84,10 +87,12 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
       style={{
         width: '100%',
         height,
+        minHeight: 0,
         borderRadius: token.borderRadiusLG,
         border: `1px solid ${token.colorBorderSecondary}`,
         overflow: 'hidden',
         ...CANVAS_GRID_REACTFLOW.style,
+        ...style,
       }}
     >
       <ReactFlow

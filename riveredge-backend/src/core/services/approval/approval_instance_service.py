@@ -638,9 +638,16 @@ class ApprovalInstanceService:
             label = str(data.get("label") or node_id)
 
             node_tasks = [t for t in tasks if t.node_id == node_id]
+            # condition_route 只挂在条件节点（from_node），避免目标审批节点重复冒出「条件分支」
             node_history = [
-                h for h in history
-                if h.from_node == node_id or h.to_node == node_id
+                h
+                for h in history
+                if h.from_node == node_id
+                or (
+                    h.to_node == node_id
+                    and ApprovalInstanceService._normalize_execution_action(h.action)
+                    != "condition_route"
+                )
             ]
 
             is_current = bool(
@@ -1848,11 +1855,15 @@ class ApprovalInstanceService:
             next_label = ""
             next_data = next_node.get("data") if isinstance(next_node.get("data"), dict) else {}
             next_label = str(next_data.get("label") or next_node.get("id") or "").strip()
+            # 选边人 = 前序审批节点通过人（写入 instance.data 决策的人），不是流程发起人
+            route_by = await ApprovalInstanceService._resolve_condition_route_action_by(
+                tenant_id, instance
+            )
             await ApprovalInstanceService._create_approval_history(
                 tenant_id=tenant_id,
                 approval_instance_id=instance.id,
                 action="condition_route",
-                action_by=instance.submitter_id,
+                action_by=route_by,
                 comment=f"条件分支进入：{next_label}" if next_label else "条件分支已选定",
                 from_node=str(node_id) if node_id else None,
                 to_node=str(next_node.get("id") or "") or None,
@@ -2222,6 +2233,30 @@ class ApprovalInstanceService:
     @staticmethod
     def _condition_branch_route_key(condition_node_id: str) -> str:
         return f"__branch_true_{condition_node_id}"
+
+    @staticmethod
+    async def _resolve_condition_route_action_by(
+        tenant_id: int,
+        instance: ApprovalInstance,
+    ) -> int:
+        """
+        条件分支记录的操作人：前序审批节点最近一次通过的审批人。
+        禁止默认用流程发起人（submitter）冒充选边人。
+        """
+        last = (
+            await ApprovalTask.filter(
+                tenant_id=tenant_id,
+                approval_instance_id=instance.id,
+                status="approved",
+            )
+            .order_by("-action_at", "-id")
+            .first()
+        )
+        if last and last.approver_id:
+            return int(last.approver_id)
+        if instance.current_approver_id:
+            return int(instance.current_approver_id)
+        return int(instance.submitter_id)
 
     @staticmethod
     def _infer_decision_spec_from_condition_node(
