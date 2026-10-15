@@ -31146,6 +31146,14 @@ export default {
     '修复接入设备查看数据趋势图选点位后空白',
   'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.description':
     '趋势图 Tab 改为可见时再挂载图表并固定容器高度；数值字段兼容字符串小数；无数据时给出明确空态提示。',
+  'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.title':
+    '修复销售订单列表明细列不显示物料',
+  'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.description':
+    '订单视图「明细」预览列依赖行项目数据，列表请求已始终带上 include_items，与报价单、采购订单一致，不再整列显示为「-」。',
+  'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.title':
+    '加快工单开单、出库与报价列表打开',
+  'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.description':
+    '工单新建编辑弹窗不再打开时全量预拉物料，改为选料与来源单据按需解析；销售出库列表详情抽屉与报价详情时间线改为按需加载，减轻列表首屏体积。',
   'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.title':
     '其他收支提交会弹出发起人自选审批人',
   'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.description':
