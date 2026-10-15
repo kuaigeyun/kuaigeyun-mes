@@ -328,11 +328,9 @@ function salesOrderCatchMessage(error: unknown, fallback: string): string {
 
 type SalesOrderListScope = 'all' | 'mine' | 'department';
 
-/** 列表数据范围默认值：管理员看全部，其余看「我的」（与报价单一致） */
+/** 列表数据范围默认值：全部（可再切「我的」/「我的部门」） */
 function resolveDefaultSalesOrderListScope(): SalesOrderListScope {
-  const u = useGlobalStore.getState().currentUser;
-  if (u?.is_tenant_admin || u?.is_infra_admin) return 'all';
-  return 'mine';
+  return 'all';
 }
 
 /** 新建销售订单未填归属业务员时，默认当前登录用户 */

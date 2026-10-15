@@ -232,22 +232,23 @@ async def _section_exceptions(ctx: BadgeScopeCtx) -> BadgeFragment:
     }
 
 
-async def _sales_order_open_delivery_base(tenant_id: int):
-    """存在未发完货明细、且非草稿/终态/待审核/驳回的销售订单。"""
-    from apps.kuaizhizao.models.sales_order import SalesOrder
+async def _sales_order_undelivered_item_rows(tenant_id: int) -> list[tuple[int, str]]:
+    """一次取出未交完货明细的 (sales_order_id, delivery_status)；须 list 物化后再 id__in。"""
     from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
 
-    # 必须先 materialize：ValuesListQuery 不能直接塞进 id__in 再交给 DataScope 计数，
-    # 否则会抛「ValuesListQuery object is not iterable」，徽章段失败并拖慢登录态请求。
-    undelivered_order_ids = list(
-        dict.fromkeys(
-            await SalesOrderItem.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-                delivery_status__in=_SALES_ORDER_UNDELIVERED_ITEM_STATUSES,
-            ).values_list("sales_order_id", flat=True)
-        )
+    return list(
+        await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            delivery_status__in=_SALES_ORDER_UNDELIVERED_ITEM_STATUSES,
+        ).values_list("sales_order_id", "delivery_status")
     )
+
+
+def _sales_order_open_delivery_base_from_ids(tenant_id: int, undelivered_order_ids: list[int]):
+    """存在未发完货明细、且非草稿/终态/待审核/驳回的销售订单。"""
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+
     if not undelivered_order_ids:
         return SalesOrder.filter(tenant_id=tenant_id, id=-1)
     return SalesOrder.filter(
@@ -261,13 +262,7 @@ async def _sales_order_open_delivery_base(tenant_id: int):
     )
 
 
-def _sales_order_menu_badge_query(qs, ctx: BadgeScopeCtx):
-    """销售订单菜单角标：只计归属业务员为当前用户的单据（与列表「我的」口径一致）。"""
-    return qs.filter(salesman_id=ctx.user.id)
-
-
 async def _section_sales(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
-    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
     from apps.kuaizhizao.models.sales_forecast import SalesForecast
 
     tid = ctx.tenant_id
@@ -275,28 +270,26 @@ async def _section_sales(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
         "IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认",
         "AUDITED", "RELEASED", "执行中",
     ]
-    so_delivery_base = _sales_order_menu_badge_query(
-        await _sales_order_open_delivery_base(tid),
-        ctx,
-    )
-    undelivered_pending_item_ids = list(
-        dict.fromkeys(
-            await SalesOrderItem.filter(
-                tenant_id=tid,
-                deleted_at__isnull=True,
-                delivery_status="待交货",
-            ).values_list("sales_order_id", flat=True)
-        )
-    )
-    undelivered_partial_item_ids = list(
-        dict.fromkeys(
-            await SalesOrderItem.filter(
-                tenant_id=tid,
-                deleted_at__isnull=True,
-                delivery_status="部分交货",
-            ).values_list("sales_order_id", flat=True)
-        )
-    )
+    # 范围只走 badge_count(DataScope)；禁止再硬过滤 salesman_id（会把「全部」权限用户徽章打成 0）
+    undelivered_rows = await _sales_order_undelivered_item_rows(tid)
+    undelivered_order_ids: list[int] = []
+    undelivered_pending_item_ids: list[int] = []
+    undelivered_partial_item_ids: list[int] = []
+    seen_all: set[int] = set()
+    seen_pending: set[int] = set()
+    seen_partial: set[int] = set()
+    for oid, status in undelivered_rows:
+        order_id = int(oid)
+        if order_id not in seen_all:
+            seen_all.add(order_id)
+            undelivered_order_ids.append(order_id)
+        if status == "待交货" and order_id not in seen_pending:
+            seen_pending.add(order_id)
+            undelivered_pending_item_ids.append(order_id)
+        elif status == "部分交货" and order_id not in seen_partial:
+            seen_partial.add(order_id)
+            undelivered_partial_item_ids.append(order_id)
+    so_delivery_base = _sales_order_open_delivery_base_from_ids(tid, undelivered_order_ids)
     so_overdue, so_pending, so_prog, sf_overdue, sf_pending, sf_prog = await _gather_counts(
         badge_count(
             so_delivery_base.filter(delivery_date__lt=now_date),

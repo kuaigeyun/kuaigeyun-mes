@@ -192,6 +192,7 @@ interface InboundOrderItem {
   material_code?: string;
   material_name?: string;
   material_spec?: string;
+  material_model?: string;
   material_unit?: string;
   purchase_order_item_id?: number;
   receipt_quantity?: number;
@@ -394,7 +395,47 @@ async function fetchStorageLocationsForWarehouse(
   return parts.flat().sort((a, b) => a.label.localeCompare(b.label));
 }
 
-const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1280;
+const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1480;
+
+/** 详情明细：物料编码/名称后接规格、型号（与库存即时查询列一致） */
+function buildInboundDetailMaterialCols(t: (key: string) => string) {
+  const dash = (v: unknown) => (v != null && String(v).trim() ? String(v) : '—');
+  return [
+    { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+    { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.spec'),
+      dataIndex: 'material_spec',
+      width: 120,
+      ellipsis: true,
+      render: (v: unknown) => dash(v),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.model'),
+      dataIndex: 'material_model',
+      width: 100,
+      ellipsis: true,
+      render: (v: unknown) => dash(v),
+    },
+  ];
+}
+
+/** 打开详情时用已预取的物料档案补齐规格/型号（行无快照时） */
+function enrichInboundItemsMaterialSpecModel<T extends Record<string, unknown>>(
+  items: T[],
+  materialById: Map<string, { specification?: string; model?: string }>,
+): T[] {
+  return items.map((it) => {
+    const mid = it.material_id;
+    const m = mid != null && mid !== '' ? materialById.get(String(mid)) : undefined;
+    const spec =
+      String(it.material_spec ?? '').trim() || String(m?.specification ?? '').trim() || undefined;
+    const model =
+      String(it.material_model ?? it.model ?? '').trim() || String(m?.model ?? '').trim() || undefined;
+    if (spec === it.material_spec && model === it.material_model) return it;
+    return { ...it, material_spec: spec, material_model: model };
+  });
+}
 
 function renderInboundDetailSerialCell(t: (key: string, options?: { count?: number }) => string, val: unknown): string {
   if (!Array.isArray(val) || val.length === 0) return '—';
@@ -742,12 +783,21 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         detailData = await outsourceProductReturnApi.get(record.id!.toString());
       }
       if (detailData) {
-        await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
+        const rawItems = Array.isArray(detailData.items) ? detailData.items : [];
+        const materialById = await prefetchMaterialsForUnitSelect(
+          rawItems.map((it: { material_id?: number }) => it?.material_id),
+        );
+        const items = enrichInboundItemsMaterialSpecModel(rawItems, materialById);
+        const detailWithItems = { ...detailData, items };
         if (record.receipt_type === 'purchase') {
-          setPurchaseReceiptAttachments(mapAttachmentsToUploadList(detailData.attachments));
+          setPurchaseReceiptAttachments(mapAttachmentsToUploadList(detailWithItems.attachments));
         }
         setCurrentOrder(
-          normalizeInboundHubDetail(record.receipt_type!, detailData as Record<string, unknown>, record),
+          normalizeInboundHubDetail(
+            record.receipt_type!,
+            detailWithItems as Record<string, unknown>,
+            record,
+          ),
         );
         setInboundTrackingRefreshKey((k) => k + 1);
         if (record.receipt_type === 'purchase' && record.id != null) {
@@ -2234,11 +2284,11 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
 
   const inboundDetailLineColumns = useMemo(() => {
     if (!currentOrder) return [];
+    const materialCols = buildInboundDetailMaterialCols(t);
     if (currentOrder.receipt_type === 'production_return') {
       return appendWarehouseLineAmountColumns(
         [
-          { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-          { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+          ...materialCols,
           {
             title: t('common.unit'),
             dataIndex: 'material_unit',
@@ -2264,8 +2314,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     if (currentOrder.receipt_type === 'purchase') {
       return appendWarehouseLineAmountColumns(
         [
-          { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-          { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+          ...materialCols,
           {
             title: t('app.kuaizhizao.warehouseInbound.col.actualQty'),
             dataIndex: 'receipt_quantity',
@@ -2296,8 +2345,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     if (currentOrder.receipt_type === 'outsource_receipt') {
       return appendWarehouseLineAmountColumns(
         [
-          { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-          { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+          ...materialCols,
           {
             title: t('app.kuaizhizao.warehouseInbound.col.thisReceiptOutsource'),
             dataIndex: 'receipt_quantity',
@@ -2348,8 +2396,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     }
     return appendWarehouseLineAmountColumns(
       [
-        { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+        ...materialCols,
         {
           title: t('common.quantity'),
           dataIndex: 'receipt_quantity',

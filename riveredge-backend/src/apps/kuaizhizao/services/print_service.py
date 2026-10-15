@@ -266,10 +266,17 @@ def _limit_html_to_pdf_child() -> None:
 
 
 def _format_pdf_subprocess_failure(err: str, out: str, returncode: int) -> str:
-    """子进程失败信息：优先取 stderr 尾部（Playwright 根因在 Traceback 末尾）。"""
+    """子进程失败信息：优先取 Traceback 最后一行（ExceptionType: message）。"""
     detail = (err or out or f"exit {returncode}").strip()
     if not detail:
         return f"exit {returncode}"
+    if "Traceback (most recent call last)" in detail:
+        last = next(
+            (ln.strip() for ln in reversed(detail.splitlines()) if ln.strip()),
+            "",
+        )
+        if last:
+            detail = last
     if len(detail) > 2000:
         return "…" + detail[-1999:]
     return detail

@@ -1,3 +1,4 @@
+import { getCachedNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
 import { normalizeFormListItems } from '../../../utils/formListItems';
 import { formatCurrencyAmount } from '../../../utils/format';
 
@@ -6,10 +7,24 @@ const toSafeNumber = (value: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const toCents = (value: unknown): number => Math.round(toSafeNumber(value) * 100);
-const fromCents = (cents: number): number => cents / 100;
+/** 金额最小单位（跟随 common.amount_decimal_places，禁止写死「分」） */
+function getAmountPlaces(): number {
+  return getCachedNumericPrecisionPlaces('amount');
+}
 
-/** 单据明细行价税拆分（与销售/报价/合同/采购明细一致） */
+function getAmountScale(places = getAmountPlaces()): number {
+  return 10 ** Math.max(0, places);
+}
+
+const toAmountUnits = (value: unknown, scale = getAmountScale()): number =>
+  Math.round(toSafeNumber(value) * scale);
+
+const fromAmountUnits = (units: number, scale = getAmountScale()): number => units / scale;
+
+/**
+ * 单据明细行价税拆分（销售/报价/合同/采购共用）。
+ * 先 qty×单价再按金额小数位舍入；禁止先把单价压成 2 位（否则 0.195×1 会变成 0.20）。
+ */
 export function calcDocumentLineAmounts(
   qtyInput: unknown,
   priceInput: unknown,
@@ -17,27 +32,28 @@ export function calcDocumentLineAmounts(
   priceTypeInput?: string,
 ) {
   const qty = toSafeNumber(qtyInput);
-  const unitPriceCents = toCents(priceInput);
+  const unitPrice = toSafeNumber(priceInput);
   const taxRate = toSafeNumber(taxRateInput);
   const priceType = priceTypeInput ?? 'tax_exclusive';
+  const scale = getAmountScale();
 
   if (priceType === 'tax_inclusive') {
-    const inclCents = Math.round(qty * unitPriceCents);
-    const exclCents = Math.round(inclCents / (1 + taxRate / 100));
-    const taxCents = inclCents - exclCents;
+    const inclUnits = Math.round(qty * unitPrice * scale);
+    const exclUnits = Math.round(inclUnits / (1 + taxRate / 100));
+    const taxUnits = inclUnits - exclUnits;
     return {
-      excl: fromCents(exclCents),
-      tax: fromCents(taxCents),
-      incl: fromCents(inclCents),
+      excl: fromAmountUnits(exclUnits, scale),
+      tax: fromAmountUnits(taxUnits, scale),
+      incl: fromAmountUnits(inclUnits, scale),
     };
   }
 
-  const exclCents = Math.round(qty * unitPriceCents);
-  const taxCents = Math.round((exclCents * taxRate) / 100);
+  const exclUnits = Math.round(qty * unitPrice * scale);
+  const taxUnits = Math.round((exclUnits * taxRate) / 100);
   return {
-    excl: fromCents(exclCents),
-    tax: fromCents(taxCents),
-    incl: fromCents(exclCents + taxCents),
+    excl: fromAmountUnits(exclUnits, scale),
+    tax: fromAmountUnits(taxUnits, scale),
+    incl: fromAmountUnits(exclUnits + taxUnits, scale),
   };
 }
 
@@ -48,29 +64,31 @@ const roundToPlaces = (value: number, places: number): number => {
   return Math.round(value * factor) / factor;
 };
 
-/** 价税合计为真源时反算未税/税额（允许与 qty×单价分币结果存在尾差） */
+/** 价税合计为真源时反算未税/税额（允许与 qty×单价舍入结果存在尾差） */
 export function calcDocumentLineAmountsFromInclTotal(inclTotal: unknown, taxRateInput: unknown) {
-  const inclCents = toCents(inclTotal);
+  const scale = getAmountScale();
+  const inclUnits = toAmountUnits(inclTotal, scale);
   const taxRate = toSafeNumber(taxRateInput);
   const factor = 1 + taxRate / 100;
-  const exclCents = factor > 0 ? Math.round(inclCents / factor) : inclCents;
-  const taxCents = inclCents - exclCents;
+  const exclUnits = factor > 0 ? Math.round(inclUnits / factor) : inclUnits;
+  const taxUnits = inclUnits - exclUnits;
   return {
-    excl: fromCents(exclCents),
-    tax: fromCents(taxCents),
-    incl: fromCents(inclCents),
+    excl: fromAmountUnits(exclUnits, scale),
+    tax: fromAmountUnits(taxUnits, scale),
+    incl: fromAmountUnits(inclUnits, scale),
   };
 }
 
 /** 未税金额为真源时正算税额/价税合计 */
 export function calcDocumentLineAmountsFromExclTotal(exclTotal: unknown, taxRateInput: unknown) {
-  const exclCents = toCents(exclTotal);
+  const scale = getAmountScale();
+  const exclUnits = toAmountUnits(exclTotal, scale);
   const taxRate = toSafeNumber(taxRateInput);
-  const taxCents = Math.round((exclCents * taxRate) / 100);
+  const taxUnits = Math.round((exclUnits * taxRate) / 100);
   return {
-    excl: fromCents(exclCents),
-    tax: fromCents(taxCents),
-    incl: fromCents(exclCents + taxCents),
+    excl: fromAmountUnits(exclUnits, scale),
+    tax: fromAmountUnits(taxUnits, scale),
+    incl: fromAmountUnits(exclUnits + taxUnits, scale),
   };
 }
 
@@ -333,16 +351,17 @@ type LineReader = (row: Record<string, unknown>) => {
 };
 
 function sumFeeAmounts(feeDetails: unknown[] | undefined) {
-  let otherSideCents = 0;
-  let ourSideCents = 0;
+  const scale = getAmountScale();
+  let otherSideUnits = 0;
+  let ourSideUnits = 0;
   for (const fee of normalizeFormListItems<Record<string, unknown>>(feeDetails)) {
-    const feeCents = toCents(fee?.amount);
-    if (fee?.bearer === 'other_side') otherSideCents += feeCents;
-    else ourSideCents += feeCents;
+    const feeUnits = toAmountUnits(fee?.amount, scale);
+    if (fee?.bearer === 'other_side') otherSideUnits += feeUnits;
+    else ourSideUnits += feeUnits;
   }
   return {
-    otherSide: fromCents(otherSideCents),
-    ourSide: fromCents(ourSideCents),
+    otherSide: fromAmountUnits(otherSideUnits, scale),
+    ourSide: fromAmountUnits(ourSideUnits, scale),
   };
 }
 
@@ -354,10 +373,11 @@ export function computeDocumentGoodsTotals(
 ): DocumentGoodsTotals {
   const rows = normalizeFormListItems<Record<string, unknown>>(items);
   const pt = priceType ?? 'tax_exclusive';
+  const scale = getAmountScale();
   let totalQuantity = 0;
-  let goodsExclCents = 0;
-  let taxAmountCents = 0;
-  let goodsInclCents = 0;
+  let goodsExclUnits = 0;
+  let taxAmountUnits = 0;
+  let goodsInclUnits = 0;
 
   for (const row of rows) {
     const { qty, price, taxRate } = readLine(row);
@@ -372,16 +392,16 @@ export function computeDocumentGoodsTotals(
       },
       pt,
     );
-    goodsExclCents += toCents(line.excl);
-    taxAmountCents += toCents(line.tax);
-    goodsInclCents += toCents(line.incl);
+    goodsExclUnits += toAmountUnits(line.excl, scale);
+    taxAmountUnits += toAmountUnits(line.tax, scale);
+    goodsInclUnits += toAmountUnits(line.incl, scale);
   }
 
   return {
     totalQuantity,
-    goodsExcl: fromCents(goodsExclCents),
-    taxAmount: fromCents(taxAmountCents),
-    goodsIncl: fromCents(goodsInclCents),
+    goodsExcl: fromAmountUnits(goodsExclUnits, scale),
+    taxAmount: fromAmountUnits(taxAmountUnits, scale),
+    goodsIncl: fromAmountUnits(goodsInclUnits, scale),
   };
 }
 
@@ -390,11 +410,12 @@ export function applyDocumentHeaderDiscount(
   goodsIncl: number,
   discountAmountInput: unknown,
 ): Pick<DocumentTotalsWithDiscount, 'discountAmount' | 'goodsAfterDiscount'> {
-  const inclCents = toCents(goodsIncl);
-  const discountCents = Math.min(Math.max(0, toCents(discountAmountInput)), inclCents);
+  const scale = getAmountScale();
+  const inclUnits = toAmountUnits(goodsIncl, scale);
+  const discountUnits = Math.min(Math.max(0, toAmountUnits(discountAmountInput, scale)), inclUnits);
   return {
-    discountAmount: fromCents(discountCents),
-    goodsAfterDiscount: fromCents(inclCents - discountCents),
+    discountAmount: fromAmountUnits(discountUnits, scale),
+    goodsAfterDiscount: fromAmountUnits(inclUnits - discountUnits, scale),
   };
 }
 
@@ -427,14 +448,18 @@ export function resolveSalesDocumentStoredTotalAmount(
   if (pt === 'tax_inclusive') {
     return totals.estimatedReceivable;
   }
-  const discountCents = Math.min(toCents(totals.discountAmount), toCents(totals.goodsIncl));
-  const inclCents = toCents(totals.goodsIncl);
-  const exclCents = toCents(totals.goodsExcl);
-  const exclAfterDiscountCents =
-    inclCents > 0
-      ? Math.round((exclCents * (inclCents - discountCents)) / inclCents)
-      : exclCents;
-  return fromCents(exclAfterDiscountCents + toCents(totals.customerFees));
+  const scale = getAmountScale();
+  const discountUnits = Math.min(
+    toAmountUnits(totals.discountAmount, scale),
+    toAmountUnits(totals.goodsIncl, scale),
+  );
+  const inclUnits = toAmountUnits(totals.goodsIncl, scale);
+  const exclUnits = toAmountUnits(totals.goodsExcl, scale);
+  const exclAfterDiscountUnits =
+    inclUnits > 0
+      ? Math.round((exclUnits * (inclUnits - discountUnits)) / inclUnits)
+      : exclUnits;
+  return fromAmountUnits(exclAfterDiscountUnits + toAmountUnits(totals.customerFees, scale), scale);
 }
 
 /** 按价类落库/展示的行金额 */
@@ -489,14 +514,15 @@ export function computeSalesDocumentTotals(
     discountAmountInput,
   );
   const fees = sumFeeAmounts(feeDetails);
-  const estimatedReceivableCents =
-    toCents(withDiscount.goodsAfterDiscount) + toCents(fees.otherSide);
+  const scale = getAmountScale();
+  const estimatedReceivableUnits =
+    toAmountUnits(withDiscount.goodsAfterDiscount, scale) + toAmountUnits(fees.otherSide, scale);
 
   return {
     ...withDiscount,
     customerFees: fees.otherSide,
     ourFees: fees.ourSide,
-    estimatedReceivable: fromCents(estimatedReceivableCents),
+    estimatedReceivable: fromAmountUnits(estimatedReceivableUnits, scale),
   };
 }
 
@@ -513,15 +539,16 @@ export function computePurchaseDocumentTotals(
     taxRate: row.tax_rate,
   }));
   const fees = sumFeeAmounts(feeDetails);
-  const estimatedPayableCents = toCents(goods.goodsIncl) + toCents(fees.otherSide);
-  const estimatedTotalCostCents = toCents(goods.goodsIncl) + toCents(fees.ourSide);
+  const scale = getAmountScale();
+  const estimatedPayableUnits = toAmountUnits(goods.goodsIncl, scale) + toAmountUnits(fees.otherSide, scale);
+  const estimatedTotalCostUnits = toAmountUnits(goods.goodsIncl, scale) + toAmountUnits(fees.ourSide, scale);
 
   return {
     ...goods,
     otherSideFees: fees.otherSide,
     ourSideFees: fees.ourSide,
-    estimatedPayable: fromCents(estimatedPayableCents),
-    estimatedTotalCost: fromCents(estimatedTotalCostCents),
+    estimatedPayable: fromAmountUnits(estimatedPayableUnits, scale),
+    estimatedTotalCost: fromAmountUnits(estimatedTotalCostUnits, scale),
   };
 }
 

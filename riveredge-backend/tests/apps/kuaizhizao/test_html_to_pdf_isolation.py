@@ -54,8 +54,7 @@ def test_format_pdf_subprocess_failure_keeps_traceback_tail():
     head = "Traceback (most recent call last):\n" + ("x" * 2500) + "\n"
     tail = "Error: BrowserType.launch: Executable doesn't exist at /opt/chrome"
     detail = _format_pdf_subprocess_failure(head + tail, "", 1)
-    assert "Executable doesn't exist" in detail
-    assert detail.startswith("…")
+    assert detail == tail
     assert "Traceback (most recent call last)" not in detail
 
 

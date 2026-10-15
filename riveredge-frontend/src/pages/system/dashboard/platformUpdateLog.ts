@@ -44,6 +44,54 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'numeric-precision-decimal-places-6-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.numeric-precision-decimal-places-6-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.numeric-precision-decimal-places-6-r01.description',
+  },
+  {
+    id: 'trace-report-pdf-error-tail-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.trace-report-pdf-error-tail-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.trace-report-pdf-error-tail-r01.description',
+  },
+  {
+    id: 'inbound-detail-lines-spec-model-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.inbound-detail-lines-spec-model-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inbound-detail-lines-spec-model-r01.description',
+  },
+  {
+    id: 'sales-order-list-perf-menu-badge-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-list-perf-menu-badge-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-list-perf-menu-badge-r01.description',
+  },
+  {
+    id: 'sales-order-list-scope-default-all-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-list-scope-default-all-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-list-scope-default-all-r01.description',
+  },
+  {
+    id: 'document-amount-summary-precision-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-summary-precision-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-amount-summary-precision-r01.description',
+  },
+  {
     id: 'inbound-hub-other-inbound-edit-r01',
     date: '2026-10-15',
     type: 'improvement',

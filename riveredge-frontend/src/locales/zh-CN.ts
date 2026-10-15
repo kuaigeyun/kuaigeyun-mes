@@ -15915,6 +15915,7 @@ export default {
   'app.kuaizhizao.warehouseInbound.col.materialCode': '物料编码',
   'app.kuaizhizao.warehouseInbound.col.materialName': '物料名称',
   'app.kuaizhizao.warehouseInbound.col.spec': '规格',
+  'app.kuaizhizao.warehouseInbound.col.model': '型号',
   'app.kuaizhizao.warehouseInbound.col.actualQty': '实际数量',
   'app.kuaizhizao.warehouseInbound.col.location': '库位',
   'app.kuaizhizao.warehouseInbound.col.batchNo': '批号',
@@ -26206,7 +26207,7 @@ export default {
     '开启后，在单据详情抽屉「基本信息」中显示更新时间。关闭后隐藏该字段。',
   'pages.system.configCenter.paramSection.common_numeric_precision': '数值精度',
   'pages.system.configCenter.paramSection.common_numeric_precision_desc':
-    '数量、单价、金额分项设定，默认均为 2 位，可配置范围 0–4。',
+    '数量、单价、金额分项设定，默认均为 2 位，可配置范围 0–6。',
   'pages.system.configCenter.paramSection.production_work_order': '工单',
   'pages.system.configCenter.paramSection.production_work_order_desc':
     '工单拆分合并、优先级、客户显示与无 BOM 开工等。',
@@ -26245,13 +26246,13 @@ export default {
     '收货、报工、发货等节点自动创建对应检验单。',
   'pages.system.configCenter.param.common_quantity_decimal_places': '数量小数位',
   'pages.system.configCenter.param.common_quantity_decimal_places_desc':
-    '数量录入与展示小数位数。默认 2 位，范围 0–4。',
+    '数量录入与展示小数位数。默认 2 位，范围 0–6。',
   'pages.system.configCenter.param.common_price_decimal_places': '单价小数位',
   'pages.system.configCenter.param.common_price_decimal_places_desc':
-    '单价录入与展示小数位数。默认 2 位，范围 0–4。修改后采购订单/申请等单价输入立即按该精度生效。',
+    '单价录入与展示小数位数。默认 2 位，范围 0–6。修改后采购订单/申请等单价输入立即按该精度生效。',
   'pages.system.configCenter.param.common_amount_decimal_places': '金额小数位',
   'pages.system.configCenter.param.common_amount_decimal_places_desc':
-    '金额（行金额、单据合计）展示与舍入小数位数。默认 2 位，范围 0–4。',
+    '金额（行金额、单据合计）展示与舍入小数位数。默认 2 位，范围 0–6。',
   'pages.system.configCenter.paramGroup.toolbar_sync_push': '工具栏 · 同步 / 推送',
   'pages.system.configCenter.paramGroup.toolbar_sync_push_work_order': '工单工具栏 · 同步 / 推送',
   'pages.system.configCenter.paramGroup.toolbar_sync_push_reporting': '报工工具栏 · 同步 / 推送',
@@ -31101,6 +31102,30 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.trace-report-pdf-error-tail-r01.title':
+    '导出追溯报告失败时显示可操作原因',
+  'pages.dashboard.updateLog.entries.trace-report-pdf-error-tail-r01.description':
+    '打印 PDF 子进程失败时直接展示 Traceback 末行根因（如未安装 Chromium），导出追溯报告的前端提示也优先保留错误尾部，避免只看到 runpy 堆栈开头。',
+  'pages.dashboard.updateLog.entries.numeric-precision-decimal-places-6-r01.title':
+    '配置中心数量/单价/金额小数位扩至 0–6',
+  'pages.dashboard.updateLog.entries.numeric-precision-decimal-places-6-r01.description':
+    '通用配置数值精度上限由 4 位调整为 6 位；相关业务库表 decimal scale 同步扩至 6，配置生效后可按更高精度录入与存储。',
+  'pages.dashboard.updateLog.entries.inbound-detail-lines-spec-model-r01.title':
+    '入库单详情明细增加规格、型号列',
+  'pages.dashboard.updateLog.entries.inbound-detail-lines-spec-model-r01.description':
+    '入库管理详情抽屉明细信息在物料名称后展示规格与型号；行无快照时用已预取的物料档案回填，与库存即时查询展示一致。',
+  'pages.dashboard.updateLog.entries.sales-order-list-perf-menu-badge-r01.title':
+    '销售订单列表加载加速，修复菜单待办徽章不显示',
+  'pages.dashboard.updateLog.entries.sales-order-list-perf-menu-badge-r01.description':
+    '列表批量取数与详情一致并行查询，缩短首屏墙钟；菜单徽章去掉硬编码「仅本人业务员」旁路，统一走 DataScope，有待交货/部分交货时按数据权限显示红/蓝数字。',
+  'pages.dashboard.updateLog.entries.sales-order-list-scope-default-all-r01.title':
+    '销售订单列表默认加载「全部」',
+  'pages.dashboard.updateLog.entries.sales-order-list-scope-default-all-r01.description':
+    '进入销售订单页时分段选择器默认选中「全部」，不再按非管理员默认「我的」；仍可手动切换「我的」「我的部门」。',
+  'pages.dashboard.updateLog.entries.document-amount-summary-precision-r01.title':
+    '修复采购等单据合计金额误按「分」取舍',
+  'pages.dashboard.updateLog.entries.document-amount-summary-precision-r01.description':
+    '明细合计改为先数量×单价、再按业务配置的金额小数位舍入，不再先把单价压成两位；单价 0.195 时合计与行总价一致（如金额小数位为 4 时显示 0.1950）。',
   'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-edit-r01.title':
     '入库管理其他入库单支持编辑',
   'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-edit-r01.description':

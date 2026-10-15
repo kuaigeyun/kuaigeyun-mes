@@ -2799,26 +2799,28 @@ class SalesOrderService:
             # 安全重组订单列表，避免并发删除导致的 KeyError
             orders = [refetched_by_id[oid] for oid in order_ids if oid in refetched_by_id]
 
-        # 2. 批量查询 Demand
-        demands = await Demand.filter(
-            tenant_id=tenant_id,
-            source_type="sales_order",
-            source_id__in=order_ids,
-            deleted_at__isnull=True,
-        ).all()
-        demand_by_order: Dict[int, Demand] = {d.source_id: d for d in demands}
+        # 2–5. 列表批量取数：与详情一致用 asyncio.gather，避免串行打满墙钟
+        from apps.kuaizhizao.utils.sales_order_push_qty import batch_pushable_qty_by_order_item
+        from apps.kuaizhizao.services.sales_order_code_sync import sales_order_downstream_by_ids
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            batch_has_purchasable_remaining,
+            require_purchase_requisition_for_tenant,
+        )
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            _order_prepayment_linked_by_ids,
+        )
+        from infra.services.business_config_service import BusinessConfigService
 
-        # 3. 批量查询 SalesOrderItem
-        items_by_order: Dict[int, List[SalesOrderItem]] = {}
-        if include_items:
-            all_items = await SalesOrderItem.filter(
-                tenant_id=tenant_id,
-                sales_order_id__in=order_ids,
-            ).order_by("sales_order_id", "id").all()
-            for it in all_items:
-                items_by_order.setdefault(it.sales_order_id, []).append(it)
-        else:
-            # 列表头 + capabilities 所需最小明细字段（不拉完整 items）
+        async def _load_list_items() -> Dict[int, List[Any]]:
+            by_order: Dict[int, List[Any]] = {}
+            if include_items:
+                all_items = await SalesOrderItem.filter(
+                    tenant_id=tenant_id,
+                    sales_order_id__in=order_ids,
+                ).order_by("sales_order_id", "id").all()
+                for it in all_items:
+                    by_order.setdefault(it.sales_order_id, []).append(it)
+                return by_order
             items_agg_rows = await SalesOrderItem.filter(
                 tenant_id=tenant_id,
                 sales_order_id__in=order_ids,
@@ -2832,7 +2834,7 @@ class SalesOrderService:
                 "work_order_id",
             )
             for iid, oid, qty, delivered, remaining, material_id, work_order_id in items_agg_rows:
-                items_by_order.setdefault(oid, []).append(
+                by_order.setdefault(oid, []).append(
                     type(
                         "_AggItem",
                         (),
@@ -2847,8 +2849,75 @@ class SalesOrderService:
                         },
                     )()
                 )
+            return by_order
 
-        # 4. 批量 Material 补全（仅 include_items 时）
+        async def _load_list_finance() -> Dict[int, Dict[str, float]]:
+            deliveries = await SalesDelivery.filter(
+                tenant_id=tenant_id,
+                sales_order_id__in=order_ids,
+                deleted_at__isnull=True,
+            ).values_list("id", "sales_order_id")
+            order_to_deliveries: Dict[int, List[int]] = {}
+            for did, oid in deliveries:
+                order_to_deliveries.setdefault(oid, []).append(did)
+            return await self._batch_finance_progress_by_order(
+                tenant_id, orders, order_to_deliveries
+            )
+
+        async def _load_invoice_remainder() -> Dict[int, Decimal]:
+            if not pro_app_available("kuaicaiwu"):
+                return {}
+            SalesInvoiceService = import_pro_attr(
+                "apps.kuaicaiwu.services.sales_invoice_service", "SalesInvoiceService"
+            )
+            return await SalesInvoiceService().batch_sales_order_invoice_remainder(
+                tenant_id, orders
+            )
+
+        (
+            demands,
+            items_by_order,
+            finance_progress_by_order,
+            shipped_by_order,
+            pushed_work_orders_by_order,
+            audit_enabled,
+            require_audit_before_print,
+            delivery_project_by_order,
+            downstream_by_order,
+            invoice_remainder_by_order,
+            require_pr,
+            require_sn_before_sd,
+            prepay_by_order,
+        ) = await asyncio.gather(
+            Demand.filter(
+                tenant_id=tenant_id,
+                source_type="sales_order",
+                source_id__in=order_ids,
+                deleted_at__isnull=True,
+            ).all(),
+            _load_list_items(),
+            _load_list_finance(),
+            self._shipped_qty_by_sales_order(tenant_id, order_ids),
+            self._pushed_work_orders_by_sales_order(
+                tenant_id=tenant_id,
+                sales_order_ids=order_ids,
+            ),
+            self.business_config_service.check_audit_required(tenant_id, "sales_order"),
+            self.business_config_service.get_sales_require_audit_before_print(tenant_id),
+            self._batch_has_delivery_project_by_order(tenant_id, order_ids),
+            sales_order_downstream_by_ids(tenant_id, order_ids),
+            _load_invoice_remainder(),
+            require_purchase_requisition_for_tenant(tenant_id),
+            BusinessConfigService().require_shipment_notice_before_delivery(tenant_id),
+            _order_prepayment_linked_by_ids(
+                tenant_id,
+                order_ids,
+                source_type="sales_order",
+                target_type="receipt",
+            ),
+        )
+        demand_by_order: Dict[int, Demand] = {d.source_id: d for d in demands}
+
         material_code_fallback_all: Dict[int, Dict[int, str]] = {}
         material_fallback_all: Dict[int, Dict[int, Dict[str, Any]]] = {}
         if include_items:
@@ -2892,30 +2961,6 @@ class SalesOrderService:
                         material_code_fallback_all[oid] = fallback
                         material_fallback_all[oid] = mat_fallback
 
-        # 5. 批量计算账款/发票进度
-        deliveries = await SalesDelivery.filter(
-            tenant_id=tenant_id,
-            sales_order_id__in=order_ids,
-            deleted_at__isnull=True,
-        ).values_list("id", "sales_order_id")
-        order_to_deliveries: Dict[int, List[int]] = {}
-        for did, oid in deliveries:
-            order_to_deliveries.setdefault(oid, []).append(did)
-
-        finance_progress_by_order = await self._batch_finance_progress_by_order(
-            tenant_id, orders, order_to_deliveries
-        )
-
-        shipped_by_order = await self._shipped_qty_by_sales_order(tenant_id, order_ids)
-        pushed_work_orders_by_order = await self._pushed_work_orders_by_sales_order(
-            tenant_id=tenant_id,
-            sales_order_ids=order_ids,
-        )
-        audit_enabled = await self.business_config_service.check_audit_required(tenant_id, "sales_order")
-        require_audit_before_print = (
-            await self.business_config_service.get_sales_require_audit_before_print(tenant_id)
-        )
-
         eligible_ship_check_ids: List[int] = []
         delivery_progress_by_order: Dict[int, float] = {}
         for order in orders:
@@ -2925,51 +2970,12 @@ class SalesOrderService:
             delivery_progress_by_order[order.id] = dp
             if dp < 100:
                 eligible_ship_check_ids.append(order.id)
-        shippable_map = await self._batch_shippable_by_order(tenant_id, eligible_ship_check_ids)
-
-        from apps.kuaizhizao.utils.sales_order_push_qty import batch_pushable_qty_by_order_item
 
         all_list_items = [it for items in items_by_order.values() for it in items]
-        pushable_by_order = await batch_pushable_qty_by_order_item(tenant_id, all_list_items)
-        delivery_project_by_order = await self._batch_has_delivery_project_by_order(
-            tenant_id, order_ids
-        )
-        from apps.kuaizhizao.services.sales_order_code_sync import sales_order_downstream_by_ids
-
-        downstream_by_order = await sales_order_downstream_by_ids(tenant_id, order_ids)
-
-        invoice_remainder_by_order: Dict[int, Decimal] = {}
-        if pro_app_available("kuaicaiwu"):
-            SalesInvoiceService = import_pro_attr(
-                "apps.kuaicaiwu.services.sales_invoice_service", "SalesInvoiceService"
-            )
-            invoice_remainder_by_order = (
-                await SalesInvoiceService().batch_sales_order_invoice_remainder(
-                    tenant_id, orders
-                )
-            )
-        from apps.kuaizhizao.services.sales_order_purchase_push import (
-            batch_has_purchasable_remaining,
-            require_purchase_requisition_for_tenant,
-        )
-        from infra.services.business_config_service import BusinessConfigService
-
-        purchasable_by_order = await batch_has_purchasable_remaining(
-            tenant_id, items_by_order
-        )
-        require_pr = await require_purchase_requisition_for_tenant(tenant_id)
-        require_sn_before_sd = await BusinessConfigService().require_shipment_notice_before_delivery(
-            tenant_id
-        )
-        from apps.kuaizhizao.services.document_action_policy.enricher import (
-            _order_prepayment_linked_by_ids,
-        )
-
-        prepay_by_order = await _order_prepayment_linked_by_ids(
-            tenant_id,
-            order_ids,
-            source_type="sales_order",
-            target_type="receipt",
+        shippable_map, pushable_by_order, purchasable_by_order = await asyncio.gather(
+            self._batch_shippable_by_order(tenant_id, eligible_ship_check_ids),
+            batch_pushable_qty_by_order_item(tenant_id, all_list_items),
+            batch_has_purchasable_remaining(tenant_id, items_by_order),
         )
 
         # 6. 组装响应

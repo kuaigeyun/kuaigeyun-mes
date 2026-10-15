@@ -7,6 +7,9 @@ type InboundDetailItem = {
   material_id?: number;
   material_code?: string;
   material_name?: string;
+  material_spec?: string;
+  /** 型号：行快照或打开详情时从物料档案回填 */
+  material_model?: string;
   material_unit?: string;
   unit?: string;
   receipt_quantity?: number;

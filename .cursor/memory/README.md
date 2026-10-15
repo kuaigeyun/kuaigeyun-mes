@@ -65,6 +65,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 快数采、kuaiiot、MES 写回、边缘协议、fill_target | `features/kuaiiot-phased-hardening.md` |
 | 编码规则、页面配置、testGenerateCode、编号预览慢 | `features/code-rule-page-config-load.md` |
 | 设备台账、车间/产线/工位快速新增、UniDropdown.quickCreate | `features/equipment-factory-binding-quick-add.md` |
+| 好力 GO 模具/设备台账批量导出、导出选中 | `features/haoligo-ledger-batch-export.md` |
 | 质检方案快速新建、方案类型空白、defaultPlanType | `features/inspection-plan-quick-type-default.md` |
 | 委外检验、质量巡检、OSQC、plan_type outsource/patrol | `features/quality-outsource-patrol.md` |
 | 图纸气泡标注、drawing_balloon、FAI 导入特性、PRO OCR | `features/drawing-balloon-sheet-pro.md` |
@@ -85,6 +86,8 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 个性化主题保存后又暗、偏好与标签互相冲掉、jsonb merge | `features/user-preference-atomic-merge.md` |
 | 回显权限、display、reference_resources 单一真源、预设角色物料回显 | `features/permission-display-echo.md` |
 | 取单 403、pull-lines 要不要开查看、来源筛选项直调 list | `features/pull-source-display-echo.md` |
+| 采购合计取舍、单价 0.195 合计 0.20、DocumentAmountSummary | `features/document-amount-summary-precision.md` |
+| 数值精度、数量/单价/金额小数位、0–6、configTree max | `features/numeric-precision-decimal-places-6.md` |
 | 选物料 403、仅回显加载物料列表失败、UniMaterialSelect | `features/uni-material-select-reference-display.md` |
 | 建议供应商无搜索、SupplierSelectDropdown、UniDropdown 可搜 | `features/supplier-select-dropdown.md` |
 | 客户供应商多收付款账户、settlementAccounts、付款账户 | `features/partner-settlement-accounts.md` |
@@ -96,6 +99,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 新建销售订单很慢、进页预拉物料 2000 | `features/sales-order-form-material-preload.md` |
 | 前端慢、进页卡、Top5 菜单性能基线、useDeferAfterPaint | `features/frontend-perf-baseline.md` |
 | 销售订单点详情很慢、get_sales_order_by_id 数秒 | `features/sales-order-detail-api-perf.md` |
+| 销售订单列表慢、菜单销售订单徽章不显示 | `features/sales-order-list-perf-menu-badge.md` |
 | 全链路追踪很慢、附件中心很慢、trace/attachment-center | `features/document-trace-attach-perf.md` |
 | 工作台待办、dashboard todos、无权限仍见待办 | `features/dashboard-todo-rbac-filter.md` |
 | 开源无专业包崩溃、kuaicaiwu ImportError、销售采购订单列表 500、infra_license_keys、业务蓝图 graph、IKKZ4P、IKL5HM | `features/oss-pro-decouple-startup.md` |
@@ -162,12 +166,15 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/user-preference-atomic-merge.md` | 用户偏好 JSON 原子深合并 | system | 已交付 |
 | `features/permission-display-echo.md` | 权限回显 display 矩阵与鉴权 | rbac | 已交付 |
 | `features/pull-source-display-echo.md` | 取单来源回显（不必开查看） | rbac | 已交付 |
+| `features/document-amount-summary-precision.md` | 单据合计金额精度（先乘后舍） | finance-ui | 已交付 |
+| `features/numeric-precision-decimal-places-6.md` | 配置中心数值精度 0–6 与库表 scale | platform-config | 已交付 |
 | `features/uni-material-select-reference-display.md` | 物料选择器走 reference-display | rbac | 已交付 |
 | `features/supplier-select-dropdown.md` | 供应商可搜索下拉 SupplierSelectDropdown | master-data | 已交付 |
 | `features/partner-settlement-accounts.md` | 客户/供应商多收付款账户 JSON | master-data | 已交付 |
 | `features/sales-order-form-material-preload.md` | 销售订单表单物料按需缓存 | master-data-ui | 已交付 |
 | `features/frontend-perf-baseline.md` | 前端性能基线与优化主线 | frontend-perf | 有效 |
 | `features/sales-order-detail-api-perf.md` | 销售订单详情接口并行取数 | kuaizhizao-sales | 已交付 |
+| `features/sales-order-list-perf-menu-badge.md` | 销售订单列表并行取数与菜单徽章 DataScope | kuaizhizao-sales | 已交付 |
 | `features/document-trace-attach-perf.md` | 全链路与附件中心取数加速 | kuaizhizao-trace | 已交付 |
 | `features/dashboard-todo-rbac-filter.md` | 工作台待办按单据 :read 过滤 | rbac | 已交付 |
 | `features/oss-pro-decouple-startup.md` | 开源仓无专业包可独立启动 | deploy | 已交付 |
@@ -208,6 +215,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/iot-line-clear-mqtt.md` | 产线 MQTT 清零（接入/发送 + 手动/自动） | kuaiiot | 已交付 |
 | `features/code-rule-page-config-load.md` | 编码规则页面配置加载 | code-rule | 已交付 |
 | `features/equipment-factory-binding-quick-add.md` | 设备台账工厂绑定快速新增 | master-data-ui | 已交付 |
+| `features/haoligo-ledger-batch-export.md` | 好力 GO 模具/设备台账批量导出 | dedicated-haoligo | 已交付 |
 | `features/inspection-plan-quick-type-default.md` | 快速新建质检方案默认锁定类型 | master-data-ui | 已交付 |
 | `features/quality-outsource-patrol.md` | 委外检验 OSQC 与质量巡检 | quality | 已交付 |
 | `features/fast-deploy-scripts.md` | fast-deploy 脚本入口 | deploy | 已交付 |

@@ -1,13 +1,13 @@
 /**
- * 业务数值输入上限（与后端 core.utils.decimal_limits DECIMAL(18,4) 对齐）。
+ * 业务数值输入上限（与后端 core.utils.decimal_limits DECIMAL(20,6) 对齐）。
  * InputNumber 使用 JS number，上限取不超过安全整数范围的最大值。
  */
 import type { InputNumberProps } from 'antd';
 import type { Rule } from 'antd/es/form';
 import type { NumericPrecisionKind } from '../services/businessConfig';
 
-/** 与后端 (18,4) 一致的整数位上限在 JS 下不可全量表示；FE 使用 13 位整数 + 4 位小数 */
-export const NUMERIC_INPUT_ABS_MAX = 9_999_999_999_999.9999;
+/** 与后端 (20,6) 一致的整数位上限在 JS 下不可全量表示；FE 使用 13 位整数 + 6 位小数 */
+export const NUMERIC_INPUT_ABS_MAX = 9_999_999_999_999.999999;
 
 export type NumericFieldKind = NumericPrecisionKind;
 
