@@ -45,15 +45,6 @@ svc = EquipmentOpsService()
 
 async def _spot_check_response(header, lines=None) -> SpotCheckResponse:
     resp = SpotCheckResponse.model_validate(header)
-    if header.period_key and header.plan_id:
-        from apps.kuaizhizao.models.equipment_spot_check_plan import EquipmentSpotCheckPlan
-
-        plan = await EquipmentSpotCheckPlan.filter(
-            tenant_id=header.tenant_id, id=header.plan_id,
-        ).first()
-        if plan:
-            resp.scheme_code = plan.scheme_code
-            resp.scheme_name = plan.scheme_name
     if lines is not None:
         resp.lines = [SpotCheckLineResponse.model_validate(l) for l in lines]
     return resp
@@ -123,7 +114,6 @@ async def list_spot_checks(
     uuid: Optional[str] = Query(None, description="点检单 UUID（精确匹配）"),
     scheme_domain: Optional[str] = Query(None, description="方案业务域 equipment/esd"),
     scheme_id: Optional[int] = Query(None, ge=1, description="点检方案 ID"),
-    plan_uuid: Optional[str] = Query(None, description="来源点检计划 UUID"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows, total = await svc.spot_check_service.list(
@@ -142,7 +132,6 @@ async def list_spot_checks(
         uuid=uuid,
         scheme_domain=scheme_domain,
         scheme_id=scheme_id,
-        plan_uuid=plan_uuid,
     )
     return SpotCheckListResponse(
         items=[SpotCheckResponse.model_validate(r) for r in rows],

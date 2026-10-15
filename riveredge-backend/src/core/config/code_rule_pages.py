@@ -97,7 +97,6 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-equipment-management-tool": "GZ",       # 工装（拼音 gongzhuang）
     "kuaizhizao-equipment-management-acceptance": "YS",  # 设备工装验收
     "kuaizhizao-equipment-spot-check": "DJ",  # 设备点检
-    "kuaizhizao-equipment-spot-check-plan": "DJJH",  # 设备点检计划
     "kuaizhizao-equipment-route-patrol": "LX",  # 路线巡检
     "kuaizhizao-equipment-fault": "GZ",  # 设备故障报修
     "kuaizhizao-equipment-repair": "WX",  # 设备维修台账
@@ -1520,18 +1519,6 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "equipment_repair_code",
-        "allow_manual_edit": False,
-    },
-    {
-        "page_code": "kuaizhizao-equipment-spot-check-plan",
-        "page_name": "设备点检计划",
-        "page_path": "/apps/kuaizhizao/equipment-management/spot-check-plans",
-        "code_field": "plan_no",
-        "code_field_label": "计划编号",
-        "module": "快格轻制造",
-        "module_icon": "tool",
-        "auto_generate": True,
-        "rule_code": "equipment_spot_check_plan_code",
         "allow_manual_edit": False,
     },
     {

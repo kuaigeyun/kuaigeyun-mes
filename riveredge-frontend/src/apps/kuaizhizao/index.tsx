@@ -161,10 +161,6 @@ const EquipmentPage = lazy(() => import('./pages/equipment-management/equipment'
 const EquipmentDetailPage = lazy(() => import('./pages/equipment-management/equipment/detail'));
 const EquipmentFaultsPage = lazy(() => import('./pages/equipment-management/equipment-faults'));
 const MaintenancePlansPage = lazy(() => import('./pages/equipment-management/maintenance-plans'));
-const SpotCheckPlansPage = lazy(() => import('./pages/equipment-management/spot-check-plans'));
-const SpotCheckPlanCalendarPage = lazy(
-  () => import('./pages/equipment-management/spot-check-plan-calendar'),
-);
 const MoldsPage = lazy(() => import('./pages/equipment-management/molds'));
 const MoldDetailPage = lazy(() => import('./pages/equipment-management/molds/detail'));
 const ToolLedgerPage = lazy(() => import('./pages/equipment-management/tool-ledger'));
@@ -580,11 +576,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/equipment-faults" element={withPageSuspense(EquipmentFaultsPage)} />
       <Route path="equipment-management/maintenance-plans" element={withPageSuspense(MaintenancePlansPage)} />
       <Route path="equipment-management/maintenance-plan-calendar" element={withPageSuspense(MaintenancePlanCalendarPage)} />
-      <Route path="equipment-management/spot-check-plans" element={withPageSuspense(SpotCheckPlansPage)} />
-      <Route
-        path="equipment-management/spot-check-plan-calendar"
-        element={withPageSuspense(SpotCheckPlanCalendarPage)}
-      />
       <Route path="equipment-management/maintenance-executions" element={withPageSuspense(MaintenanceExecutionsPage)} />
       <Route path="equipment-management/equipment-repairs" element={withPageSuspense(EquipmentRepairsPage)} />
       <Route path="equipment-management/equipment-calibrations" element={withPageSuspense(EquipmentCalibrationsPage)} />

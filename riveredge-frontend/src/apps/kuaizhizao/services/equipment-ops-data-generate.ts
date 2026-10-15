@@ -1,5 +1,5 @@
 /**
- * 设备点检 / 保养执行造数 API（按点检计划 / 保养计划）
+ * 设备点检 / 保养执行造数 API（按点检单模板 / 保养计划）
  */
 
 import { apiRequest } from '../../../services/api';
@@ -29,7 +29,7 @@ export interface EquipmentOpsOperatorPayload {
 }
 
 export interface EquipmentOpsGeneratePayload {
-  spot_check_plan_ids: number[];
+  spot_check_ids: number[];
   maintenance_plan_ids: number[];
   equipment_ids: number[];
   anchor_start: string;
@@ -43,7 +43,7 @@ export interface EquipmentOpsGeneratePayload {
 
 export interface EquipmentOpsPreviewResult {
   equipment_count: number;
-  spot_check_plan_count?: number;
+  spot_check_seed_count?: number;
   maintenance_plan_count?: number;
   spot_check_targets: number;
   maintenance_targets: number;

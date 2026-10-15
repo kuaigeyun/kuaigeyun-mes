@@ -17,7 +17,7 @@ standard: 计划必绑保养方案；设备来自 scheme_type=maintenance 绑定
 
 ## 目标
 
-点检计划与保养计划同一契约：计划只选方案；设备、维护类型、周期以方案及其绑定为真源。
+保养计划契约：计划只选方案；设备、维护类型、周期以方案及其绑定为真源。（点检计划已拆除，点检只走方案绑定 + 点检单。）
 
 ## 何时读 / 禁止另起
 
@@ -50,5 +50,5 @@ standard: 计划必绑保养方案；设备来自 scheme_type=maintenance 绑定
 
 ## 关联
 
-- `features/equipment-spot-check-plan.md`
+- `features/equipment-spot-check-plan.md`（已拆除，勿对标复原）
 - `features/equip-ops-scheme-bind-clients.md`

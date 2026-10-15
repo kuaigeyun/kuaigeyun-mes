@@ -408,14 +408,14 @@ async def get_flow_generate_job(
 
 
 class EquipmentOpsGenerateBody(BaseModel):
-    spot_check_plan_ids: list[int] = Field(
-        default_factory=list, description="点检计划 ID 列表"
+    spot_check_ids: list[int] = Field(
+        default_factory=list, description="点检单 ID 列表（作模板）"
     )
     maintenance_plan_ids: list[int] = Field(
         default_factory=list, description="保养计划 ID 列表"
     )
     equipment_ids: list[int] = Field(
-        default_factory=list, description="计划内设备 ID（全选或多选）"
+        default_factory=list, description="所选点检单/保养计划内设备 ID（全选或多选）"
     )
     anchor_start: Optional[datetime] = None
     anchor_end: Optional[datetime] = None
@@ -424,7 +424,7 @@ class EquipmentOpsGenerateBody(BaseModel):
     auto_approve_spot_check: bool = False
     inspector_operator: StepOperatorBody = Field(
         default_factory=lambda: StepOperatorBody(mode="equipment_assigned"),
-        description="点检执行人：默认计划负责人/设备点检人",
+        description="点检执行人：默认设备点检人/模板单执行人",
     )
     approver_operator: StepOperatorBody = Field(
         default_factory=lambda: StepOperatorBody(mode="scheme_assigned"),

@@ -1,7 +1,7 @@
 {
   "code": "kuaiems",
   "name": "快设备",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "设备运维应用：设备/模具/工装台账、作业单据与报表（业务能力由快制造提供）",
   "icon": "wrench",
   "author": "RiverEdge Team",
@@ -121,26 +121,6 @@
                 "sort_order": 1,
                 "meta": {
                   "node": "equipment_spot_check",
-                  "module": "equipment"
-                }
-              },
-              {
-                "title": "app.kuaizhizao.menu.equipment-management.spot-check-plans",
-                "path": "/apps/kuaizhizao/equipment-management/spot-check-plans",
-                "permission": "kuaizhizao:equipment-spot-check-plan:read",
-                "sort_order": 2,
-                "meta": {
-                  "node": "equipment_spot_check_plan",
-                  "module": "equipment"
-                }
-              },
-              {
-                "title": "app.kuaizhizao.menu.equipment-management.spot-check-plan-calendar",
-                "path": "/apps/kuaizhizao/equipment-management/spot-check-plan-calendar",
-                "permission": "kuaizhizao:equipment-spot-check-plan:read",
-                "sort_order": 3,
-                "meta": {
-                  "node": "equipment_spot_check_plan_calendar",
                   "module": "equipment"
                 }
               },

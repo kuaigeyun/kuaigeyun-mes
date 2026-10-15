@@ -10655,17 +10655,17 @@ export default {
   'app.kuaizhizao.flowDataGenerate.tabEquipmentOps': '设备点检保养造数',
   'app.kuaizhizao.equipmentOpsGenerate.configCard': '点检与保养造数配置',
   'app.kuaizhizao.equipmentOpsGenerate.configHint':
-    '先选点检计划与保养计划，再从计划已绑定设备中全选或多选；按计划周期在日期范围内展开生成。采集方式 B（须拍照）的方案会跳过。',
-  'app.kuaizhizao.equipmentOpsGenerate.spotCheckPlans': '点检计划',
-  'app.kuaizhizao.equipmentOpsGenerate.spotCheckPlansPlaceholder': '多选点检计划',
+    '先选点检单（作模板）与/或保养计划，再从候选设备中全选或多选；按方案/计划周期在日期范围内展开生成。采集方式 B（须拍照）的方案会跳过。',
+  'app.kuaizhizao.equipmentOpsGenerate.spotChecks': '点检单',
+  'app.kuaizhizao.equipmentOpsGenerate.spotChecksPlaceholder': '多选点检单（作模板）',
   'app.kuaizhizao.equipmentOpsGenerate.maintenancePlans': '保养计划',
   'app.kuaizhizao.equipmentOpsGenerate.maintenancePlansPlaceholder': '多选保养计划',
-  'app.kuaizhizao.equipmentOpsGenerate.plansRequired': '请至少选择一个点检计划或保养计划',
-  'app.kuaizhizao.equipmentOpsGenerate.equipment': '计划内设备',
-  'app.kuaizhizao.equipmentOpsGenerate.equipmentPlaceholder': '从所选计划已绑定设备中多选',
-  'app.kuaizhizao.equipmentOpsGenerate.equipmentRequired': '请选择计划内设备',
+  'app.kuaizhizao.equipmentOpsGenerate.plansRequired': '请至少选择一个点检单或保养计划',
+  'app.kuaizhizao.equipmentOpsGenerate.equipment': '候选设备',
+  'app.kuaizhizao.equipmentOpsGenerate.equipmentPlaceholder': '从所选点检单/保养计划设备中多选',
+  'app.kuaizhizao.equipmentOpsGenerate.equipmentRequired': '请选择设备',
   'app.kuaizhizao.equipmentOpsGenerate.equipmentFromPlansHint':
-    '候选项随上方计划变化；仅展示计划已绑定设备。',
+    '候选项随上方点检单与保养计划变化；点检侧取模板单设备，保养侧取计划绑定设备。',
   'app.kuaizhizao.equipmentOpsGenerate.selectAllEquipment': '全选',
   'app.kuaizhizao.equipmentOpsGenerate.clearEquipment': '清空',
   'app.kuaizhizao.equipmentOpsGenerate.equipmentBoundCount': '可选 {{count}} 台',
@@ -10690,7 +10690,7 @@ export default {
   'app.kuaizhizao.equipmentOpsGenerate.operatorMode.fixed': '指定人员',
   'app.kuaizhizao.equipmentOpsGenerate.operatorMode.current': '当前用户',
   'app.kuaizhizao.equipmentOpsGenerate.operatorAssignedHint.inspector':
-    '优先计划负责人，其次设备点检人；均未指定则回退当前用户',
+    '优先设备点检人，其次模板单执行人；均未指定则回退当前用户',
   'app.kuaizhizao.equipmentOpsGenerate.operatorAssignedHint.approver':
     '按点检方案上的指定审核人；未指定则回退当前用户',
   'app.kuaizhizao.equipmentOpsGenerate.operatorCurrentHint': '使用当前登录用户',
@@ -10719,10 +10719,10 @@ export default {
   'app.kuaizhizao.equipmentOpsGenerate.executeFail': '造数未通过，请修改后重试',
   'app.kuaizhizao.equipmentOpsGenerate.confirmTitle': '确认执行设备点检保养造数？',
   'app.kuaizhizao.equipmentOpsGenerate.confirmContent':
-    '将按当前配置批量创建点检单与/或保养执行，并同步写入操作日志。任一条失败将撤销本轮全部写入并提示修改，不会保留半成品数据。请确认组织、计划与设备范围无误。',
+    '将按当前配置批量创建点检单与/或保养执行，并同步写入操作日志。任一条失败将撤销本轮全部写入并提示修改，不会保留半成品数据。请确认组织、模板点检单/保养计划与设备范围无误。',
   'app.kuaizhizao.equipmentOpsGenerate.previewCard': '预览结果',
   'app.kuaizhizao.equipmentOpsGenerate.previewSummary':
-    '设备 {{equipment}} 台；点检计划 {{spotPlans}}、目标 {{spotTargets}}（约 {{spotDocs}} 张）；保养计划 {{maintPlans}}、目标 {{maintTargets}}（约 {{maintDocs}} 张）。',
+    '设备 {{equipment}} 台；点检模板 {{spotPlans}}、目标 {{spotTargets}}（约 {{spotDocs}} 张）；保养计划 {{maintPlans}}、目标 {{maintTargets}}（约 {{maintDocs}} 张）。',
   'app.kuaizhizao.equipmentOpsGenerate.resultCard': '执行结果',
   'app.kuaizhizao.equipmentOpsGenerate.resultSummary': '已创建 {{count}} 张单据（run={{runId}}）',
   'app.kuaizhizao.equipmentOpsGenerate.colDocType': '单据类型',
@@ -31066,6 +31066,10 @@ export default {
     '修复接入设备查看数据趋势图选点位后空白',
   'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.description':
     '趋势图 Tab 改为可见时再挂载图表并固定容器高度；数值字段兼容字符串小数；无数据时给出明确空态提示。',
+  'pages.dashboard.updateLog.entries.remove-equipment-spot-check-plan-r01.title':
+    '拆除设备点检计划，点检仍走点检单与方案绑定',
+  'pages.dashboard.updateLog.entries.remove-equipment-spot-check-plan-r01.description':
+    '移除点检计划菜单、日历与相关权限；点检单不再挂计划任务字段。运维造数改为选择已有点检单作模板按方案周期展开，保养计划造数路径不变。',
   'pages.dashboard.updateLog.entries.tenant-restore-dept-parent-fk-r01.title':
     '修复租户备份恢复时部门树父级外键失败',
   'pages.dashboard.updateLog.entries.tenant-restore-dept-parent-fk-r01.description':

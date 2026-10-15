@@ -106,7 +106,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 工作台更新说明、platformUpdateLog、版本卡 | `features/platform-update-log.md` |
 | 流程造数、操作用户、单项跳过、采购/工单失败继续、工序流转间隔、造数进度条、flow-generate job | `features/flow-data-generate-operator-modes.md` |
 | 设备点检造数、保养执行造数、点检单导入 | `features/equipment-ops-data-generate.md` |
-| 点检方案发布、计划设备清单、计划排程、待执行任务、实际填写、审核完成、DJJH | `features/equipment-spot-check-plan.md` |
+| 点检计划已拆除、DJJH、勿再实现计划层、造数改选点检单 | `features/equipment-spot-check-plan.md` |
 | 应用初始化缓慢、首次组织引导、消息模板预设、失败重试 | `features/tenant-bootstrap-initialization.md` |
 | 保养计划方案真源、设备绑定、维护类型周期 | `features/maintenance-plan-scheme-bind.md` |
 | 移动/工位点检跟绑定、保养执行带计划方案 | `features/equip-ops-scheme-bind-clients.md` |
@@ -155,7 +155,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/kuaiai-trust-offline.md` | KU-AI 信任中心下线 | kuaiai | 已交付 |
 | `features/flow-data-generate-operator-modes.md` | 流程造数步骤操作用户模式 | kuaizhizao-ops | 已交付 |
 | `features/equipment-ops-data-generate.md` | 设备点检保养造数与点检单导入 | kuaizhizao-ops | 已交付 |
-| `features/equipment-spot-check-plan.md` | 点检发布、任务执行与审核完成闭环（2026-10-13 用户确认） | kuaizhizao-ops | 已交付 |
+| `features/equipment-spot-check-plan.md` | 点检计划整层拆除（迁移 887；造数改 spot_check_ids） | kuaizhizao-ops | 已拆除 |
 | `features/maintenance-plan-scheme-bind.md` | 保养计划绑定保养方案 | kuaizhizao-ops | 已交付 |
 | `features/equip-ops-scheme-bind-clients.md` | 移动/工位点检保养方案绑定对齐 | kuaizhizao-ops | 已交付 |
 | `features/user-preference-atomic-merge.md` | 用户偏好 JSON 原子深合并 | system | 已交付 |
