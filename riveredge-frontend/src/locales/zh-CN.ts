@@ -31101,6 +31101,18 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-edit-r01.title':
+    '入库管理其他入库单支持编辑',
+  'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-edit-r01.description':
+    '待入库的其他入库单在入库 Hub 列表与详情中可编辑，可改原因说明、备注及明细数量与单价后再确认入库。',
+  'pages.dashboard.updateLog.entries.maintenance-execution-item-requirement-r01.title':
+    '保养执行记录展示保养项要求',
+  'pages.dashboard.updateLog.entries.maintenance-execution-item-requirement-r01.description':
+    '执行记录详情与计划执行保养时在保养项名称下展示主数据「要求」；新建执行写入要求快照，历史记录在详情接口按保养项补全。',
+  'pages.dashboard.updateLog.entries.material-call-picking-sync-r01.title':
+    '修复补料下推领料出库后仍显示备料中',
+  'pages.dashboard.updateLog.entries.material-call-picking-sync-r01.description':
+    '生产领料确认出库后回写关联补料申请的已送达数量与状态（已完成/部分送达）；撤回领料确认时同步回滚。',
   'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.title':
     '修复检验业务列表导出全部报错',
   'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.description':
@@ -31403,6 +31415,10 @@ export default {
     '项目建议书供应商评审改为选填',
   'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-optional-r01.description':
     'funide-oa 项目建议书在开发要求为 D/E/F 类时，提交审核不再强制完整填写供应商评审表，可按需补填。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-no-preset-r01.title':
+    '研发工作台交付物改为按需添加',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-no-preset-r01.description':
+    '启用定制 OA 的研发项目不再自动预置阶段门交付物与 26 项体系清单；工作台交付物列表默认为空，由用户通过「新建交付物」自行维护。已存在项目的预置行不会被自动删除。',
   'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-simplify-r01.title':
     '体系交付物操作列按状态精简',
   'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-simplify-r01.description':

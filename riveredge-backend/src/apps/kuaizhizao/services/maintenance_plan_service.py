@@ -7,7 +7,7 @@ Author: Luigi Lu
 Date: 2026-01-05
 """
 
-from typing import List, Optional, Any
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from decimal import Decimal
 from tortoise.exceptions import IntegrityError
@@ -15,6 +15,7 @@ from tortoise.exceptions import IntegrityError
 from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
 from apps.kuaizhizao.models.equipment import Equipment
 from apps.kuaizhizao.models.equipment_ops import (
+    EquipmentMaintenanceItem,
     EquipmentMaintenanceScheme,
     EquipmentSchemeBinding,
 )
@@ -405,6 +406,43 @@ class MaintenanceExecutionService:
     
     提供维护执行记录的 CRUD 操作。
     """
+
+    @staticmethod
+    async def enrich_executed_items_requirements(
+        tenant_id: int,
+        executed_items: Optional[List[Dict[str, Any]]],
+    ) -> Optional[List[Dict[str, Any]]]:
+        """为已执行保养项补全「要求」：JSON 未存时按 item_id 读保养项主数据。"""
+        if not executed_items:
+            return executed_items
+        item_ids = sorted(
+            {
+                int(row.get("item_id"))
+                for row in executed_items
+                if row.get("item_id") is not None and int(row.get("item_id")) > 0
+            }
+        )
+        by_id: Dict[int, EquipmentMaintenanceItem] = {}
+        if item_ids:
+            rows = await EquipmentMaintenanceItem.filter(
+                tenant_id=tenant_id,
+                id__in=item_ids,
+                deleted_at__isnull=True,
+            ).all()
+            by_id = {int(r.id): r for r in rows}
+
+        enriched: List[Dict[str, Any]] = []
+        for row in executed_items:
+            copy = dict(row)
+            req = str(copy.get("requirement") or "").strip()
+            if not req:
+                item_id = copy.get("item_id")
+                if item_id is not None:
+                    master = by_id.get(int(item_id))
+                    if master and master.requirement:
+                        copy["requirement"] = str(master.requirement).strip()
+            enriched.append(copy)
+        return enriched
     
     @staticmethod
     async def create_maintenance_execution(
@@ -483,6 +521,23 @@ class MaintenanceExecutionService:
                 if linked_fault.equipment_id != equipment.id:
                     raise ValidationError("故障单关联设备与保养执行设备不一致")
 
+            create_payload = data.model_dump(
+                exclude_none=True,
+                exclude={
+                    "equipment_uuid",
+                    "maintenance_plan_uuid",
+                    "source_type",
+                    "source_uuid",
+                },
+            )
+            if create_payload.get("executed_items"):
+                create_payload["executed_items"] = (
+                    await MaintenanceExecutionService.enrich_executed_items_requirements(
+                        tenant_id,
+                        create_payload["executed_items"],
+                    )
+                )
+
             execution = MaintenanceExecution(
                 tenant_id=tenant_id,
                 equipment_id=equipment.id,
@@ -490,15 +545,7 @@ class MaintenanceExecutionService:
                 equipment_name=equipment.name,
                 maintenance_plan_id=maintenance_plan.id if maintenance_plan else None,
                 maintenance_plan_uuid=maintenance_plan.uuid if maintenance_plan else None,
-                **data.model_dump(
-                    exclude_none=True,
-                    exclude={
-                        "equipment_uuid",
-                        "maintenance_plan_uuid",
-                        "source_type",
-                        "source_uuid",
-                    },
-                ),
+                **create_payload,
                 source_type=source_type,
                 source_uuid=source_uuid,
             )
@@ -561,6 +608,14 @@ class MaintenanceExecutionService:
         
         if not execution:
             raise NotFoundError("维护执行记录不存在")
+
+        if execution.executed_items:
+            execution.executed_items = (
+                await MaintenanceExecutionService.enrich_executed_items_requirements(
+                    tenant_id,
+                    execution.executed_items,
+                )
+            )
         
         return execution
     

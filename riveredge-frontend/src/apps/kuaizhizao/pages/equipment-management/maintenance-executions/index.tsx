@@ -51,6 +51,7 @@ interface MaintenanceExecution {
   executed_items?: Array<{
     item_id?: number;
     item_name?: string;
+    requirement?: string;
     done?: boolean;
     attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   }>;
@@ -375,6 +376,14 @@ const MaintenanceExecutionsPage: React.FC = () => {
               {detail.executed_items.map((item, index) => (
                 <div key={String(item.item_id ?? index)} style={{ marginBottom: 16 }}>
                   <Typography.Text strong>{item.item_name ?? `#${item.item_id ?? index + 1}`}</Typography.Text>
+                  <Typography.Paragraph
+                    type="secondary"
+                    style={{ marginTop: 4, marginBottom: 0, whiteSpace: 'pre-wrap' }}
+                  >
+                    {item.requirement?.trim()
+                      ? item.requirement.trim()
+                      : '—'}
+                  </Typography.Paragraph>
                   <div style={{ marginTop: 8 }}>
                     <LineAttachmentsUpload
                       category="maintenance_execution_item"

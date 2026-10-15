@@ -5,7 +5,7 @@
 """
 
 import uuid
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from datetime import datetime
 from decimal import Decimal
 from tortoise.transactions import in_transaction
@@ -628,6 +628,134 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             tgt_wh_name or tgt_wh_id,
             src_wh_name or src_wh_id,
         )
+
+    @staticmethod
+    def _picked_qty_by_material_from_picking_items(
+        picking_items: Sequence[Any],
+        issue_qty_by_item_id: Dict[int, Decimal],
+    ) -> Dict[int, Decimal]:
+        from apps.kuaizhizao.utils.mrp_quantity import mrp_qty
+
+        out: Dict[int, Decimal] = {}
+        for item in picking_items:
+            mid = int(getattr(item, "material_id", 0) or 0)
+            if mid <= 0:
+                continue
+            item_id = int(getattr(item, "id", 0) or 0)
+            qty = mrp_qty(issue_qty_by_item_id.get(item_id, Decimal(0)))
+            if qty <= 0:
+                continue
+            out[mid] = out.get(mid, Decimal(0)) + qty
+        return out
+
+    def _refresh_call_status_from_delivered(
+        self, call_req: MaterialCallRequest, items: List[MaterialCallRequestItem]
+    ) -> None:
+        from apps.kuaizhizao.utils.mrp_quantity import mrp_qty
+
+        if call_req.status == "cancelled":
+            return
+        total_req = sum(mrp_qty(i.requested_quantity or 0) for i in items)
+        total_del = sum(mrp_qty(i.delivered_quantity or 0) for i in items)
+        if total_del <= 0:
+            if call_req.status in ("completed", "partial"):
+                call_req.status = "processing"
+            call_req.completed_at = None
+            return
+        if total_req > 0 and total_del >= total_req:
+            call_req.status = "completed"
+            if not call_req.completed_at:
+                call_req.completed_at = now_utc()
+            return
+        call_req.status = "partial"
+        call_req.completed_at = None
+
+    async def _apply_picked_qty_to_call_items(
+        self,
+        items: List[MaterialCallRequestItem],
+        picked_by_material: Dict[int, Decimal],
+        *,
+        reverse: bool,
+    ) -> None:
+        from apps.kuaizhizao.utils.mrp_quantity import mrp_qty
+
+        by_material: Dict[int, List[MaterialCallRequestItem]] = {}
+        for it in items:
+            by_material.setdefault(int(it.material_id), []).append(it)
+        for mid, lines in by_material.items():
+            lines.sort(key=lambda x: (int(x.line_no or 0), int(x.id or 0)))
+            remaining = mrp_qty(picked_by_material.get(mid, Decimal(0)))
+            if remaining <= 0:
+                continue
+            if reverse:
+                for it in reversed(lines):
+                    cur = mrp_qty(it.delivered_quantity or 0)
+                    take = min(cur, remaining)
+                    if take <= 0:
+                        continue
+                    it.delivered_quantity = mrp_qty(cur - take)
+                    remaining = mrp_qty(remaining - take)
+                    await it.save()
+                    if remaining <= 0:
+                        break
+            else:
+                for it in lines:
+                    cur = mrp_qty(it.delivered_quantity or 0)
+                    req = mrp_qty(it.requested_quantity or 0)
+                    headroom = mrp_qty(req - cur) if req > 0 else remaining
+                    if headroom < 0:
+                        headroom = Decimal(0)
+                    take = min(headroom, remaining)
+                    if take <= 0:
+                        continue
+                    it.delivered_quantity = mrp_qty(cur + take)
+                    remaining = mrp_qty(remaining - take)
+                    await it.save()
+                    if remaining <= 0:
+                        break
+
+    async def sync_linked_calls_from_production_picking(
+        self,
+        tenant_id: int,
+        picking_id: int,
+        picking_items: Sequence[Any],
+        issue_qty_by_item_id: Dict[int, Decimal],
+        *,
+        reverse: bool = False,
+    ) -> None:
+        """
+        补料申请下推生产领料并确认出库后，回写送达数量与状态（正式发料，不过线边备料过账）。
+        """
+        calls = await MaterialCallRequest.filter(
+            tenant_id=tenant_id,
+            production_picking_id=int(picking_id),
+            deleted_at__isnull=True,
+        ).exclude(status="cancelled").all()
+        if not calls:
+            return
+
+        picked_by_material = self._picked_qty_by_material_from_picking_items(
+            picking_items, issue_qty_by_item_id
+        )
+        if not picked_by_material:
+            return
+
+        for call in calls:
+            items = await MaterialCallRequestItem.filter(
+                tenant_id=tenant_id, request_id=call.id
+            ).all()
+            if not items:
+                continue
+            await self._apply_picked_qty_to_call_items(
+                items, picked_by_material, reverse=reverse
+            )
+            call_row = await MaterialCallRequest.get(id=call.id, tenant_id=tenant_id)
+            items = await MaterialCallRequestItem.filter(
+                tenant_id=tenant_id, request_id=call.id
+            ).all()
+            self._refresh_call_status_from_delivered(call_row, items)
+            await call_row.save()
+            await self._sync_header_from_items(tenant_id, int(call.id))
 
     async def update_call_request(
         self,

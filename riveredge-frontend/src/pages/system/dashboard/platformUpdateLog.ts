@@ -44,6 +44,30 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'inbound-hub-other-inbound-edit-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-edit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-edit-r01.description',
+  },
+  {
+    id: 'maintenance-execution-item-requirement-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.maintenance-execution-item-requirement-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.maintenance-execution-item-requirement-r01.description',
+  },
+  {
+    id: 'material-call-picking-sync-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-call-picking-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-call-picking-sync-r01.description',
+  },
+  {
     id: 'misc-voucher-submit-initiator-select-r01',
     date: '2026-10-15',
     type: 'fix',

@@ -1317,6 +1317,9 @@ class OtherInboundCreate(OtherInboundBase):
 class OtherInboundUpdate(OtherInboundBase):
     """其他入库单更新schema"""
     inbound_code: Optional[str] = Field(None, max_length=50, description="入库单编码")
+    items: Optional[List["OtherInboundItemCreate"]] = Field(
+        None, description="入库明细列表（传入时全量替换，仅待入库可改）"
+    )
 
 
 class OtherInboundResponse(OtherInboundBase):

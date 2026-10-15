@@ -175,6 +175,7 @@ const MaintenancePlansPage: React.FC = () => {
     Array<{
       item_id?: number;
       item_name?: string;
+      requirement?: string;
       done?: boolean;
       attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
     }>
@@ -430,11 +431,14 @@ const MaintenancePlansPage: React.FC = () => {
     try {
       const scheme = await maintenanceSchemesApi.get(schemeId);
       setExecutedItems(
-        (scheme.lines ?? []).map((l: { item_id?: number; item_name?: string }) => ({
-          item_id: l.item_id,
-          item_name: l.item_name,
-          done: false,
-        })),
+        (scheme.lines ?? []).map(
+          (l: { item_id?: number; item_name?: string; requirement?: string }) => ({
+            item_id: l.item_id,
+            item_name: l.item_name,
+            requirement: l.requirement,
+            done: false,
+          }),
+        ),
       );
     } catch {
       setExecutedItems([]);
@@ -1088,6 +1092,14 @@ const MaintenancePlansPage: React.FC = () => {
                     >
                       {item.item_name ?? `#${item.item_id}`}
                     </Checkbox>
+                    <Typography.Paragraph
+                      type="secondary"
+                      style={{ marginTop: 4, marginBottom: 0, marginLeft: 24, whiteSpace: 'pre-wrap' }}
+                    >
+                      {item.requirement?.trim()
+                        ? item.requirement.trim()
+                        : '—'}
+                    </Typography.Paragraph>
                     <div style={{ marginTop: 8 }}>
                       <LineAttachmentsUpload
                         category="maintenance_execution_item"
