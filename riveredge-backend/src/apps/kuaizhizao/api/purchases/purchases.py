@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Query, Path, Body
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_permission_codes
+from core.api.deps.access import require_permission_codes, require_read_or_display
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.models.user import User as CurrentUser
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
@@ -419,7 +419,7 @@ async def get_purchase_order_price_trend(
 @router.get(
     "/purchase-orders/receipt-notice-pull-lines",
     summary="Open purchase order lines for receipt notice pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:purchase-order"))],
 )
 async def list_receipt_notice_pull_lines(
     skip: int = Query(0, ge=0),

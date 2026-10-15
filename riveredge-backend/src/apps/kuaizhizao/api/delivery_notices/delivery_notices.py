@@ -14,7 +14,7 @@ from loguru import logger
 
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_permission_codes
+from core.api.deps.access import require_permission_codes, require_read_or_display
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
@@ -83,7 +83,7 @@ async def preview_delivery_notice_from_sales_delivery(
 @router.get(
     "/sales-delivery-pull-lines",
     summary="Open sales delivery lines for delivery notice pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:outbound"))],
 )
 async def list_delivery_notice_pull_lines(
     skip: int = Query(0, ge=0),

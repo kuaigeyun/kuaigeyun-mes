@@ -1211,21 +1211,6 @@ const RolesPermissionsPage: React.FC = () => {
   ]);
 
   /**
-   * 应用权限模板
-   */
-  const handleApplyTemplate = useCallback(
-    (templateKey: string) => {
-      const codes = mergeBaselinePermissionCodes(
-        filterPermissionCodesByTemplate(templateKey, functionGrantPermissionCodes),
-      );
-      setGrantedCodes(codes);
-      const template = PERMISSION_TEMPLATES.find((tmpl) => tmpl.key === templateKey);
-      messageApi.success(t('pages.system.roles.templateApplied', { name: template?.name || templateKey, count: codes.length }));
-    },
-    [functionGrantPermissionCodes, messageApi, t]
-  );
-
-  /**
    * 处理角色树选择
    */
   const handleRoleTreeSelect = (selectedKeys: React.Key[]) => {
@@ -1918,18 +1903,6 @@ const RolesPermissionsPage: React.FC = () => {
               </Space>
             </div>
             <div className="roles-permissions-center-toolbar__actions">
-                {permissionLayer === 'function' && (
-                  <Select
-                    placeholder={t('pages.system.roles.applyTemplate')}
-                    style={{ width: 160 }}
-                    allowClear
-                    onSelect={(key) => handleApplyTemplate(String(key))}
-                    options={PERMISSION_TEMPLATES.map((tmpl) => ({
-                      value: tmpl.key,
-                      label: tmpl.name + (tmpl.description ? ` (${tmpl.description})` : ''),
-                    }))}
-                  />
-                )}
                 <Button
                   icon={<CopyOutlined />}
                   onClick={() => setCopyModalVisible(true)}

@@ -118,6 +118,7 @@ import { fetchPurchaseReceiptIqcEnsure } from './inboundPurchaseIqcGate';
 import { pullPaymentApplicationFromPurchaseReceipt } from '../../../services/payment-application';
 import { PurchaseReceiptIqcReviewModal } from './PurchaseReceiptIqcReviewModal';
 import PurchaseReceiptEditModal from './PurchaseReceiptEditModal';
+import OtherInboundEditModal from './OtherInboundEditModal';
 import { fetchCustomerMaterialIqcEnsure } from './inboundCustomerMaterialIqcGate';
 import { CustomerMaterialIqcReviewModal } from './CustomerMaterialIqcReviewModal';
 import {
@@ -773,6 +774,12 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
 
   const isEditablePurchaseReceipt = (order?: InboundOrder | null) =>
     order?.receipt_type === 'purchase' && isInboundEditable(order);
+
+  const isEditableOtherInbound = (order?: InboundOrder | null) =>
+    order?.receipt_type === 'other_inbound' && isInboundEditable(order);
+
+  const isInboundHubEditable = (order?: InboundOrder | null) =>
+    isEditablePurchaseReceipt(order) || isEditableOtherInbound(order);
 
   const handleEdit = useCallback((record: InboundOrder) => {
     setEditModalRecord(record);
@@ -1951,11 +1958,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         const nodes: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="detail" onClick={() => void handleDetail(record)} />,
         ];
-        if (
-          record.receipt_type === 'purchase' &&
-          isInboundEditable(record) &&
-          inboundPerms.canUpdate
-        ) {
+        if (isInboundHubEditable(record) && inboundPerms.canUpdate) {
           nodes.push(
             <Button
               {...rowActionKind('update')}
@@ -2899,7 +2902,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         extra={
           currentOrder ? (
             <Space>
-              {isEditablePurchaseReceipt(currentOrder) && inboundPerms.canUpdate ? (
+              {isInboundHubEditable(currentOrder) && inboundPerms.canUpdate ? (
                 <Button
                   {...rowActionKind('update')}
                   onClick={() => {
@@ -3030,8 +3033,14 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         onContinue={() => void handleFqcReviewContinue()}
       />
       <PurchaseReceiptEditModal
-        open={editModalRecord != null}
-        record={editModalRecord}
+        open={editModalRecord?.receipt_type === 'purchase'}
+        record={editModalRecord?.receipt_type === 'purchase' ? editModalRecord : null}
+        onClose={handleEditModalClose}
+        onSuccess={handleEditModalSuccess}
+      />
+      <OtherInboundEditModal
+        open={editModalRecord?.receipt_type === 'other_inbound'}
+        record={editModalRecord?.receipt_type === 'other_inbound' ? editModalRecord : null}
         onClose={handleEditModalClose}
         onSuccess={handleEditModalSuccess}
       />

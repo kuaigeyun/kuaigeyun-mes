@@ -16,7 +16,7 @@ from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_warehouse_execution_access
-from core.api.deps.access import require_permission_codes
+from core.api.deps.access import require_permission_codes, require_read_or_display
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.models.user import User
 from tortoise.exceptions import IntegrityError
@@ -730,7 +730,7 @@ def _parse_selected_item_ids(request: Dict[str, Any], empty_detail: str) -> List
 @router.get(
     "/production-pickings/work-order-pull-lines",
     summary="Open work order kitting lines for production picking pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:work-order"))],
 )
 async def list_production_picking_work_order_pull_lines(
     skip: int = Query(0, ge=0),
@@ -982,7 +982,7 @@ async def preview_production_return_from_work_order(
 @router.get(
     "/production-returns/picking-item-pull-lines",
     summary="Open picking lines for production return pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:work-order"))],
 )
 async def list_production_return_picking_item_pull_lines(
     skip: int = Query(0, ge=0),
@@ -2013,7 +2013,7 @@ async def preview_work_order_inbound(
 @router.get(
     "/finished-goods-receipts/work-order-pull-lines",
     summary="Open work order product lines for finished goods receipt pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:work-order"))],
 )
 async def list_finished_goods_work_order_pull_lines(
     skip: int = Query(0, ge=0),
@@ -3715,7 +3715,7 @@ async def list_sales_deliveries(
 @router.get(
     "/sales-deliveries/sales-order-pull-lines",
     summary="Open sales order lines for sales delivery pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-order:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:sales-order"))],
 )
 async def list_sales_delivery_sales_order_pull_lines(
     skip: int = Query(0, ge=0),
@@ -3794,7 +3794,7 @@ async def pull_sales_deliveries_from_sales_order_items(
 @router.get(
     "/sales-deliveries/shipment-notice-pull-lines",
     summary="Open shipment notice lines for sales delivery pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:shipment-notice:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:shipment-notice"))],
 )
 async def list_sales_delivery_shipment_notice_pull_lines(
     skip: int = Query(0, ge=0),
@@ -3850,7 +3850,16 @@ async def pull_sales_deliveries_from_shipment_notice_items(
 @router.get(
     "/outsource-issues/work-order-pull-lines",
     summary="Open outsource work order material lines for issue pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:outsource-order:read"))],
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:outsource-work-order:read",
+                "kuaizhizao:outsource-work-order:display",
+                "kuaizhizao:outsource-order:read",
+                "kuaizhizao:outsource-order:display",
+            )
+        )
+    ],
 )
 async def list_outsource_issue_work_order_pull_lines(
     skip: int = Query(0, ge=0),
@@ -3900,7 +3909,16 @@ async def pull_outsource_issues_from_work_order_items(
 @router.get(
     "/outsource-inbound/pull-lines",
     summary="Open outsource inbound lines for receipt or return pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:outsource-order:read"))],
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:outsource-work-order:read",
+                "kuaizhizao:outsource-work-order:display",
+                "kuaizhizao:outsource-order:read",
+                "kuaizhizao:outsource-order:display",
+            )
+        )
+    ],
 )
 async def list_outsource_inbound_pull_lines(
     pull_type: str = Query(..., description="outsource_receipt / outsource_material_return / outsource_product_return"),
@@ -4448,7 +4466,7 @@ async def pull_sales_return_from_sales_delivery(
 @router.get(
     "/sales-returns/sales-order-pull-lines",
     summary="Open sales order lines for sales return pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-order:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:sales-order"))],
 )
 async def list_sales_return_sales_order_pull_lines(
     skip: int = Query(0, ge=0),
@@ -4513,7 +4531,7 @@ async def pull_sales_returns_from_sales_order_items(
 @router.get(
     "/sales-returns/sales-delivery-pull-lines",
     summary="Open sales delivery lines for sales return pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:outbound"))],
 )
 async def list_sales_return_sales_delivery_pull_lines(
     skip: int = Query(0, ge=0),
@@ -4887,7 +4905,7 @@ async def list_purchase_receipts(
 @router.get(
     "/purchase-receipts/purchase-order-pull-lines",
     summary="Open purchase order lines for purchase receipt pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:purchase-order"))],
 )
 async def list_purchase_receipt_purchase_order_pull_lines(
     skip: int = Query(0, ge=0),
@@ -4964,7 +4982,7 @@ async def pull_purchase_receipts_from_purchase_order_items(
 @router.get(
     "/purchase-receipts/receipt-notice-pull-lines",
     summary="Open receipt notice lines for purchase receipt pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:receipt-notice:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:receipt-notice"))],
 )
 async def list_purchase_receipt_receipt_notice_pull_lines(
     skip: int = Query(0, ge=0),
@@ -5410,7 +5428,7 @@ async def list_purchase_returns(
 @router.get(
     "/purchase-returns/purchase-order-pull-lines",
     summary="Open purchase order lines for purchase return pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:purchase-order"))],
 )
 async def list_purchase_return_purchase_order_pull_lines(
     skip: int = Query(0, ge=0),

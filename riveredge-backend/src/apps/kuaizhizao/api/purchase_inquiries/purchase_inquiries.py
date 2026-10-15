@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTT
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_permission_codes
+from core.api.deps.access import require_permission_codes, require_read_or_display
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
@@ -108,7 +108,7 @@ async def list_inquiries(
 @router.get(
     "/purchase-inquiries/purchase-order-pull-lines",
     summary="Open awarded inquiry lines for purchase order pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-inquiry:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:purchase-inquiry"))],
 )
 async def list_purchase_order_pull_lines(
     skip: int = Query(0, ge=0),

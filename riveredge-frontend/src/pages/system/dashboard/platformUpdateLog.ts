@@ -60,6 +60,70 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.description',
   },
   {
+    id: 'inbound-hub-other-inbound-edit-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-edit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-edit-r01.description',
+  },
+  {
+    id: 'maintenance-execution-item-requirement-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.maintenance-execution-item-requirement-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.maintenance-execution-item-requirement-r01.description',
+  },
+  {
+    id: 'material-call-picking-sync-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-call-picking-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-call-picking-sync-r01.description',
+  },
+  {
+    id: 'misc-voucher-submit-initiator-select-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.description',
+  },
+  {
+    id: 'quality-inspection-export-route-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.description',
+  },
+  {
+    id: 'pull-source-display-echo-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.pull-source-display-echo-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.pull-source-display-echo-r01.description',
+  },
+  {
+    id: 'roles-permissions-remove-top-template-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.roles-permissions-remove-top-template-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.roles-permissions-remove-top-template-r01.description',
+  },
+  {
+    id: 'application-center-sync-menu-permission-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.application-center-sync-menu-permission-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.application-center-sync-menu-permission-r01.description',
+  },
+  {
     id: 'remove-equipment-spot-check-plan-r01',
     date: '2026-10-15',
     type: 'improvement',

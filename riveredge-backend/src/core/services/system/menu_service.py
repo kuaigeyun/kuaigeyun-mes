@@ -2316,6 +2316,8 @@ class MenuService:
             if is_industry_pack_shell_code(app_code):
                 industry_module_seen = True
                 continue
+            if app_code and not ApplicationService.is_manifest_deployed_on_node(app_code):
+                continue
 
             manifest = manifest_by_code.get(app_code) if app_code else None
             manifest_menu = (
