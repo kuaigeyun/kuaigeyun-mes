@@ -169,6 +169,16 @@ REWRITE_SPECS: tuple[RewriteDocSpec, ...] = (
         person_name_field="receiver_name",
     ),
     RewriteDocSpec(
+        doc_type="semi_finished_goods_receipt",
+        label="半成品入库",
+        model_path="apps.kuaizhizao.models.semi_finished_goods_receipt:SemiFinishedGoodsReceipt",
+        code_field="receipt_code",
+        date_fields=(),
+        optional_datetime_fields=("review_time", "receipt_time"),
+        person_id_field="receiver_id",
+        person_name_field="receiver_name",
+    ),
+    RewriteDocSpec(
         doc_type="reporting_record",
         label="报工记录",
         model_path="apps.kuaizhizao.models.reporting_record:ReportingRecord",

@@ -690,8 +690,12 @@ async def _resolve_inspection_template_fields(
     explicit_plan_id: Optional[int] = None,
     use_quality_characteristics: bool = False,
     work_order_operation: Any = None,
+    force_simple_when_unset: bool = False,
 ) -> Dict[str, Any]:
-    """按场景解析 mode/plan_id 并填充检验项模板。"""
+    """按场景解析 mode/plan_id 并填充检验项模板。
+
+    force_simple_when_unset：造数等场景——无质检或方案模式但无可用方案时，按简易质检生成模板。
+    """
     from apps.kuaizhizao.models.inspection_plan import InspectionPlan, InspectionPlanStep
     from apps.kuaizhizao.models.quality_standard import QualityStandard
     from apps.kuaizhizao.services.inspection_step_spec import plan_step_to_snapshot_item
@@ -710,9 +714,12 @@ async def _resolve_inspection_template_fields(
     )
     # 临时指定方案（如已入库补检）：物料未配置 IQC 时仍可按所选方案生成检验项
     if mode == "none":
-        if not explicit_plan_id:
+        if force_simple_when_unset:
+            mode = "simple"
+        elif not explicit_plan_id:
             return {}
-        mode = "plan"
+        else:
+            mode = "plan"
 
     def _items_field(items_payload: dict) -> Dict[str, Any]:
         if use_quality_characteristics:
@@ -778,6 +785,8 @@ async def _resolve_inspection_template_fields(
                 "inspection_standard": f"{plan.plan_name} ({plan.plan_code})",
                 **_items_field(payload),
             }
+        if force_simple_when_unset:
+            mode = "simple"
 
     if mode == "simple":
         std = await QualityStandard.filter(
@@ -3440,6 +3449,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         order_items: List[Any],
         *,
         receipt_ids: Optional[List[int]] = None,
+        include_unset_iqc: bool = False,
     ) -> List[Dict[str, Any]]:
         """按物料剩余可检数量构建下推预览行（支持分批来货）。"""
         material_ids = [
@@ -3471,7 +3481,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             ordered = float(getattr(item, "ordered_quantity", 0) or 0)
             if item_id <= 0 or mid <= 0 or ordered <= 0:
                 continue
-            if await self._resolve_iqc_policy_eff(tenant_id, mid, policy_cache) == "none":
+            if (
+                not include_unset_iqc
+                and await self._resolve_iqc_policy_eff(tenant_id, mid, policy_cache) == "none"
+            ):
                 continue
             material_remaining = remaining_by_mid.get(mid, 0.0)
             max_push = min(ordered, material_remaining)
@@ -3558,6 +3571,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         selected_item_ids: Optional[List[int]] = None,
         inspection_quantities: Optional[Dict[int, float]] = None,
         notes: Optional[str] = None,
+        force_simple_when_unset: bool = False,
     ) -> List[IncomingInspectionResponse]:
         """从采购订单下推来料检验单（支持按来货数量分批；未传数量时推剩余可检量）。"""
         await _require_iqc_stage_enabled(tenant_id)
@@ -3596,7 +3610,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             )
 
             preview_items = await self._build_po_incoming_inspection_push_preview_items(
-                tenant_id, purchase_order_id, order_items
+                tenant_id,
+                purchase_order_id,
+                order_items,
+                include_unset_iqc=force_simple_when_unset,
             )
             preview_by_id = {int(row["item_id"]): row for row in preview_items}
 
@@ -3634,7 +3651,12 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                         f"物料 {row.get('material_code') or item_id} 本次下推数量超过剩余可检数量"
                     )
                 mid = int(row["material_id"])
-                template = await _resolve_inspection_template_fields(tenant_id, mid, "iqc")
+                template = await _resolve_inspection_template_fields(
+                    tenant_id,
+                    mid,
+                    "iqc",
+                    force_simple_when_unset=force_simple_when_unset,
+                )
                 today = today_site_str()
                 code = await self.generate_code(
                     tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}"
@@ -3970,7 +3992,14 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
     def __init__(self):
         super().__init__(ProcessInspection)
 
-    async def create_process_inspection(self, tenant_id: int, inspection_data: ProcessInspectionCreate, created_by: int) -> ProcessInspectionResponse:
+    async def create_process_inspection(
+        self,
+        tenant_id: int,
+        inspection_data: ProcessInspectionCreate,
+        created_by: int,
+        *,
+        force_simple_when_unset: bool = False,
+    ) -> ProcessInspectionResponse:
         """创建过程检验单"""
         await _require_ipqc_stage_enabled(tenant_id)
         _, process_enabled = await _get_quality_policy_flags(tenant_id)
@@ -3988,6 +4017,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 "ipqc",
                 operation_id=create_data.get("operation_id"),
                 use_quality_characteristics=True,
+                force_simple_when_unset=force_simple_when_unset,
             )
             for k, v in template.items():
                 create_data.setdefault(k, v)
@@ -4622,6 +4652,8 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         operation_id: int,
         created_by: int,
         reporting_record_id: Optional[int] = None,
+        *,
+        force_simple_when_unset: bool = False,
     ) -> ProcessInspectionResponse:
         """
         从工单和工序创建过程检验单。
@@ -4629,6 +4661,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         工序绑定多个检验方案时，一次为每个方案各建一张待检单。
         同工单工序同方案已有待检 / 已检验 / 已审核单据时复用，禁止再开一张。
         返回值取首张（兼容单返回契约）；同次调用仍会补齐其余尚未建单的方案。
+        force_simple_when_unset：造数场景——无质检时按简易质检建单。
         """
         await _require_ipqc_stage_enabled(tenant_id)
         _, process_enabled = await _get_quality_policy_flags(tenant_id)
@@ -4687,7 +4720,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 operation_id=master_op_id,
                 work_order_operation=woo,
             )
-            if eff == "none":
+            if eff == "none" and not force_simple_when_unset:
                 raise BusinessLogicError(
                     "当前工单工序未配置过程检验（工序/成品质检模式均为无质检），无需下推过程检验单"
                 )
@@ -4788,6 +4821,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                     work_order_operation=woo,
                     explicit_plan_id=target_plan_id,
                     use_quality_characteristics=True,
+                    force_simple_when_unset=force_simple_when_unset,
                 )
                 inspection = await ProcessInspection.create(
                     tenant_id=tenant_id,
@@ -7114,17 +7148,13 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         work_order_id: int,
         created_by: int,
         reporting_record_id: Optional[int] = None,
+        *,
+        force_simple_when_unset: bool = False,
     ) -> FinishedGoodsInspectionResponse:
         """
-        从工单创建成品检验单
-        
-        Args:
-            tenant_id: 租户ID
-            work_order_id: 工单ID
-            created_by: 创建人ID
-            
-        Returns:
-            FinishedGoodsInspectionResponse: 创建的成品检验单
+        从工单创建成品检验单。
+
+        force_simple_when_unset：造数场景——无质检时按简易质检建单。
         """
         await _require_fqc_stage_enabled(tenant_id)
         finished_enabled = await _is_finished_inspection_enabled(tenant_id)
@@ -7154,7 +7184,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 "fqc",
                 material_id=mid,
             )
-            if eff == "none":
+            if eff == "none" and not force_simple_when_unset:
                 raise BusinessLogicError(
                     "当前成品物料未配置成品检验（质检模式为无质检），无需下推成品检验单"
                 )
@@ -7190,6 +7220,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 tenant_id,
                 wf["material_id"],
                 "fqc",
+                force_simple_when_unset=force_simple_when_unset,
             )
             initial_review_fields = await _quality_inspection_initial_review_fields(
                 tenant_id, "finished_goods_inspection"

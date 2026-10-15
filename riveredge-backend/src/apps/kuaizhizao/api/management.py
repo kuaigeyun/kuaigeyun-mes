@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import Any, Optional
 
@@ -22,6 +23,7 @@ from apps.kuaizhizao.services.flow_data_generate_service import (
     STEP_DEFAULT_ROLE_CODES,
     STEP_KEYS,
     FlowDataGenerateService,
+    FlowGenerateJobService,
     FlowGenerateRequest,
     IntervalConfig,
     parse_intervals,
@@ -308,9 +310,54 @@ async def preview_flow_generate(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
 
+async def _run_flow_generate_job(
+    *,
+    job_id: str,
+    tenant_id: int,
+    operator_id: int,
+    req: FlowGenerateRequest,
+) -> None:
+    FlowGenerateJobService.update(
+        job_id, status="running", progress=1, message="开始执行"
+    )
+
+    def _progress(pct: int, message: str) -> None:
+        FlowGenerateJobService.update(job_id, progress=pct, message=message)
+
+    try:
+        result = await FlowDataGenerateService().execute(
+            tenant_id=tenant_id,
+            operator_id=operator_id,
+            req=req,
+            progress_cb=_progress,
+        )
+        FlowGenerateJobService.update(
+            job_id,
+            status="succeeded",
+            progress=100,
+            message="完成",
+            result=result,
+        )
+    except (NotFoundError, BusinessLogicError, ValidationError, ValueError) as e:
+        FlowGenerateJobService.update(
+            job_id,
+            status="failed",
+            message="造数未通过",
+            error=str(e),
+        )
+    except Exception as e:
+        logger.exception("flow-generate job {} failed: {}", job_id, e)
+        FlowGenerateJobService.update(
+            job_id,
+            status="failed",
+            message="造数失败",
+            error=f"流程造数失败: {e}",
+        )
+
+
 @router.post(
     "/flow-generate",
-    summary="Execute manufacturing flow data generate from sales order",
+    summary="Start manufacturing flow data generate (async job; poll GET .../jobs/{id})",
     dependencies=[Depends(require_permission_codes(FLOW_GENERATE_PERMISSION))],
 )
 async def execute_flow_generate(
@@ -319,22 +366,45 @@ async def execute_flow_generate(
     tenant_id: int = Depends(get_current_tenant),
     auth: AuthContext = Depends(get_auth_context),
 ) -> dict[str, Any]:
+    """立即返回 job_id，后台执行，避免网关 504。前端轮询 GET /flow-generate/jobs/{job_id}。"""
     _assert_admin_gate(auth, action="使用流程造数")
     try:
-        result = await FlowDataGenerateService().execute(
-            tenant_id=tenant_id,
-            operator_id=int(current_user.id),
-            req=_to_flow_request(body),
-        )
-        return result
+        req = _to_flow_request(body)
     except (NotFoundError, BusinessLogicError, ValidationError, ValueError) as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-    except Exception as e:
-        logger.exception("flow-generate execute failed: {}", e)
+
+    job = FlowGenerateJobService.create(
+        tenant_id=tenant_id, operator_id=int(current_user.id)
+    )
+    asyncio.create_task(
+        _run_flow_generate_job(
+            job_id=job.job_id,
+            tenant_id=tenant_id,
+            operator_id=int(current_user.id),
+            req=req,
+        )
+    )
+    return FlowGenerateJobService.to_dict(job)
+
+
+@router.get(
+    "/flow-generate/jobs/{job_id}",
+    summary="Get flow generate job progress / result",
+    dependencies=[Depends(require_permission_codes(FLOW_GENERATE_PERMISSION))],
+)
+async def get_flow_generate_job(
+    job_id: str,
+    tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
+) -> dict[str, Any]:
+    _assert_admin_gate(auth, action="使用流程造数")
+    rec = FlowGenerateJobService.get(tenant_id=tenant_id, job_id=job_id)
+    if not rec:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"流程造数失败: {e}",
-        ) from e
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"造数任务不存在: {job_id}",
+        )
+    return FlowGenerateJobService.to_dict(rec)
 
 
 class EquipmentOpsGenerateBody(BaseModel):

@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'tenant-restore-dept-parent-fk-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tenant-restore-dept-parent-fk-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tenant-restore-dept-parent-fk-r01.description',
+  },
+  {
     id: 'other-expense-submit-approver-snapshot-r01',
     date: '2026-10-15',
     type: 'fix',

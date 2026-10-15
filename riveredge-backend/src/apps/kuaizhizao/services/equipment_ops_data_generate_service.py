@@ -506,7 +506,6 @@ class EquipmentOpsDataGenerateService:
                         SpotCheckUpdate(
                             inspector_id=inspector_id,
                             inspector_name=inspector_name,
-                            remark=f"equipment_ops_generate run={run_id}",
                             lines=line_inputs,
                         ),
                         current_user=current_user,
@@ -565,10 +564,8 @@ class EquipmentOpsDataGenerateService:
                             executor_name=(
                                 getattr(mp, "responsible_person_name", None) or op_name
                             ),
-                            execution_content=f"造数执行 {mp.plan_name}",
                             execution_result="正常",
                             status="已确认",
-                            remark=f"equipment_ops_generate run={run_id}",
                         ),
                         created_by=operator_id,
                     )

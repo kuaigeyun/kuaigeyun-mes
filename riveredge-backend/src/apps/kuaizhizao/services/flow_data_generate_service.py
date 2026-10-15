@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import random
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -20,6 +21,8 @@ from core.services.logging.operation_log_service import OperationLogService
 from core.models.operation_log import OperationLog
 from core.utils.timezone_utils import now_utc, resolve_business_datetime, site_timezone_name
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
+
+ProgressCallback = Callable[[int, str], Any]
 
 
 STEP_KEYS = (
@@ -53,6 +56,10 @@ DEFAULT_INTERVAL_MIN = 300
 DEFAULT_INTERVAL_MAX = 1800
 DEFAULT_REPORTING_BATCHES_MIN = 2
 DEFAULT_REPORTING_BATCHES_MAX = 5
+# 工序间流转：须完上道时按标准工时推进；可跳转时用较短间隔
+OP_FLOW_GAP_MIN_SECONDS = 600
+OP_FLOW_GAP_MAX_SECONDS = 7 * 24 * 3600
+OP_JUMP_GAP_RATIO = 0.15  # 可跳转时仅占用上道标准工时的一小段
 
 
 @dataclass
@@ -183,11 +190,44 @@ class TimelinePlanner:
         self._use_schedule = bool(use_work_schedule and work_schedule)
         self._tz = ZoneInfo(site_timezone_name())
 
+    def interval_for(self, step_key: str) -> IntervalConfig:
+        return self._intervals.get(step_key, self._default)
+
+    def current(self) -> datetime:
+        return self._cursor
+
+    def set_cursor(self, when: datetime) -> None:
+        """设置游标（可回拨，用于多工单/可跳转工序并行时间线）。"""
+        self._cursor = resolve_business_datetime(when).replace(microsecond=0)
+
+    def bump_to(self, when: datetime) -> None:
+        """游标仅向前对齐到 when（取较晚者）。"""
+        when_utc = resolve_business_datetime(when).replace(microsecond=0)
+        if when_utc > self._cursor:
+            self._cursor = when_utc
+
+    def fork(self) -> "TimelinePlanner":
+        """复制当前游标与间隔配置，独立推进（多工单并行报工）。"""
+        other = TimelinePlanner(
+            anchor=self._cursor,
+            default_interval=self._default,
+            intervals=dict(self._intervals),
+            work_schedule=self._schedule,
+            use_work_schedule=self._use_schedule,
+        )
+        other._cursor = self._cursor
+        return other
+
     def next(self, step_key: str) -> datetime:
-        cfg = self._intervals.get(step_key, self._default)
+        cfg = self.interval_for(step_key)
         gap = random.uniform(float(cfg.min_seconds), float(cfg.max_seconds))
         # 额外扰动分秒：在秒级 gap 上再叠 0–59 秒的碎秒感（若 gap 已含秒则仍保证随机）
         gap += random.uniform(0.0, 59.0) * 0.01
+        return self.advance_by_seconds(gap)
+
+    def advance_by_seconds(self, seconds: float) -> datetime:
+        """按明确秒数推进游标（工序标准工时/流转间隔）。"""
+        gap = max(1.0, float(seconds))
         nxt = self._cursor + timedelta(seconds=gap)
         nxt = nxt.replace(microsecond=0)
         if nxt <= self._cursor:
@@ -225,6 +265,84 @@ class TimelinePlanner:
                 continue
             return cur
         return when_site
+
+
+@dataclass
+class _FlowJobRecord:
+    job_id: str
+    tenant_id: int
+    operator_id: int
+    status: str = "queued"  # queued | running | succeeded | failed
+    progress: int = 0
+    message: str = ""
+    result: Optional[dict[str, Any]] = None
+    error: Optional[str] = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class FlowGenerateJobService:
+    """流程造数异步任务（进程内状态；POST 立即返回，避免网关 504）。"""
+
+    _jobs: dict[str, _FlowJobRecord] = {}
+    _lock = asyncio.Lock()
+
+    @classmethod
+    def create(
+        cls, *, tenant_id: int, operator_id: int
+    ) -> _FlowJobRecord:
+        job_id = str(uuid.uuid4())
+        rec = _FlowJobRecord(
+            job_id=job_id, tenant_id=tenant_id, operator_id=operator_id
+        )
+        cls._jobs[job_id] = rec
+        return rec
+
+    @classmethod
+    def get(cls, *, tenant_id: int, job_id: str) -> Optional[_FlowJobRecord]:
+        rec = cls._jobs.get(job_id)
+        if not rec or rec.tenant_id != tenant_id:
+            return None
+        return rec
+
+    @classmethod
+    def update(
+        cls,
+        job_id: str,
+        *,
+        status: Optional[str] = None,
+        progress: Optional[int] = None,
+        message: Optional[str] = None,
+        result: Optional[dict[str, Any]] = None,
+        error: Optional[str] = None,
+    ) -> None:
+        rec = cls._jobs.get(job_id)
+        if not rec:
+            return
+        if status is not None:
+            rec.status = status
+        if progress is not None:
+            rec.progress = max(0, min(100, int(progress)))
+        if message is not None:
+            rec.message = message
+        if result is not None:
+            rec.result = result
+        if error is not None:
+            rec.error = error
+        rec.updated_at = datetime.now(timezone.utc)
+
+    @classmethod
+    def to_dict(cls, rec: _FlowJobRecord) -> dict[str, Any]:
+        return {
+            "job_id": rec.job_id,
+            "status": rec.status,
+            "progress": rec.progress,
+            "message": rec.message or None,
+            "result": rec.result,
+            "error": rec.error,
+            "created_at": rec.created_at.isoformat(),
+            "updated_at": rec.updated_at.isoformat(),
+        }
 
 
 class FlowDataGenerateService:
@@ -318,6 +436,170 @@ class FlowDataGenerateService:
             )
         return {"items": items, "total": len(items)}
 
+    @staticmethod
+    def _operation_flow_gap_seconds(
+        *,
+        prev_op: dict[str, Any],
+        next_op: dict[str, Any],
+        quantity: Decimal,
+        reporting_cfg: IntervalConfig,
+    ) -> float:
+        """工序间业务时刻间隔（秒）。
+
+        须完上道：按上道准备+标准工时×数量；可跳转：仅占上道工时的一小段。
+        未维护工时时回退报工步骤间隔随机值。
+        """
+        from apps.kuaizhizao.utils.work_order_operation_scheduling import (
+            operation_total_hours,
+        )
+
+        hours = operation_total_hours(
+            prev_op.get("setup_time"),
+            prev_op.get("standard_time"),
+            quantity,
+        )
+        cfg = reporting_cfg.clamp() if hasattr(reporting_cfg, "clamp") else reporting_cfg
+        if hours <= 0:
+            return float(random.uniform(float(cfg.min_seconds), float(cfg.max_seconds)))
+        seconds = float(hours) * 3600.0
+        if bool(next_op.get("allow_jump")):
+            seconds *= OP_JUMP_GAP_RATIO
+        return max(float(OP_FLOW_GAP_MIN_SECONDS), min(float(OP_FLOW_GAP_MAX_SECONDS), seconds))
+
+    @staticmethod
+    def _normalize_preview_operation(raw: dict[str, Any], index: int) -> dict[str, Any]:
+        seq = raw.get("sequence")
+        try:
+            sequence = int(seq) if seq is not None else index + 1
+        except (TypeError, ValueError):
+            sequence = index + 1
+        return {
+            "code": raw.get("code") or raw.get("operation_code"),
+            "name": raw.get("name") or raw.get("operation_name") or f"工序{sequence}",
+            "sequence": sequence,
+            "allow_jump": bool(raw.get("allow_jump") if raw.get("allow_jump") is not None else raw.get("allowJump")),
+            "standard_time": raw.get("standard_time"),
+            "setup_time": raw.get("setup_time"),
+        }
+
+    @classmethod
+    def _ops_from_operation_sequence(cls, seq: Any) -> list[dict[str, Any]]:
+        if not seq:
+            return []
+        if isinstance(seq, dict):
+            ops = seq.get("operations")
+            if isinstance(ops, list) and ops:
+                ordered = ops
+                seq_uuids = seq.get("sequence")
+                if isinstance(seq_uuids, list) and seq_uuids:
+                    by_uuid: dict[str, dict[str, Any]] = {}
+                    for op in ops:
+                        if not isinstance(op, dict):
+                            continue
+                        uid = op.get("uuid") or op.get("operation_uuid")
+                        if uid:
+                            by_uuid[str(uid)] = op
+                    rebuilt = [by_uuid[str(u)] for u in seq_uuids if str(u) in by_uuid]
+                    if rebuilt:
+                        ordered = rebuilt
+                return [
+                    cls._normalize_preview_operation(op, i)
+                    for i, op in enumerate(ordered)
+                    if isinstance(op, dict)
+                ]
+            return []
+        if isinstance(seq, list):
+            out: list[dict[str, Any]] = []
+            for i, item in enumerate(seq):
+                if isinstance(item, dict):
+                    out.append(cls._normalize_preview_operation(item, i))
+            return out
+        return []
+
+    async def _resolve_source_process_operations(
+        self,
+        tenant_id: int,
+        source: str,
+        doc: Any,
+    ) -> dict[str, Any]:
+        """从源单据首个可解析工艺的物料取工序序列，供预览展开报工节点。"""
+        from apps.kuaizhizao.models.sales_forecast_item import SalesForecastItem
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+        from apps.master_data.models.material import Material
+        from apps.master_data.services.material_product_process_service import (
+            MaterialProductProcessService,
+        )
+
+        empty: dict[str, Any] = {
+            "operations": [],
+            "quantity": Decimal("1"),
+            "material_code": None,
+        }
+        if source == "sales_forecast":
+            items = (
+                await SalesForecastItem.filter(
+                    tenant_id=tenant_id,
+                    forecast_id=int(doc.id),
+                    deleted_at__isnull=True,
+                )
+                .order_by("id")
+                .all()
+            )
+            qty_attr = "forecast_quantity"
+        else:
+            items = (
+                await SalesOrderItem.filter(
+                    tenant_id=tenant_id,
+                    sales_order_id=int(doc.id),
+                    deleted_at__isnull=True,
+                )
+                .order_by("id")
+                .all()
+            )
+            qty_attr = "order_quantity"
+        if not items:
+            return empty
+
+        for item in items:
+            material_id = int(getattr(item, "material_id", 0) or 0)
+            if material_id <= 0:
+                continue
+            try:
+                seq, _allow = await MaterialProductProcessService.resolve_sequence_for_material(
+                    tenant_id, material_id
+                )
+            except Exception as exc:
+                logger.info(
+                    "flow_generate preview resolve sequence material={}: {}",
+                    material_id,
+                    exc,
+                )
+                continue
+            operations = self._ops_from_operation_sequence(seq)
+            if not operations:
+                continue
+            material = await Material.get_or_none(
+                id=material_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            qty_raw = getattr(item, qty_attr, None)
+            try:
+                qty = Decimal(str(qty_raw if qty_raw is not None else 1))
+            except Exception:
+                qty = Decimal("1")
+            if qty <= 0:
+                qty = Decimal("1")
+            code = None
+            if material:
+                code = getattr(material, "main_code", None) or getattr(material, "code", None)
+            if not code:
+                code = getattr(item, "material_code", None)
+            return {
+                "operations": operations,
+                "quantity": qty,
+                "material_code": str(code) if code else None,
+            }
+        return empty
+
     async def preview(
         self,
         tenant_id: int,
@@ -346,8 +628,45 @@ class FlowDataGenerateService:
             work_schedule=req.work_schedule,
             use_work_schedule=req.use_work_schedule,
         )
+        op_plan = await self._resolve_source_process_operations(tenant_id, source, doc)
         preview_times: list[dict[str, Any]] = []
         for key, label in planned_steps:
+            if key == "reporting" and op_plan.get("operations"):
+                ops_list = op_plan["operations"]
+                qty = Decimal(str(op_plan.get("quantity") or 1))
+                for idx, op in enumerate(ops_list):
+                    if idx == 0:
+                        issued = planner.next("reporting")
+                    else:
+                        gap = self._operation_flow_gap_seconds(
+                            prev_op=ops_list[idx - 1],
+                            next_op=op,
+                            quantity=qty,
+                            reporting_cfg=req.intervals.get("reporting") or req.default_interval,
+                        )
+                        issued = planner.advance_by_seconds(gap)
+                    flow_mode = (
+                        "可跳转"
+                        if bool(op.get("allow_jump"))
+                        else "须完上道"
+                    )
+                    preview_times.append(
+                        {
+                            "step_key": "reporting",
+                            "label": f"工序报工-{op.get('name') or op.get('code') or idx + 1}",
+                            "issued_at": issued.isoformat(),
+                            "operation_sequence": int(op.get("sequence") or idx + 1),
+                            "operation_code": op.get("code"),
+                            "operation_name": op.get("name"),
+                            "flow_mode": flow_mode,
+                            "note": (
+                                f"流转={flow_mode}"
+                                f"；标准工时={op.get('standard_time') or '-'}h/件"
+                                f"；准备={op.get('setup_time') or '-'}h"
+                            ),
+                        }
+                    )
+                continue
             issued = planner.next(key)
             preview_times.append(
                 {
@@ -355,6 +674,17 @@ class FlowDataGenerateService:
                     "label": label,
                     "issued_at": issued.isoformat(),
                 }
+            )
+        warnings = self._preview_warnings(doc, enabled, source_type=source)
+        if enabled.get("reporting", True) and op_plan.get("operations"):
+            warnings.append(
+                "工序报工按工艺流转：须完上道则按上道标准工时推进时刻；"
+                "可跳转工序使用较短间隔。预览已展开各工序时间节点。"
+            )
+        elif enabled.get("reporting", True) and not op_plan.get("operations"):
+            warnings.append(
+                "未解析到源单据物料工艺工序，预览仅显示报工步骤总节点；"
+                "执行时将按工单实际工序与流转规则间隔报工。"
             )
         return {
             "source_type": source,
@@ -365,14 +695,29 @@ class FlowDataGenerateService:
             "warehouse_name": warehouse["name"],
             "anchor_at": anchor.isoformat(),
             "steps": preview_times,
-            "warnings": self._preview_warnings(doc, enabled, source_type=source),
+            "process_operations": op_plan.get("operations") or [],
+            "process_material_code": op_plan.get("material_code"),
+            "warnings": warnings,
         }
+
+    async def _emit_progress(
+        self,
+        progress_cb: Optional[ProgressCallback],
+        pct: int,
+        message: str,
+    ) -> None:
+        if not progress_cb:
+            return
+        maybe = progress_cb(max(0, min(100, int(pct))), message)
+        if asyncio.iscoroutine(maybe):
+            await maybe
 
     async def execute(
         self,
         tenant_id: int,
         operator_id: int,
         req: FlowGenerateRequest,
+        progress_cb: Optional[ProgressCallback] = None,
     ) -> dict[str, Any]:
         run_id = str(uuid.uuid4())
         source = req.normalized_source()
@@ -407,7 +752,11 @@ class FlowDataGenerateService:
         timeline: list[TimelineEntry] = []
         step_results: list[dict[str, Any]] = []
         outsource_notes: list[str] = []
+        skipped_errors: list[str] = []
         demand_id: Optional[int] = None
+        # 需求计算/下推成功后进入「可跳过单项」阶段：单项失败不撤销已写入
+        item_phase = False
+        await self._emit_progress(progress_cb, 2, "解析步骤操作人")
         ops, op_notes = await self._resolve_step_operators(
             tenant_id=tenant_id,
             fallback_user_id=operator_id,
@@ -433,6 +782,7 @@ class FlowDataGenerateService:
 
         try:
             # 1) 需求计算
+            await self._emit_progress(progress_cb, 8, "需求计算")
             if enabled.get("demand_computation", True):
                 if source == "sales_forecast":
                     computation_id, demand_id = await self._step_push_and_execute_computation_from_forecast(
@@ -458,6 +808,7 @@ class FlowDataGenerateService:
                 raise BusinessLogicError("需求计算步骤为必选，无法关闭")
 
             # 2) 一键下推工单 + 采购单
+            await self._emit_progress(progress_cb, 18, "下推工单与采购单")
             push_results = await self._step_push_orders(
                 tenant_id=tenant_id,
                 operator_id=ops["demand_computation"],
@@ -470,157 +821,220 @@ class FlowDataGenerateService:
             )
             work_orders = push_results.get("work_orders") or []
             purchase_orders = push_results.get("purchase_orders") or []
+            for warn in push_results.get("push_warnings") or []:
+                outsource_notes.append(str(warn))
             for owo in push_results.get("outsource_work_orders") or []:
                 code = owo.get("code") or owo.get("id")
                 outsource_notes.append(f"委外工单 {code} 已生成，本版不自动走委外收发，需人工处理")
 
-            # 3) 采购：审核 PO；入库走来料检验步骤或直接下推
+            item_phase = True
+
+            # 3) 采购：按单处理，失败跳过该 PO，其余继续
             if enabled.get("purchase", True) and purchase_orders:
-                await self._step_approve_purchase_orders(
+                await self._emit_progress(progress_cb, 28, "采购审核与入库")
+                approved_pos = await self._step_approve_purchase_orders(
                     tenant_id=tenant_id,
                     operator_id=ops["purchase"],
                     purchase_orders=purchase_orders,
+                    step_results=step_results,
+                    skipped_errors=skipped_errors,
                 )
-                if enabled.get("incoming_inspection", True):
-                    await self._step_incoming_inspection(
-                        tenant_id=tenant_id,
-                        operator_id=ops["incoming_inspection"],
-                        purchase_orders=purchase_orders,
-                        warehouse=warehouse,
-                        planner=planner,
-                        timeline=timeline,
-                        step_results=step_results,
-                        run_id=run_id,
-                    )
-                else:
-                    await self._step_purchase_direct_receipt(
-                        tenant_id=tenant_id,
-                        operator_id=ops["purchase"],
-                        purchase_orders=purchase_orders,
-                        warehouse=warehouse,
-                        planner=planner,
-                        timeline=timeline,
-                        step_results=step_results,
-                        run_id=run_id,
-                    )
+                if approved_pos:
+                    if enabled.get("incoming_inspection", True):
+                        await self._step_incoming_inspection(
+                            tenant_id=tenant_id,
+                            operator_id=ops["incoming_inspection"],
+                            purchase_orders=approved_pos,
+                            warehouse=warehouse,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                            skipped_errors=skipped_errors,
+                        )
+                    else:
+                        await self._step_purchase_direct_receipt(
+                            tenant_id=tenant_id,
+                            operator_id=ops["purchase"],
+                            purchase_orders=approved_pos,
+                            warehouse=warehouse,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                            skipped_errors=skipped_errors,
+                        )
 
-            # 4) 生产链（按工单）
+            # 4) 生产链（按工单）：单张失败跳过，其余继续
+            wo_total = max(1, len([w for w in work_orders if int(w.get("id") or 0) > 0]))
+            wo_idx = 0
             for wo in work_orders:
                 wo_id = int(wo.get("id") or 0)
                 if wo_id <= 0:
                     continue
-                if enabled.get("inventory_topup", True):
-                    await self._step_inventory_topup(
-                        tenant_id=tenant_id,
-                        operator_id=ops["inventory_topup"],
-                        work_order_id=wo_id,
-                        warehouse=warehouse,
-                        planner=planner,
-                        timeline=timeline,
+                wo_idx += 1
+                wo_code = str(wo.get("code") or wo_id)
+                pct = 35 + int(50 * (wo_idx - 1) / wo_total)
+                await self._emit_progress(
+                    progress_cb,
+                    pct,
+                    f"生产链 工单 {wo_code}（{wo_idx}/{wo_total}）",
+                )
+                try:
+                    if enabled.get("inventory_topup", True):
+                        await self._step_inventory_topup(
+                            tenant_id=tenant_id,
+                            operator_id=ops["inventory_topup"],
+                            work_order_id=wo_id,
+                            warehouse=warehouse,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                        )
+                    if enabled.get("production_picking", True):
+                        await self._step_picking(
+                            tenant_id=tenant_id,
+                            operator_id=ops["production_picking"],
+                            work_order_id=wo_id,
+                            warehouse=warehouse,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                        )
+                    if enabled.get("reporting", True):
+                        await self._step_reporting(
+                            tenant_id=tenant_id,
+                            operator_id=ops["reporting"],
+                            operator_pool=reporting_pool,
+                            operator_cfg=req.step_operators.get("reporting")
+                            or StepOperatorConfig(),
+                            batch_cfg=req.reporting_batches.clamp(),
+                            work_order_id=wo_id,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                        )
+                    if enabled.get("process_inspection", True):
+                        await self._step_process_inspection(
+                            tenant_id=tenant_id,
+                            operator_id=ops["process_inspection"],
+                            work_order_id=wo_id,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                        )
+                    if enabled.get("finished_goods_inspection", True):
+                        await self._step_fqc(
+                            tenant_id=tenant_id,
+                            operator_id=ops["finished_goods_inspection"],
+                            work_order_id=wo_id,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                        )
+                    if enabled.get("finished_goods_receipt", True):
+                        await self._step_fg_receipt(
+                            tenant_id=tenant_id,
+                            operator_id=ops["finished_goods_receipt"],
+                            work_order_id=wo_id,
+                            warehouse=warehouse,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                        )
+                except Exception as exc:
+                    msg = str(exc).strip() or exc.__class__.__name__
+                    logger.warning("flow-generate skip work order {}: {}", wo_code, exc)
+                    self._append_skip(
                         step_results=step_results,
-                        run_id=run_id,
+                        skipped_errors=skipped_errors,
+                        step_key="reporting",
+                        label=f"工单 {wo_code}",
+                        message=msg,
                     )
-                if enabled.get("production_picking", True):
-                    await self._step_picking(
-                        tenant_id=tenant_id,
-                        operator_id=ops["production_picking"],
-                        work_order_id=wo_id,
-                        warehouse=warehouse,
-                        planner=planner,
-                        timeline=timeline,
-                        step_results=step_results,
-                        run_id=run_id,
-                    )
-                if enabled.get("reporting", True):
-                    await self._step_reporting(
-                        tenant_id=tenant_id,
-                        operator_id=ops["reporting"],
-                        operator_pool=reporting_pool,
-                        operator_cfg=req.step_operators.get("reporting")
-                        or StepOperatorConfig(),
-                        batch_cfg=req.reporting_batches.clamp(),
-                        work_order_id=wo_id,
-                        planner=planner,
-                        timeline=timeline,
-                        step_results=step_results,
-                        run_id=run_id,
-                    )
-                if enabled.get("process_inspection", True):
-                    await self._step_process_inspection(
-                        tenant_id=tenant_id,
-                        operator_id=ops["process_inspection"],
-                        work_order_id=wo_id,
-                        planner=planner,
-                        timeline=timeline,
-                        step_results=step_results,
-                        run_id=run_id,
-                    )
-                if enabled.get("finished_goods_inspection", True):
-                    await self._step_fqc(
-                        tenant_id=tenant_id,
-                        operator_id=ops["finished_goods_inspection"],
-                        work_order_id=wo_id,
-                        planner=planner,
-                        timeline=timeline,
-                        step_results=step_results,
-                        run_id=run_id,
-                    )
-                if enabled.get("finished_goods_receipt", True):
-                    await self._step_fg_receipt(
-                        tenant_id=tenant_id,
-                        operator_id=ops["finished_goods_receipt"],
-                        work_order_id=wo_id,
-                        warehouse=warehouse,
-                        planner=planner,
-                        timeline=timeline,
-                        step_results=step_results,
-                        run_id=run_id,
-                    )
+                    continue
 
-            # 5) 发货 / 出库
+            # 5) 发货 / 出库：失败记入跳过，不撤销已写生产/采购
             if enabled.get("shipment_delivery", True):
-                if source == "sales_forecast":
-                    await self._step_shipment_delivery_from_forecast(
-                        tenant_id=tenant_id,
-                        operator_id=ops["shipment_delivery"],
-                        sales_forecast_id=doc_id,
-                        warehouse=warehouse,
-                        planner=planner,
-                        timeline=timeline,
+                await self._emit_progress(progress_cb, 88, "发货出库")
+                try:
+                    if source == "sales_forecast":
+                        await self._step_shipment_delivery_from_forecast(
+                            tenant_id=tenant_id,
+                            operator_id=ops["shipment_delivery"],
+                            sales_forecast_id=doc_id,
+                            warehouse=warehouse,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                        )
+                    else:
+                        await self._step_shipment_delivery(
+                            tenant_id=tenant_id,
+                            operator_id=ops["shipment_delivery"],
+                            sales_order_id=doc_id,
+                            warehouse=warehouse,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                        )
+                except Exception as exc:
+                    msg = str(exc).strip() or exc.__class__.__name__
+                    logger.warning("flow-generate skip shipment: {}", exc)
+                    self._append_skip(
                         step_results=step_results,
-                        run_id=run_id,
-                    )
-                else:
-                    await self._step_shipment_delivery(
-                        tenant_id=tenant_id,
-                        operator_id=ops["shipment_delivery"],
-                        sales_order_id=doc_id,
-                        warehouse=warehouse,
-                        planner=planner,
-                        timeline=timeline,
-                        step_results=step_results,
-                        run_id=run_id,
+                        skipped_errors=skipped_errors,
+                        step_key="shipment_delivery",
+                        label="发货/出库",
+                        message=msg,
                     )
 
-            self._raise_if_step_errors(step_results)
-
-            # 改写时间 + 日志回写（仅成功路径）
-            await self._rewrite_timeline(tenant_id, timeline)
-            await self._align_operation_logs(timeline)
+            # 改写时间 + 日志回写（已写入单据保留；跳过项不影响）
+            await self._emit_progress(progress_cb, 94, "改写业务时间与操作日志")
+            if timeline:
+                await self._rewrite_timeline(tenant_id, timeline)
+                await self._align_operation_logs(timeline)
+            await self._emit_progress(progress_cb, 100, "完成")
 
         except Exception as exc:
+            # 仅需求计算/下推等基础阶段失败才整轮撤销；单项阶段已跳过不会进这里
             logger.exception("flow-generate failed: {}", exc)
-            revert_notes = await self._revert_failed_run(
-                tenant_id=tenant_id,
-                demand_id=demand_id,
-                timeline=timeline,
-            )
-            detail = str(exc).strip() or exc.__class__.__name__
-            if revert_notes:
-                detail = f"{detail}；回滚提示：{'；'.join(revert_notes[:5])}"
-            raise BusinessLogicError(
-                f"流程造数未通过，请修改后重试（本轮写入已撤销）：{detail}"
-            ) from exc
+            if item_phase:
+                # 不应到达；若意外抛出，仍保留已写入，汇总为跳过错误后返回
+                msg = str(exc).strip() or exc.__class__.__name__
+                self._append_skip(
+                    step_results=step_results,
+                    skipped_errors=skipped_errors,
+                    step_key="demand_computation",
+                    label="流程造数",
+                    message=msg,
+                )
+                if timeline:
+                    try:
+                        await self._rewrite_timeline(tenant_id, timeline)
+                        await self._align_operation_logs(timeline)
+                    except Exception as rewrite_exc:
+                        logger.warning("flow-generate rewrite after partial: {}", rewrite_exc)
+            else:
+                revert_notes = await self._revert_failed_run(
+                    tenant_id=tenant_id,
+                    demand_id=demand_id,
+                    timeline=timeline,
+                )
+                detail = str(exc).strip() or exc.__class__.__name__
+                if revert_notes:
+                    detail = f"{detail}；回滚提示：{'；'.join(revert_notes[:5])}"
+                raise BusinessLogicError(
+                    f"流程造数未通过，请修改后重试（本轮写入已撤销）：{detail}"
+                ) from exc
 
         return {
             "success": True,
@@ -647,7 +1061,8 @@ class FlowDataGenerateService:
             ],
             "outsource_notes": outsource_notes,
             "operators": ops,
-            "errors": [],
+            "errors": skipped_errors,
+            "skipped_count": len(skipped_errors),
         }
 
     # ── helpers ──────────────────────────────────────────────
@@ -659,20 +1074,27 @@ class FlowDataGenerateService:
                 enabled[k] = bool(v)
         return enabled
 
-    def _raise_if_step_errors(self, step_results: list[dict[str, Any]]) -> None:
-        hard = [
-            s
-            for s in step_results
-            if str(s.get("status") or "").strip().lower() == "error"
-        ]
-        if not hard:
-            return
-        parts: list[str] = []
-        for s in hard[:8]:
-            label = s.get("label") or s.get("step_key") or "步骤"
-            msg = s.get("message") or "失败"
-            parts.append(f"{label}: {msg}")
-        raise BusinessLogicError("；".join(parts))
+    @staticmethod
+    def _append_skip(
+        *,
+        step_results: list[dict[str, Any]],
+        skipped_errors: list[str],
+        step_key: str,
+        label: str,
+        message: str,
+    ) -> None:
+        """单项失败：记入步骤结果与 errors，不中断整轮。"""
+        text = f"{label}: {message}"
+        skipped_errors.append(text)
+        step_results.append(
+            {
+                "step_key": step_key,
+                "status": "skipped",
+                "label": label,
+                "message": message,
+                "note": "不通过已跳过，其余继续",
+            }
+        )
 
     def _is_already_done_error(self, exc: BaseException) -> bool:
         text = str(exc or "")
@@ -1225,7 +1647,7 @@ class FlowDataGenerateService:
             warnings.append("需求计算不可关闭")
         if enabled.get("reporting", True):
             warnings.append(
-                "工序报工按配置拆成多批次：每批独立业务时间，操作人从角色池随机轮换"
+                "同工序多批报工用步骤间隔；跨工序按流转（须完上道/可跳转）与标准工时推进时刻"
             )
         warnings.append("需组织已开启「自动生成工单」且允许计算直推工单")
         warnings.append("BOM/工艺路线不全会导致工单或报工失败")
@@ -1351,19 +1773,32 @@ class FlowDataGenerateService:
             by_type.setdefault(t.doc_type, []).append(
                 {"id": t.doc_id, "issued_at": t.issued_at}
             )
+        code_by_key: dict[tuple[str, int], str] = {}
         for doc_type, items in by_type.items():
-            try:
-                await DocumentTimeRewriteService.rewrite_documents_at_exact_times(
-                    tenant_id=tenant_id,
-                    doc_type=doc_type,
-                    items=items,
-                    sync_operator=True,
-                    rewrite_code_date=doc_type != "reporting_record",
-                    preserve_business_dates=False,
+            result = await DocumentTimeRewriteService.rewrite_documents_at_exact_times(
+                tenant_id=tenant_id,
+                doc_type=doc_type,
+                items=items,
+                sync_operator=True,
+                rewrite_code_date=doc_type != "reporting_record",
+                preserve_business_dates=False,
+            )
+            failed = int(result.get("failed") or 0)
+            if failed > 0:
+                errs = result.get("errors") or []
+                sample = "；".join(str(e) for e in errs[:5])
+                raise BusinessLogicError(
+                    f"业务时间改写失败（{doc_type} 失败 {failed} 条）：{sample}"
                 )
-            except Exception as exc:
-                logger.warning("rewrite {} failed: {}", doc_type, exc)
-                raise
+            for row in result.get("codes") or []:
+                rid = int(row.get("id") or 0)
+                code = str(row.get("code") or "").strip()
+                if rid > 0 and code:
+                    code_by_key[(doc_type, rid)] = code
+        for entry in timeline:
+            new_code = code_by_key.get((entry.doc_type, entry.doc_id))
+            if new_code:
+                entry.doc_code = new_code
 
     async def _align_operation_logs(self, timeline: list[TimelineEntry]) -> None:
         for t in timeline:
@@ -1526,8 +1961,17 @@ class FlowDataGenerateService:
             purchase="purchase_order" if enable_purchase else None,
             include_outsource=True,
             push_mode="confirm",
+            fill_missing_supplier="random",
+            omit_document_notes=True,
         )
         results = result.get("results") or {}
+        push_warnings = [
+            str(w)
+            for w in (result.get("warnings") or results.get("warnings") or [])
+            if w
+        ]
+        if push_warnings:
+            results["push_warnings"] = push_warnings
         for wo in results.get("work_orders") or []:
             wo_id = int(wo.get("id") or 0)
             if wo_id <= 0:
@@ -1591,15 +2035,20 @@ class FlowDataGenerateService:
         tenant_id: int,
         operator_id: int,
         purchase_orders: list[dict[str, Any]],
-    ) -> None:
+        step_results: list[dict[str, Any]],
+        skipped_errors: list[str],
+    ) -> list[dict[str, Any]]:
+        """审核采购单；失败跳过该单，返回审核成功（或已审核）的 PO 列表。"""
         from apps.kuaizhizao.services.purchase_service import PurchaseService
         from apps.kuaizhizao.schemas.purchase import PurchaseOrderApprove
 
         po_svc = PurchaseService()
+        approved: list[dict[str, Any]] = []
         for po in purchase_orders:
             po_id = int(po.get("id") or 0)
             if po_id <= 0:
                 continue
+            po_code = str(po.get("order_code") or po.get("code") or po_id)
             try:
                 await po_svc.approve_purchase_order(
                     tenant_id=tenant_id,
@@ -1607,11 +2056,20 @@ class FlowDataGenerateService:
                     approve_data=PurchaseOrderApprove(approved=True),
                     approved_by=operator_id,
                 )
+                approved.append(po)
             except Exception as exc:
                 if self._is_already_done_error(exc):
                     logger.info("PO {} approve skipped: {}", po_id, exc)
+                    approved.append(po)
                     continue
-                raise BusinessLogicError(f"采购订单审核失败 PO#{po_id}: {exc}") from exc
+                self._append_skip(
+                    step_results=step_results,
+                    skipped_errors=skipped_errors,
+                    step_key="purchase",
+                    label=f"采购订单 {po_code}",
+                    message=str(exc).strip() or exc.__class__.__name__,
+                )
+        return approved
 
     async def _confirm_purchase_receipt(
         self,
@@ -1708,15 +2166,18 @@ class FlowDataGenerateService:
         timeline: list[TimelineEntry],
         step_results: list[dict[str, Any]],
         run_id: str,
+        skipped_errors: Optional[list[str]] = None,
     ) -> None:
-        """未勾选来料检验：PO 直接下推采购入库并确认。"""
+        """未勾选来料检验：PO 直接下推采购入库并确认；单 PO 失败跳过。"""
         from apps.kuaizhizao.services.purchase_service import PurchaseService
 
+        errs = skipped_errors if skipped_errors is not None else []
         po_svc = PurchaseService()
         for po in purchase_orders:
             po_id = int(po.get("id") or 0)
             if po_id <= 0:
                 continue
+            po_code = str(po.get("order_code") or po.get("code") or po_id)
             try:
                 pushed = await po_svc.push_to_receipt(
                     tenant_id=tenant_id,
@@ -1724,23 +2185,27 @@ class FlowDataGenerateService:
                     created_by=operator_id,
                     warehouse_id=warehouse["id"],
                 )
+                receipt_id = int(pushed.get("id") or pushed.get("receipt_id") or 0) or None
+                receipt_code = pushed.get("receipt_code") or pushed.get("code")
+                if receipt_id:
+                    await self._confirm_purchase_receipt(
+                        tenant_id=tenant_id,
+                        operator_id=operator_id,
+                        receipt_id=receipt_id,
+                        receipt_code=str(receipt_code) if receipt_code else None,
+                        step_key="purchase",
+                        planner=planner,
+                        timeline=timeline,
+                        step_results=step_results,
+                        run_id=run_id,
+                    )
             except Exception as exc:
-                raise BusinessLogicError(
-                    f"采购入库下推失败 PO#{po_id}: {exc}"
-                ) from exc
-            receipt_id = int(pushed.get("id") or pushed.get("receipt_id") or 0) or None
-            receipt_code = pushed.get("receipt_code") or pushed.get("code")
-            if receipt_id:
-                await self._confirm_purchase_receipt(
-                    tenant_id=tenant_id,
-                    operator_id=operator_id,
-                    receipt_id=receipt_id,
-                    receipt_code=str(receipt_code) if receipt_code else None,
-                    step_key="purchase",
-                    planner=planner,
-                    timeline=timeline,
+                self._append_skip(
                     step_results=step_results,
-                    run_id=run_id,
+                    skipped_errors=errs,
+                    step_key="purchase",
+                    label=f"采购入库 {po_code}",
+                    message=str(exc).strip() or exc.__class__.__name__,
                 )
 
     async def _step_incoming_inspection(
@@ -1754,11 +2219,13 @@ class FlowDataGenerateService:
         timeline: list[TimelineEntry],
         step_results: list[dict[str, Any]],
         run_id: str,
+        skipped_errors: Optional[list[str]] = None,
     ) -> None:
-        """来料检验：按物料 IQC 预设（none/simple/plan）从 PO 下推，合格后入库。"""
+        """来料检验：按物料 IQC 预设从 PO 下推；单 PO 失败跳过。"""
         from apps.kuaizhizao.services.purchase_service import PurchaseService
         from apps.kuaizhizao.services.quality_service import IncomingInspectionService
 
+        errs = skipped_errors if skipped_errors is not None else []
         po_svc = PurchaseService()
         iqc_svc = IncomingInspectionService()
 
@@ -1766,19 +2233,21 @@ class FlowDataGenerateService:
             po_id = int(po.get("id") or 0)
             if po_id <= 0:
                 continue
-            receipt_id: Optional[int] = None
-            receipt_code: Optional[str] = None
+            po_code = str(po.get("order_code") or po.get("code") or po_id)
             try:
-                inspections = await iqc_svc.create_inspection_from_purchase_order(
-                    tenant_id=tenant_id,
-                    purchase_order_id=po_id,
-                    created_by=operator_id,
-                )
-            except Exception as exc:
-                logger.info(
-                    "IQC from PO {} failed, fallback push_to_receipt: {}", po_id, exc
-                )
+                receipt_id: Optional[int] = None
+                receipt_code: Optional[str] = None
                 try:
+                    inspections = await iqc_svc.create_inspection_from_purchase_order(
+                        tenant_id=tenant_id,
+                        purchase_order_id=po_id,
+                        created_by=operator_id,
+                        force_simple_when_unset=True,
+                    )
+                except Exception as exc:
+                    logger.info(
+                        "IQC from PO {} failed, fallback push_to_receipt: {}", po_id, exc
+                    )
                     pushed = await po_svc.push_to_receipt(
                         tenant_id=tenant_id,
                         order_id=po_id,
@@ -1787,59 +2256,63 @@ class FlowDataGenerateService:
                     )
                     receipt_id = int(pushed.get("id") or pushed.get("receipt_id") or 0) or None
                     receipt_code = pushed.get("receipt_code") or pushed.get("code")
-                except Exception as exc2:
-                    raise BusinessLogicError(
-                        f"来料检验/入库失败 PO#{po_id}: {exc2}"
-                    ) from exc2
-            else:
-                for insp in inspections or []:
-                    insp_id = int(getattr(insp, "id", 0) or 0)
-                    if insp_id <= 0:
-                        continue
-                    issued = planner.next("incoming_inspection")
-                    await self._record_step(
-                        tenant_id=tenant_id,
-                        operator_id=operator_id,
-                        run_id=run_id,
-                        step_key="incoming_inspection",
-                        doc_type="incoming_inspection",
-                        doc_id=insp_id,
-                        doc_code=str(getattr(insp, "inspection_code", None) or insp_id),
-                        label="来料检验",
-                        issued_at=issued,
-                        timeline=timeline,
-                        step_results=step_results,
-                    )
-                    await self._pass_quality_inspection(
-                        svc=iqc_svc,
-                        tenant_id=tenant_id,
-                        inspection_id=insp_id,
-                        operator_id=operator_id,
-                        quantity=getattr(insp, "inspection_quantity", 0),
-                    )
-                    try:
-                        pushed = await iqc_svc.push_to_purchase_receipt(
+                else:
+                    for insp in inspections or []:
+                        insp_id = int(getattr(insp, "id", 0) or 0)
+                        if insp_id <= 0:
+                            continue
+                        issued = planner.next("incoming_inspection")
+                        await self._record_step(
+                            tenant_id=tenant_id,
+                            operator_id=operator_id,
+                            run_id=run_id,
+                            step_key="incoming_inspection",
+                            doc_type="incoming_inspection",
+                            doc_id=insp_id,
+                            doc_code=str(getattr(insp, "inspection_code", None) or insp_id),
+                            label="来料检验",
+                            issued_at=issued,
+                            timeline=timeline,
+                            step_results=step_results,
+                        )
+                        await self._pass_quality_inspection(
+                            svc=iqc_svc,
                             tenant_id=tenant_id,
                             inspection_id=insp_id,
-                            created_by=operator_id,
-                            warehouse_id=warehouse["id"],
+                            operator_id=operator_id,
+                            quantity=getattr(insp, "inspection_quantity", 0),
                         )
-                        receipt_id = int(pushed.get("receipt_id") or 0) or receipt_id
-                        receipt_code = pushed.get("receipt_code") or receipt_code
-                    except Exception as exc:
-                        logger.info("IQC push receipt {}: {}", insp_id, exc)
+                        try:
+                            pushed = await iqc_svc.push_to_purchase_receipt(
+                                tenant_id=tenant_id,
+                                inspection_id=insp_id,
+                                created_by=operator_id,
+                                warehouse_id=warehouse["id"],
+                            )
+                            receipt_id = int(pushed.get("receipt_id") or 0) or receipt_id
+                            receipt_code = pushed.get("receipt_code") or receipt_code
+                        except Exception as exc:
+                            logger.info("IQC push receipt {}: {}", insp_id, exc)
 
-            if receipt_id:
-                await self._confirm_purchase_receipt(
-                    tenant_id=tenant_id,
-                    operator_id=operator_id,
-                    receipt_id=receipt_id,
-                    receipt_code=str(receipt_code) if receipt_code else None,
-                    step_key="incoming_inspection",
-                    planner=planner,
-                    timeline=timeline,
+                if receipt_id:
+                    await self._confirm_purchase_receipt(
+                        tenant_id=tenant_id,
+                        operator_id=operator_id,
+                        receipt_id=receipt_id,
+                        receipt_code=str(receipt_code) if receipt_code else None,
+                        step_key="incoming_inspection",
+                        planner=planner,
+                        timeline=timeline,
+                        step_results=step_results,
+                        run_id=run_id,
+                    )
+            except Exception as exc:
+                self._append_skip(
                     step_results=step_results,
-                    run_id=run_id,
+                    skipped_errors=errs,
+                    step_key="incoming_inspection",
+                    label=f"来料检验/入库 {po_code}",
+                    message=str(exc).strip() or exc.__class__.__name__,
                 )
 
     async def _step_process_inspection(
@@ -1853,10 +2326,9 @@ class FlowDataGenerateService:
         step_results: list[dict[str, Any]],
         run_id: str,
     ) -> None:
-        """过程检验：按工序 IPQC 预设（none/simple/plan）建单并合格审核。"""
+        """过程检验：按工序 IPQC 建单并合格审核；无质检/无方案时强制简易。"""
         from apps.kuaizhizao.models.process_inspection import ProcessInspection
         from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
-        from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
         from apps.kuaizhizao.services.quality_service import ProcessInspectionService
 
         svc = ProcessInspectionService()
@@ -1883,23 +2355,12 @@ class FlowDataGenerateService:
                 continue
             op_name = str(getattr(wo_op, "operation_name", None) or f"工序{master_op_id}")
             try:
-                eff, _, _ = await resolve_inspection_policy(
-                    tenant_id,
-                    "ipqc",
-                    operation_id=master_op_id,
-                    work_order_operation=wo_op,
-                )
-            except Exception as exc:
-                logger.info("resolve IPQC policy WO#{} op {}: {}", work_order_id, master_op_id, exc)
-                continue
-            if eff == "none":
-                continue
-            try:
                 await svc.create_inspection_from_work_order(
                     tenant_id=tenant_id,
                     work_order_id=work_order_id,
                     operation_id=master_op_id,
                     created_by=operator_id,
+                    force_simple_when_unset=True,
                 )
             except Exception as exc:
                 logger.info(
@@ -1957,7 +2418,7 @@ class FlowDataGenerateService:
                     "step_key": "process_inspection",
                     "status": "skipped",
                     "label": f"过程检验 WO#{work_order_id}",
-                    "message": "各工序质检模式为无质检，或无可处理检验单",
+                    "message": "无可处理过程检验单",
                 }
             )
 
@@ -2022,10 +2483,8 @@ class FlowDataGenerateService:
             tenant_id=tenant_id,
             inbound_data=OtherInboundCreate(
                 reason_type="其他",
-                reason_desc=f"流程造数补库 WO#{work_order_id}",
                 warehouse_id=warehouse["id"],
                 warehouse_name=warehouse["name"],
-                notes="flow_generate inventory topup",
                 items=shortage_items,
             ),
             created_by=operator_id,
@@ -2171,9 +2630,29 @@ class FlowDataGenerateService:
             return user_cache[uid]
 
         svc = ReportingService()
+        reporting_interval = planner.interval_for("reporting")
+        prev_op_meta: Optional[dict[str, Any]] = None
         for op in ops:
             op_id = int(getattr(op, "operation_id", 0) or op.id)
             op_name = str(getattr(op, "operation_name", None) or f"工序{op_id}")
+            op_meta = {
+                "allow_jump": bool(getattr(op, "allow_jump", False)),
+                "standard_time": getattr(op, "standard_time", None),
+                "setup_time": getattr(op, "setup_time", None),
+                "name": op_name,
+                "code": getattr(op, "operation_code", None),
+                "sequence": getattr(op, "sequence", None),
+            }
+            # 工序间：按流转模式推进业务时刻（须完上道用标准工时，可跳转用短间隔）
+            if prev_op_meta is not None:
+                gap = self._operation_flow_gap_seconds(
+                    prev_op=prev_op_meta,
+                    next_op=op_meta,
+                    quantity=qty,
+                    reporting_cfg=reporting_interval,
+                )
+                planner.advance_by_seconds(gap)
+
             batch_count = cfg.pick_batch_count(qty)
             parts = self._split_reporting_quantities(qty, batch_count)
             if use_op_assigned:
@@ -2191,7 +2670,11 @@ class FlowDataGenerateService:
             for batch_idx, part_qty in enumerate(parts, start=1):
                 worker_id = rotating[(batch_idx - 1) % len(rotating)]
                 worker_name = await _worker_name(worker_id)
-                reported_at = now_utc()
+                # 同工序多批次：用报工步骤间隔；跨工序首批已由流转 advance 推进游标
+                if batch_idx == 1 and prev_op_meta is not None:
+                    issued = planner.current()
+                else:
+                    issued = planner.next("reporting")
                 create_data = ReportingRecordCreate(
                     work_order_id=work_order_id,
                     work_order_code=str(wo.code),
@@ -2205,8 +2688,7 @@ class FlowDataGenerateService:
                     qualified_quantity=part_qty,
                     unqualified_quantity=Decimal("0"),
                     work_hours=Decimal("1"),
-                    reported_at=reported_at,
-                    remarks=f"flow_generate batch={batch_idx}/{len(parts)}",
+                    reported_at=issued,
                 )
                 record = await svc.create_reporting_record(
                     tenant_id=tenant_id,
@@ -2225,7 +2707,11 @@ class FlowDataGenerateService:
                 except Exception as exc:
                     logger.info("approve reporting {}: {}", record_id, exc)
 
-                issued = planner.next("reporting")
+                flow_note = (
+                    "可跳转"
+                    if op_meta["allow_jump"]
+                    else "须完上道"
+                )
                 await self._record_step(
                     tenant_id=tenant_id,
                     operator_id=worker_id,
@@ -2238,8 +2724,9 @@ class FlowDataGenerateService:
                     issued_at=issued,
                     timeline=timeline,
                     step_results=step_results,
-                    note=f"qty={part_qty} worker=#{worker_id}",
+                    note=f"qty={part_qty} worker=#{worker_id} 流转={flow_note}",
                 )
+            prev_op_meta = op_meta
 
     async def _step_fqc(
         self,
@@ -2260,6 +2747,7 @@ class FlowDataGenerateService:
                 tenant_id=tenant_id,
                 work_order_id=work_order_id,
                 created_by=operator_id,
+                force_simple_when_unset=True,
             )
         except Exception as exc:
             if self._is_already_done_error(exc):
@@ -2322,28 +2810,46 @@ class FlowDataGenerateService:
             warehouse_name=warehouse["name"],
         )
         receipt_id = int(receipt.id)
+        inbound_kind = str(getattr(receipt, "inbound_doc_kind", None) or "").strip()
         try:
-            await svc.confirm_receipt(
-                tenant_id=tenant_id,
-                receipt_id=receipt_id,
-                confirmed_by=operator_id,
-            )
+            if inbound_kind == "semi_finished_goods":
+                from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
+                    SemiFinishedGoodsReceiptService,
+                )
+
+                await SemiFinishedGoodsReceiptService().confirm_receipt(
+                    tenant_id=tenant_id,
+                    receipt_id=receipt_id,
+                    confirmed_by=operator_id,
+                )
+            else:
+                await svc.confirm_receipt(
+                    tenant_id=tenant_id,
+                    receipt_id=receipt_id,
+                    confirmed_by=operator_id,
+                )
         except Exception as exc:
             if not self._is_already_done_error(exc):
+                label = "半成品" if inbound_kind == "semi_finished_goods" else "成品"
                 raise BusinessLogicError(
-                    f"成品入库确认失败 #{receipt_id}: {exc}"
+                    f"{label}入库确认失败 #{receipt_id}: {exc}"
                 ) from exc
 
         issued = planner.next("finished_goods_receipt")
+        doc_type = (
+            "semi_finished_goods_receipt"
+            if inbound_kind == "semi_finished_goods"
+            else "finished_goods_receipt"
+        )
         await self._record_step(
             tenant_id=tenant_id,
             operator_id=operator_id,
             run_id=run_id,
             step_key="finished_goods_receipt",
-            doc_type="finished_goods_receipt",
+            doc_type=doc_type,
             doc_id=receipt_id,
             doc_code=str(getattr(receipt, "receipt_code", None) or receipt_id),
-            label="成品入库",
+            label="半成品入库" if inbound_kind == "semi_finished_goods" else "成品入库",
             issued_at=issued,
             timeline=timeline,
             step_results=step_results,

@@ -10589,21 +10589,27 @@ export default {
   'app.kuaizhizao.flowDataGenerate.previewFail': '预览失败',
   'app.kuaizhizao.flowDataGenerate.executeOk': '全流程造数完成',
   'app.kuaizhizao.flowDataGenerate.executePartial': '造数未通过，请按提示修改后重试',
+  'app.kuaizhizao.flowDataGenerate.executePartialOk':
+    '造数已完成，其中 {{skipped}} 条未通过已跳过，其余已写入，请查看结果列表',
   'app.kuaizhizao.flowDataGenerate.executeFail': '造数未通过，请修改后重试',
+  'app.kuaizhizao.flowDataGenerate.executeProgress': '执行进度',
+  'app.kuaizhizao.flowDataGenerate.executeProgressWaiting': '任务已提交，正在排队…',
   'app.kuaizhizao.flowDataGenerate.confirmTitle': '确认生成全流程数据？',
   'app.kuaizhizao.flowDataGenerate.confirmContent':
-    '将按真实业务服务创建/审核/过账单据。任一步失败将撤销本轮写入并提示修改，不会保留半成品数据。请确认销售订单、BOM、工艺与仓库配置正确。',
+    '将按真实业务服务创建/审核/过账单据。单张工单或采购单失败将跳过该条并继续其余写入；仅需求计算/下推失败时撤销本轮。请确认销售订单、BOM、工艺与仓库配置正确。',
   'app.kuaizhizao.flowDataGenerate.confirmContentWithTenant':
-    '将在组织「{{tenant}}」下按真实业务服务创建/审核/过账单据。任一步失败将撤销本轮写入并提示修改，不会保留半成品数据。请确认销售订单、BOM、工艺与仓库配置正确。',
+    '将在组织「{{tenant}}」下按真实业务服务创建/审核/过账单据。单张工单或采购单失败将跳过该条并继续其余写入；仅需求计算/下推失败时撤销本轮。执行时间可能较长，页面会显示进度条，请勿关闭。',
   'app.kuaizhizao.flowDataGenerate.previewCard': '预览时间线',
-  'app.kuaizhizao.flowDataGenerate.previewSummary': '订单 {{order}} · 仓库 {{warehouse}}',
+  'app.kuaizhizao.flowDataGenerate.previewSummary': '订单 {{order}} 仓库 {{warehouse}}',
+  'app.kuaizhizao.flowDataGenerate.previewMaterial': '工艺物料 {{code}}',
   'app.kuaizhizao.flowDataGenerate.resultOk': '执行成功',
-  'app.kuaizhizao.flowDataGenerate.resultPartial': '执行结束（有错误）',
+  'app.kuaizhizao.flowDataGenerate.resultPartial': '执行结束（部分跳过）',
   'app.kuaizhizao.flowDataGenerate.emptyOrders': '暂无符合条件的已审核销售订单',
   'app.kuaizhizao.flowDataGenerate.colLabel': '步骤',
   'app.kuaizhizao.flowDataGenerate.colDocType': '单据类型',
   'app.kuaizhizao.flowDataGenerate.colDocCode': '单据号',
   'app.kuaizhizao.flowDataGenerate.colIssuedAt': '业务时间',
+  'app.kuaizhizao.flowDataGenerate.colFlowMode': '流转',
   'app.kuaizhizao.flowDataGenerate.colLogId': '操作日志',
   'app.kuaizhizao.flowDataGenerate.colStatus': '状态',
   'app.kuaizhizao.flowDataGenerate.colNote': '备注',
@@ -10622,7 +10628,7 @@ export default {
     '默认按该步骤预设角色随机取激活用户；也可指定人员、按部门随机、按工作小组随机、按工序派工/默认人员，或统一用当前登录用户。池内无人时回退当前用户。工序报工在随机类模式下会按批次轮换操作人池；「按工序指定人员」则按各工单工序派工解析。',
   'app.kuaizhizao.flowDataGenerate.reportingBatchCard': '工序报工分批',
   'app.kuaizhizao.flowDataGenerate.reportingBatchHint':
-    '每道工序将数量拆成多批报工：每批独立业务时间，操作人从报工角色池轮换（多角色更真实）。批次数在最小～最大之间随机，且不超过工单数量。',
+    '每道工序将数量拆成多批报工：同工序批次用步骤间隔；跨工序按「须完上道/可跳转」与标准工时推进时刻。操作人从报工角色池轮换。批次数在最小～最大之间随机，且不超过工单数量。',
   'app.kuaizhizao.flowDataGenerate.reportingBatchesMin': '报工最少批次数',
   'app.kuaizhizao.flowDataGenerate.reportingBatchesMax': '报工最多批次数',
   'app.kuaizhizao.flowDataGenerate.operatorMode.random_role': '按角色随机',
@@ -31060,6 +31066,10 @@ export default {
     '修复接入设备查看数据趋势图选点位后空白',
   'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.description':
     '趋势图 Tab 改为可见时再挂载图表并固定容器高度；数值字段兼容字符串小数；无数据时给出明确空态提示。',
+  'pages.dashboard.updateLog.entries.tenant-restore-dept-parent-fk-r01.title':
+    '修复租户备份恢复时部门树父级外键失败',
+  'pages.dashboard.updateLog.entries.tenant-restore-dept-parent-fk-r01.description':
+    '恢复导入后若父部门缺失或被孤儿清理删掉，重建 parent_id 外键会整单回滚。现改为对悬空自引用外键置空，并多轮清理普通孤儿引用。',
   'pages.dashboard.updateLog.entries.stocktaking-list-params-typo-r01.title':
     '修复库存盘点创建成功后列表看不到',
   'pages.dashboard.updateLog.entries.stocktaking-list-params-typo-r01.description':
