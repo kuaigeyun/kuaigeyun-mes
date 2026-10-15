@@ -76,4 +76,6 @@ updated: 2026-10-12
 
 业务单据选物料：`UniMaterialSelect` / `UniMaterialBatchPicker` 须走 reference-display（见 `uni-material-select-reference-display.md`），禁止直调 materials list 要求菜单 `:read`。
 
+轻办公考勤/人事车间产线：`apps/kuaioa/utils/oaWorkshopOptions.ts` → `searchReferenceDisplayAll`（`master-data:factory:workshop` / `production-line`）；禁止 `workshopApi.list`（仅有回显会空下拉）。
+
 取单通用：见 `features/pull-source-display-echo.md`（BE `require_read_or_display`；FE `loadPullSourceReferenceOptions`）。

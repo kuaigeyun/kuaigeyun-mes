@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaioa-attendance-workshop-display-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-attendance-workshop-display-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-attendance-workshop-display-r01.description',
+  },
+  {
+    id: 'infra-superadmin-user-preferences-fk-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.infra-superadmin-user-preferences-fk-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.infra-superadmin-user-preferences-fk-r01.description',
+  },
+  {
     id: 'numeric-precision-decimal-places-6-r01',
     date: '2026-10-15',
     type: 'improvement',

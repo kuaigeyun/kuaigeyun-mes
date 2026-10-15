@@ -31106,6 +31106,14 @@ export default {
     '导出追溯报告失败时显示可操作原因',
   'pages.dashboard.updateLog.entries.trace-report-pdf-error-tail-r01.description':
     '打印 PDF 子进程失败时直接展示 Traceback 末行根因（如未安装 Chromium），导出追溯报告的前端提示也优先保留错误尾部，避免只看到 runpy 堆栈开头。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-workshop-display-r01.title':
+    '修复考勤单车间下拉仅有回显权限时暂无数据',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-workshop-display-r01.description':
+    '轻办公考勤/人事车间与产线下拉改为走引用回显接口；仅授予车间「回显」即可选车间，无需车间管理菜单的查看权限。',
+  'pages.dashboard.updateLog.entries.infra-superadmin-user-preferences-fk-r01.title':
+    '修复平台超管写入个人偏好触发外键错误',
+  'pages.dashboard.updateLog.entries.infra-superadmin-user-preferences-fk-r01.description':
+    '平台超级管理员为虚拟身份，不再向 core_user_preferences 写入；个人偏好仅限租户用户，超管会话改用本机缓存，避免 user_id 外键冲突。',
   'pages.dashboard.updateLog.entries.numeric-precision-decimal-places-6-r01.title':
     '配置中心数量/单价/金额小数位扩至 0–6',
   'pages.dashboard.updateLog.entries.numeric-precision-decimal-places-6-r01.description':
