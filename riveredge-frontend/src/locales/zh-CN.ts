@@ -31106,6 +31106,10 @@ export default {
     '导出追溯报告失败时显示可操作原因',
   'pages.dashboard.updateLog.entries.trace-report-pdf-error-tail-r01.description':
     '打印 PDF 子进程失败时直接展示 Traceback 末行根因（如未安装 Chromium），导出追溯报告的前端提示也优先保留错误尾部，避免只看到 runpy 堆栈开头。',
+  'pages.dashboard.updateLog.entries.kuaioa-hr-employee-display-r01.title':
+    '人事单据选人支持员工档案回显权限',
+  'pages.dashboard.updateLog.entries.kuaioa-hr-employee-display-r01.description':
+    '请假、奖惩、岗位补贴、生活费预支、日考勤、休息夜班登记、个人薪酬与入离职登记等选人下拉改为引用回显接口；仅授予员工「回显」即可选人，无需员工档案菜单的查看权限。',
   'pages.dashboard.updateLog.entries.kuaioa-attendance-workshop-display-r01.title':
     '修复考勤单车间下拉仅有回显权限时暂无数据',
   'pages.dashboard.updateLog.entries.kuaioa-attendance-workshop-display-r01.description':

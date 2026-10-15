@@ -78,4 +78,6 @@ updated: 2026-10-12
 
 轻办公考勤/人事车间产线：`apps/kuaioa/utils/oaWorkshopOptions.ts` → `searchReferenceDisplayAll`（`master-data:factory:workshop` / `production-line`）；禁止 `workshopApi.list`（仅有回显会空下拉）。
 
+轻办公人事选人：`apps/kuaioa/utils/oaEmployeeOptions.ts` → `searchReferenceDisplayAll`（`kuaioa:employee`）；BE `apps/kuaioa/reference_display/setup.py` + manifest `reference_resources.employee`；禁止人事单据页直调 `listEmployees`（员工档案 CRUD 列表除外）。
+
 取单通用：见 `features/pull-source-display-echo.md`（BE `require_read_or_display`；FE `loadPullSourceReferenceOptions`）。
