@@ -44,6 +44,30 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'pull-source-display-echo-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.pull-source-display-echo-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.pull-source-display-echo-r01.description',
+  },
+  {
+    id: 'roles-permissions-remove-top-template-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.roles-permissions-remove-top-template-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.roles-permissions-remove-top-template-r01.description',
+  },
+  {
+    id: 'application-center-sync-menu-permission-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.application-center-sync-menu-permission-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.application-center-sync-menu-permission-r01.description',
+  },
+  {
     id: 'remove-equipment-spot-check-plan-r01',
     date: '2026-10-15',
     type: 'improvement',

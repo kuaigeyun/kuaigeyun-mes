@@ -17,7 +17,7 @@ from loguru import logger
 from tortoise.exceptions import FieldError
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_permission_codes
+from core.api.deps.access import require_permission_codes, require_read_or_display
 from core.ai.deps import AiAuth, get_ai_auth
 from core.utils.interactive_client_guard import (
     assert_allowed_sales_order_create,
@@ -331,7 +331,7 @@ SALES_ORDER_SORTABLE_FIELDS = frozenset({
 @router.get(
     "/shipment-notice-pull-lines",
     summary="Open sales order lines for shipment notice pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-order:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:sales-order"))],
 )
 async def list_shipment_notice_pull_lines(
     skip: int = Query(0, ge=0),

@@ -37,7 +37,7 @@ from apps.kuaizhizao.schemas.demand_computation import (
     FirmPlannedOrdersRequest,
     FirmPlannedOrdersResponse,
 )
-from core.api.deps.access import require_permission_codes
+from core.api.deps.access import require_permission_codes, require_read_or_display
 from apps.kuaizhizao.schemas.demand_replanning import (
     DemandChangeEventCreateRequest,
     DemandReplanTaskExecuteRequest,
@@ -80,7 +80,7 @@ async def create_computation(
 @router.get(
     "/purchase-requisition-pull-lines",
     summary="Open buy lines for purchase requisition pull",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:read"))],
+    dependencies=[Depends(require_read_or_display("kuaizhizao:plan-management-demand-computation"))],
 )
 async def list_purchase_requisition_pull_lines(
     skip: int = Query(0, ge=0),

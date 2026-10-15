@@ -30850,12 +30850,12 @@ export default {
   'pages.system.roles.copySourceFailed': '获取源角色权限失败',
   'pages.system.roles.searchRole': '搜索角色',
   'pages.system.roles.createRole': '新建角色',
-  'pages.system.roles.expandAll': '一键展开',
-  'pages.system.roles.collapseAll': '一键折叠',
+  'pages.system.roles.expandAll': '展开',
+  'pages.system.roles.collapseAll': '折叠',
   'pages.system.roles.systemRole': '系统角色',
   'pages.system.roles.disabledRole': '已禁用',
   'pages.system.roles.selectRoleHint': '请从左侧选择一个角色',
-  'pages.system.roles.copyFromRole': '从角色复制',
+  'pages.system.roles.copyFromRole': '复制',
   'pages.system.roles.savePermissions': '保存权限',
   'pages.system.roles.roleDescription': '备注：',
   'pages.system.roles.noDescription': '暂无备注',
@@ -31105,6 +31105,18 @@ export default {
     '修复接入设备查看数据趋势图选点位后空白',
   'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.description':
     '趋势图 Tab 改为可见时再挂载图表并固定容器高度；数值字段兼容字符串小数；无数据时给出明确空态提示。',
+  'pages.dashboard.updateLog.entries.pull-source-display-echo-r01.title':
+    '取单通用：来源单据回显即可，不必开查看',
+  'pages.dashboard.updateLog.entries.pull-source-display-echo-r01.description':
+    '全站 pull-lines 候选接口改为来源单据查看或回显任一即可；筛选下拉与仓库选项走引用回显。出入库快捷取单已接入，其它取单页按同一契约接入即可。',
+  'pages.dashboard.updateLog.entries.roles-permissions-remove-top-template-r01.title':
+    '角色管理中栏去掉顶部应用权限模板',
+  'pages.dashboard.updateLog.entries.roles-permissions-remove-top-template-r01.description':
+    '角色权限编辑区顶部不再展示「应用权限模板」下拉；查看者/编辑者/管理者等仍可在功能权限列表工具条使用。',
+  'pages.dashboard.updateLog.entries.application-center-sync-menu-permission-r01.title':
+    '修复应用中心一键同步菜单误报专业版权限',
+  'pages.dashboard.updateLog.entries.application-center-sync-menu-permission-r01.description':
+    '菜单同步改用应用更新或菜单更新权限，与安装/激活专业版解耦；本节点未 compose 的专业应用跳过，不影响基础与定制应用同步。',
   'pages.dashboard.updateLog.entries.remove-equipment-spot-check-plan-r01.title':
     '拆除设备点检计划，点检仍走点检单与方案绑定',
   'pages.dashboard.updateLog.entries.remove-equipment-spot-check-plan-r01.description':

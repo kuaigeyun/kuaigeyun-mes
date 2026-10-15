@@ -4,15 +4,15 @@ import { App, Select } from 'antd';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import {
   UniPullQueryModal,
+  PULL_SOURCE_REFERENCE,
   isPullableScope,
+  loadPullSourceReferenceOptions,
+  loadPullWarehouseReferenceOptions,
   renderPullCapabilityTag,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { listPurchaseOrders } from '../../../services/purchase';
 import { formatQuantity } from '../../../../../utils/format';
-import { listSalesOrders } from '../../../services/sales-order';
-import { receiptNoticeApi } from '../../../services/receipt-notice';
 import {
   warehouseApi,
   type OutsourceInboundPullLine,
@@ -23,15 +23,12 @@ import {
   type WorkOrderFinishedGoodsPullLine,
 } from '../../../services/warehouse-execution';
 import { qualityApi } from '../../../services/quality-execution';
-import {
-  workOrderApi,
-  outsourceWorkOrderApi,
-} from '../../../services/production';
-import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { type InboundOutsourcePullType } from './inboundCreateConfig';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { qualityInspectionCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
+
+const INBOUND_HOST_RESOURCE = 'kuaizhizao:inbound';
 
 export type {
   InboundPullDirectConfirmTarget,
@@ -164,30 +161,17 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
         setPullSourceOrderId(undefined);
         setPoPullLineWh({});
         setPoPullBatchWarehouseId(undefined);
-        void listPurchaseOrders({ skip: 0, limit: 100 })
-          .then((res) => {
-            setPullSourceOrderOptions(
-              (res?.data ?? [])
-                .filter((row) => row.id != null && row.order_code)
-                .map((row) => ({ value: row.id!, label: String(row.order_code) })),
-            );
-          })
+        void loadPullSourceReferenceOptions({
+          resource: PULL_SOURCE_REFERENCE.purchaseOrder,
+          hostResource: INBOUND_HOST_RESOURCE,
+        })
+          .then(setPullSourceOrderOptions)
           .catch((error: unknown) => {
             messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.po.loadSourceFailed')));
             setPullSourceOrderOptions([]);
           });
-        void masterWarehouseApi
-          .list({ is_active: true, limit: 500 })
-          .then((whRes) => {
-            const whList = Array.isArray(whRes) ? whRes : (whRes as { items?: unknown[] })?.items ?? [];
-            setPoPullWarehouseOptions(
-              (Array.isArray(whList) ? whList : []).map((w) => {
-                const row = w as { id: number; code?: string; name?: string };
-                const label = `${row.code || ''} ${row.name || ''}`.trim() || String(row.id);
-                return { label, value: row.id };
-              }),
-            );
-          })
+        void loadPullWarehouseReferenceOptions(INBOUND_HOST_RESOURCE)
+          .then(setPoPullWarehouseOptions)
           .catch((error: unknown) => {
             messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.po.loadWarehouseFailed')));
             setPoPullWarehouseOptions([]);
@@ -315,19 +299,11 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
       onOpen: () => {
         pullSourceNoticeIdRef.current = undefined;
         setPullSourceNoticeId(undefined);
-        void receiptNoticeApi.list({ skip: 0, limit: 100 })
-          .then((res) => {
-            const rows = Array.isArray((res as { data?: Array<{ id?: number; notice_code?: string }> })?.data)
-              ? (res as { data: Array<{ id?: number; notice_code?: string }> }).data
-              : Array.isArray(res)
-                ? (res as Array<{ id?: number; notice_code?: string }>)
-                : [];
-            setPullSourceNoticeOptions(
-              rows
-                .filter((row) => row.id != null && row.notice_code)
-                .map((row) => ({ value: row.id!, label: String(row.notice_code) })),
-            );
-          })
+        void loadPullSourceReferenceOptions({
+          resource: PULL_SOURCE_REFERENCE.receiptNotice,
+          hostResource: INBOUND_HOST_RESOURCE,
+        })
+          .then(setPullSourceNoticeOptions)
           .catch((error: unknown) => {
             messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.loadSourceFailed')));
             setPullSourceNoticeOptions([]);
@@ -391,21 +367,11 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
       onOpen: () => {
         pullSourceWorkOrderIdRef.current = undefined;
         setPullSourceWorkOrderId(undefined);
-        void workOrderApi.list({ skip: 0, limit: 100 })
-          .then((res) => {
-            const rows = Array.isArray((res as { data?: Array<{ id?: number; code?: string }> })?.data)
-              ? (res as { data: Array<{ id?: number; code?: string }> }).data
-              : Array.isArray((res as { items?: Array<{ id?: number; code?: string }> })?.items)
-                ? (res as { items: Array<{ id?: number; code?: string }> }).items
-                : Array.isArray(res)
-                  ? (res as Array<{ id?: number; code?: string }>)
-                  : [];
-            setPullSourceWorkOrderOptions(
-              rows
-                .filter((row) => row.id != null && row.code)
-                .map((row) => ({ value: row.id!, label: String(row.code) })),
-            );
-          })
+        void loadPullSourceReferenceOptions({
+          resource: PULL_SOURCE_REFERENCE.workOrder,
+          hostResource: INBOUND_HOST_RESOURCE,
+        })
+          .then(setPullSourceWorkOrderOptions)
           .catch((error: unknown) => {
             messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.workOrder.loadSourceFailed')));
             setPullSourceWorkOrderOptions([]);
@@ -469,21 +435,11 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
       onOpen: () => {
         pullSourceReturnWorkOrderIdRef.current = undefined;
         setPullSourceReturnWorkOrderId(undefined);
-        void workOrderApi.list({ skip: 0, limit: 100 })
-          .then((res) => {
-            const rows = Array.isArray((res as { data?: Array<{ id?: number; code?: string }> })?.data)
-              ? (res as { data: Array<{ id?: number; code?: string }> }).data
-              : Array.isArray((res as { items?: Array<{ id?: number; code?: string }> })?.items)
-                ? (res as { items: Array<{ id?: number; code?: string }> }).items
-                : Array.isArray(res)
-                  ? (res as Array<{ id?: number; code?: string }>)
-                  : [];
-            setPullSourceWorkOrderOptions(
-              rows
-                .filter((row) => row.id != null && row.code)
-                .map((row) => ({ value: row.id!, label: String(row.code) })),
-            );
-          })
+        void loadPullSourceReferenceOptions({
+          resource: PULL_SOURCE_REFERENCE.workOrder,
+          hostResource: INBOUND_HOST_RESOURCE,
+        })
+          .then(setPullSourceWorkOrderOptions)
           .catch((error: unknown) => {
             messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.productionReturn.loadSourceFailed')));
             setPullSourceWorkOrderOptions([]);
@@ -547,17 +503,11 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
       onOpen: () => {
         pullSourceSalesOrderIdRef.current = undefined;
         setPullSourceSalesOrderId(undefined);
-        void listSalesOrders({ skip: 0, limit: 100 })
-          .then((res) => {
-            const rows = Array.isArray((res as { data?: Array<{ id?: number; order_code?: string }> })?.data)
-              ? (res as { data: Array<{ id?: number; order_code?: string }> }).data
-              : [];
-            setPullSourceSalesOrderOptions(
-              rows
-                .filter((row) => row.id != null && row.order_code)
-                .map((row) => ({ value: row.id!, label: String(row.order_code) })),
-            );
-          })
+        void loadPullSourceReferenceOptions({
+          resource: PULL_SOURCE_REFERENCE.salesOrder,
+          hostResource: INBOUND_HOST_RESOURCE,
+        })
+          .then(setPullSourceSalesOrderOptions)
           .catch((error: unknown) => {
             messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.salesReturn.loadSourceFailed')));
             setPullSourceSalesOrderOptions([]);
@@ -621,19 +571,11 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
       onOpen: () => {
         pullSourceOutsourceIdRef.current = undefined;
         setPullSourceOutsourceId(undefined);
-        void outsourceWorkOrderApi.list({ skip: 0, limit: 100 })
-          .then((res) => {
-            const rows = Array.isArray((res as { data?: Array<{ id?: number; code?: string }> })?.data)
-              ? (res as { data: Array<{ id?: number; code?: string }> }).data
-              : Array.isArray(res)
-                ? (res as Array<{ id?: number; code?: string }>)
-                : [];
-            setPullSourceOutsourceOptions(
-              rows
-                .filter((row) => row.id != null && row.code)
-                .map((row) => ({ value: row.id!, label: String(row.code) })),
-            );
-          })
+        void loadPullSourceReferenceOptions({
+          resource: PULL_SOURCE_REFERENCE.outsourceWorkOrder,
+          hostResource: INBOUND_HOST_RESOURCE,
+        })
+          .then(setPullSourceOutsourceOptions)
           .catch((error: unknown) => {
             messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.outsource.loadSourceFailed')));
             setPullSourceOutsourceOptions([]);

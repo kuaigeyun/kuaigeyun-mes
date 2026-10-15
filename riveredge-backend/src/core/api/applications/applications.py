@@ -24,6 +24,8 @@ import json
 from pathlib import Path
 from core.api.deps.deps import get_current_tenant
 from core.api.deps.access import AuthContext, get_auth_context
+from core.services.authorization.access_control_service import AccessControlService
+from core.services.authorization.menu_resource_resolver import parse_permission_code
 from core.utils.timezone_utils import now_utc, to_api_isoformat
 from core.services.application.application_dedicated_binding_service import ApplicationDedicatedBindingService
 from core.schemas.system_parameter import SystemParameterCreate, SystemParameterUpdate
@@ -46,6 +48,42 @@ def _require_tenant_or_platform_admin(auth: AuthContext) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="仅组织管理员或平台管理员可安装、卸载应用或激活专业版授权。",
         )
+
+
+_MENU_SYNC_PERMISSION_CODES = (
+    "system:application:update",
+    "system:menu:update",
+)
+
+
+async def _require_application_menu_sync_access(
+    auth: AuthContext,
+    tenant_id: int,
+) -> None:
+    """菜单同步与安装/专业版授权分离；未 compose 的专业应用由服务层跳过。"""
+    if auth.is_infra_admin or auth.is_tenant_admin:
+        return
+    for perm in _MENU_SYNC_PERMISSION_CODES:
+        parsed = parse_permission_code(perm)
+        if not parsed:
+            continue
+        app_code, module, action = parsed
+        decision = await AccessControlService.check_access(
+            user_id=auth.user_id,
+            tenant_id=tenant_id,
+            resource=f"{app_code}:{module}",
+            action=action,
+            is_infra_admin=auth.is_infra_admin,
+            is_tenant_admin=auth.is_tenant_admin,
+            check_abac=False,
+            required_permissions=[perm],
+        )
+        if decision.allowed:
+            return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="需要组织管理员、平台管理员，或具备应用更新/菜单更新权限方可同步菜单。",
+    )
 
 
 def _require_platform_admin(auth: AuthContext) -> None:
@@ -488,7 +526,7 @@ async def get_menu_sync_status(
     租户/平台管理员登录后用于提示是否需要执行「一键同步菜单」。
     必须注册在 /{uuid} 之前，否则 path 会被当成应用 UUID。
     """
-    _require_tenant_or_platform_admin(auth)
+    await _require_application_menu_sync_access(auth, tenant_id)
     return await ApplicationService.get_menu_sync_status(tenant_id)
 
 
@@ -502,7 +540,7 @@ async def sync_all_manifests_and_menus(
 
     应用中心「一键同步菜单」专用，避免前端按应用串行请求。
     """
-    _require_tenant_or_platform_admin(auth)
+    await _require_application_menu_sync_access(auth, tenant_id)
     result = await ApplicationService.sync_all_manifests_and_menus(tenant_id)
     return result
 

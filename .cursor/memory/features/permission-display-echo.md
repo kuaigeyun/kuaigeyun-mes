@@ -75,3 +75,5 @@ updated: 2026-10-12
 ## 关联 UI
 
 业务单据选物料：`UniMaterialSelect` / `UniMaterialBatchPicker` 须走 reference-display（见 `uni-material-select-reference-display.md`），禁止直调 materials list 要求菜单 `:read`。
+
+取单通用：见 `features/pull-source-display-echo.md`（BE `require_read_or_display`；FE `loadPullSourceReferenceOptions`）。
