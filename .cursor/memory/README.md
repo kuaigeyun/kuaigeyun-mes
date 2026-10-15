@@ -84,7 +84,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | riveredge-app 组装、mklink、工位/TV/小程序私仓 | `features/riveredge-app-client-junctions.md` |
 | kuaicaiwu receivable ModuleNotFound、compose 空壳、external_master_data_sync | `features/compose-kuaicaiwu-empty-husk.md` |
 | 个性化主题保存后又暗、偏好与标签互相冲掉、jsonb merge | `features/user-preference-atomic-merge.md` |
-| 回显权限、display、reference_resources 单一真源、预设角色物料回显 | `features/permission-display-echo.md` |
+| 回显权限、display、reference_resources、轻办公人事选人/车间回显、预设角色物料回显 | `features/permission-display-echo.md` |
 | 取单 403、pull-lines 要不要开查看、来源筛选项直调 list | `features/pull-source-display-echo.md` |
 | 采购合计取舍、单价 0.195 合计 0.20、DocumentAmountSummary | `features/document-amount-summary-precision.md` |
 | 数值精度、数量/单价/金额小数位、0–6、configTree max | `features/numeric-precision-decimal-places-6.md` |
