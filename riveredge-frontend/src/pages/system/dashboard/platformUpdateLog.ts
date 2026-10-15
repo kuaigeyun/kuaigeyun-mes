@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'other-expense-edit-lines-amount-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.other-expense-edit-lines-amount-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-expense-edit-lines-amount-r01.description',
+  },
+  {
     id: 'funide-oa-rd-archive-merge-module-r01',
     date: '2026-10-15',
     type: 'fix',

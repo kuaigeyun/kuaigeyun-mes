@@ -167,11 +167,15 @@ class OtherIncomeService(AppBaseService[OtherIncome]):
             raise NotFoundError(f"其他费用收入单不存在: {income_id}")
         assert_other_income_capability(head, "update")
         dump = data.model_dump(exclude_unset=True)
-        lines = dump.pop("lines", None)
+        # 明细须用 schema 实例校验；model_dump 后的 dict 无 .amount
+        lines_provided = "lines" in dump
+        dump.pop("lines", None)
         user = await self.get_user_info(updated_by)
         async with in_transaction():
-            if lines is not None:
-                total, line_rows = await self._sum_and_validate_lines(tenant_id, lines)
+            if lines_provided:
+                if not data.lines:
+                    raise ValidationError("至少一行明细")
+                total, line_rows = await self._sum_and_validate_lines(tenant_id, data.lines)
                 await OtherIncomeLine.filter(
                     tenant_id=tenant_id, other_income_id=income_id
                 ).delete()

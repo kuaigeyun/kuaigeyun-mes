@@ -167,11 +167,15 @@ class OtherExpenseService(AppBaseService[OtherExpense]):
             raise NotFoundError(f"其他费用支出单不存在: {expense_id}")
         assert_other_expense_capability(head, "update")
         dump = data.model_dump(exclude_unset=True)
-        lines = dump.pop("lines", None)
+        # 明细须用 schema 实例校验；model_dump 后的 dict 无 .amount
+        lines_provided = "lines" in dump
+        dump.pop("lines", None)
         user = await self.get_user_info(updated_by)
         async with in_transaction():
-            if lines is not None:
-                total, line_rows = await self._sum_and_validate_lines(tenant_id, lines)
+            if lines_provided:
+                if not data.lines:
+                    raise ValidationError("至少一行明细")
+                total, line_rows = await self._sum_and_validate_lines(tenant_id, data.lines)
                 await OtherExpenseLine.filter(
                     tenant_id=tenant_id, other_expense_id=expense_id
                 ).delete()

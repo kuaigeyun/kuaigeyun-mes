@@ -5505,6 +5505,11 @@ export default {
   'app.kuaiplm.bomCollab.actions.enter': '文员录入',
   'app.kuaiplm.bomCollab.actions.downloadTemplate': '下载填写模板',
   'app.kuaiplm.bomCollab.actions.importExcel': 'Excel导入',
+  'app.kuaiplm.bomCollab.actions.importKingdeeBom': '导入ERP多级BOM',
+  'app.kuaiplm.bomCollab.hints.kingdeeMultilevelImport':
+    '识别「BOM多级展开」工作表，按位号与线路板子树拆分到电子/结构分区',
+  'app.kuaiplm.bomCollab.messages.kingdeeFullImported':
+    '已导入 ERP 多级 BOM：电子 {{electronics}} 行，结构 {{structure}} 行',
   'app.kuaiplm.bomCollab.messages.submitSuccess': '已提交审核',
   'app.kuaiplm.bomCollab.messages.approveSuccess': '审核通过',
   'app.kuaiplm.bomCollab.messages.rejectSuccess': '已驳回',
@@ -31325,6 +31330,10 @@ export default {
     '项目建议书供应商评审改为选填',
   'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-optional-r01.description':
     'funide-oa 项目建议书在开发要求为 D/E/F 类时，提交审核不再强制完整填写供应商评审表，可按需补填。',
+  'pages.dashboard.updateLog.entries.funide-oa-bom-collab-kingdee-import-r01.title':
+    'BOM 协同支持 ERP 多级 BOM 整表导入',
+  'pages.dashboard.updateLog.entries.funide-oa-bom-collab-kingdee-import-r01.description':
+    '新建 BOM 协同时可上传金蝶「BOM多级展开」Excel，自动映射层次、子项料号、规格、用量、位号与小米料号，并按位号与线路板子树拆入电子/结构分区。',
   'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-label-r01.title':
     '体系预置交付物类型列显示中文名称',
   'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-label-r01.description':
@@ -31477,6 +31486,10 @@ export default {
     '付款申请可要求上传付款凭证',
   'pages.dashboard.updateLog.entries.payment-require-voucher-r01.description':
     '新建付款申请时可勾选「是否需要上传付款凭证」；开启后，由该申请生成的付款单在确认过账前必须上传付款凭证，未开启则仍可自行决定是否上传。',
+  'pages.dashboard.updateLog.entries.other-expense-edit-lines-amount-r01.title':
+    '修复编辑其他费用收支保存报错',
+  'pages.dashboard.updateLog.entries.other-expense-edit-lines-amount-r01.description':
+    '编辑其他费用支出/收入并保存明细时，不再因明细被转成字典后误读金额字段而报错，可正常保存。',
   'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.title':
     '定制 OA 研发项目列表可正常打开',
   'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.description':
