@@ -200,7 +200,13 @@ class OtherIncomeService(AppBaseService[OtherIncome]):
         await head.save()
 
     async def submit_income(
-        self, tenant_id: int, income_id: int, user_id: int
+        self,
+        tenant_id: int,
+        income_id: int,
+        user_id: int,
+        *,
+        selected_approver_user_ids: Optional[List[int]] = None,
+        selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
     ) -> OtherIncomeResponse:
         head = await OtherIncome.get_or_none(
             tenant_id=tenant_id, id=income_id, deleted_at__isnull=True
@@ -211,28 +217,42 @@ class OtherIncomeService(AppBaseService[OtherIncome]):
         audit_required = await self._config.check_audit_required(tenant_id, "other_income")
         user = await self.get_user_info(user_id)
         if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.services.approval.audit_flow_guard import (
+                approval_instance_finished_on_submit,
+                start_document_approval_or_raise,
+            )
 
-            inst = await ApprovalInstanceService.start_approval_for_node(
+            instance = await start_document_approval_or_raise(
                 tenant_id=tenant_id,
                 user_id=user_id,
                 node_key="other_income",
                 entity_type="other_income",
-                entity_id=head.id,
+                entity_id=int(head.id),
                 entity_uuid=str(head.uuid),
                 title=f"其他费用收入审批: {head.income_code}",
                 content=f"金额: {head.total_amount}",
+                doc_label="其他费用收入",
+                selected_approver_user_ids=selected_approver_user_ids,
+                selected_approver_by_node=selected_approver_by_node,
             )
-            if not inst:
-                raise BusinessLogicError("审核已开启但未找到可用审批流程")
             head.status = "PendingReview"
-        else:
-            head.status = "Approved"
+            head.updated_by = user_id
+            head.updated_by_name = user["name"]
+            await head.save()
+            if approval_instance_finished_on_submit(instance):
+                return await self.approve_income(
+                    tenant_id,
+                    income_id,
+                    approved=True,
+                    operator_id=user_id,
+                )
+            return await self.get_by_id(tenant_id, income_id)
+
+        head.status = "Approved"
         head.updated_by = user_id
         head.updated_by_name = user["name"]
         await head.save()
-        if head.status == "Approved":
-            await self._on_income_approved(tenant_id, head, user_id)
+        await self._on_income_approved(tenant_id, head, user_id)
         return await self.get_by_id(tenant_id, income_id)
 
     async def _on_income_approved(

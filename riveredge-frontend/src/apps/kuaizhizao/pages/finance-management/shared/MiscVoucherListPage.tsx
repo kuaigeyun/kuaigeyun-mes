@@ -27,6 +27,7 @@ import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { formatCurrencyAmount } from '../../../../../utils/format';
@@ -280,6 +281,26 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
       approve: (id: number) => service.approve(id),
     }),
     [service],
+  );
+
+  const miscWorkflowStatuses = useMemo(
+    () => ({
+      draftStatuses: ['Draft', '草稿'],
+      pendingStatuses: ['PendingReview', '待审核'],
+      approvedStatuses: ['Approved', 'Confirmed', '已审核', '已确认'],
+      rejectedStatuses: ['Rejected', '已驳回'],
+    }),
+    [],
+  );
+
+  const reloadAfterWorkflow = useCallback(
+    (rowId?: number) => {
+      actionRef.current?.reload();
+      if (detailOpen && detailRow?.id != null && (rowId == null || detailRow.id === rowId)) {
+        void service.get(detailRow.id).then(setDetailRow).catch(() => {});
+      }
+    },
+    [detailOpen, detailRow?.id, service],
   );
 
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
@@ -644,42 +665,19 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                   <Button key="edit" {...rowActionKind('update')} onClick={() => void openEdit(row)} />,
                 );
               }
-              if (perms.canAction?.('submit') && capAllowed(row, 'submit')) {
-                nodes.push(
-                  <ActionConfirmPopconfirm
-                    key="submit"
-                    title={t(`${i18nPrefix}.submitConfirmTitle`)}
-                    description={t(`${i18nPrefix}.submitConfirmDesc`, { code })}
-                    onConfirm={() => void runAction(t(`${i18nPrefix}.submit`), () => service.submit(row.id))}
-                  >
-                    <Button {...rowActionKind('submit')} onClick={(e) => e.stopPropagation()} />
-                  </ActionConfirmPopconfirm>,
-                );
-              }
-              if (perms.canAction?.('approve') && capAllowed(row, 'approve')) {
-                nodes.push(
-                  <ActionConfirmPopconfirm
-                    key="approve"
-                    title={t(`${i18nPrefix}.approveConfirmTitle`)}
-                    description={t(`${i18nPrefix}.approveConfirmDesc`, { code })}
-                    onConfirm={() => void runAction(t(`${i18nPrefix}.approve`), () => service.approve(row.id))}
-                  >
-                    <Button {...rowActionKind('audit')} onClick={(e) => e.stopPropagation()} />
-                  </ActionConfirmPopconfirm>,
-                );
-              }
-              if (perms.canAction?.('reject') && capAllowed(row, 'reject')) {
-                nodes.push(
-                  <ActionConfirmPopconfirm
-                    key="reject"
-                    title={t(`${i18nPrefix}.rejectConfirmTitle`)}
-                    description={t(`${i18nPrefix}.rejectConfirmDesc`, { code })}
-                    onConfirm={() => void runAction(t('components.uniAction.reject'), () => service.reject(row.id))}
-                  >
-                    <Button {...rowActionKind('reject')} onClick={(e) => e.stopPropagation()} />
-                  </ActionConfirmPopconfirm>,
-                );
-              }
+              nodes.push(
+                <span {...rowActionKind('skip')} key="wf">
+                  <UniWorkflowActions
+                    {...rowActionKind('skip')}
+                    record={row}
+                    entityType={auditEntityType}
+                    entityName={t(menuTitleKey)}
+                    statusField="status"
+                    {...miscWorkflowStatuses}
+                    onSuccess={() => reloadAfterWorkflow(row.id)}
+                  />
+                </span>,
+              )
               const pushAction = kind === 'income' ? 'push_receipt' : 'push_payment';
               const pushLabel =
                 kind === 'income' ? t('app.kuaicaiwu.otherIncome.pushReceipt') : t('app.kuaicaiwu.otherExpense.pushPayment');
@@ -751,7 +749,23 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [codeField, i18nPrefix, miscStatusEnum, openDetail, openEdit, perms, renderMiscStatusTag, runAction, service, t],
+    [
+      auditEntityType,
+      codeField,
+      i18nPrefix,
+      kind,
+      menuTitleKey,
+      miscStatusEnum,
+      miscWorkflowStatuses,
+      openDetail,
+      openEdit,
+      perms,
+      reloadAfterWorkflow,
+      renderMiscStatusTag,
+      runAction,
+      service,
+      t,
+    ],
   );
 
   const createButtonText = t(`${i18nPrefix}.createButton`);
@@ -1019,6 +1033,20 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         title={detailRow ? resolveDocCode(detailRow, codeField) : ''}
         loading={detailLoading}
+        extra={
+          detailRow ? (
+            <UniWorkflowActions
+              record={detailRow}
+              entityType={auditEntityType}
+              entityName={t(menuTitleKey)}
+              statusField="status"
+              {...miscWorkflowStatuses}
+              theme="default"
+              size="middle"
+              onSuccess={() => reloadAfterWorkflow(detailRow.id)}
+            />
+          ) : null
+        }
       >
         {detailRow && (
           <>

@@ -1327,12 +1327,21 @@ async def _dispatch_other_income(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.kuaizhizao.services.other_income_service import OtherIncomeService
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     svc = OtherIncomeService()
     if action == "submit":
-        return await svc.submit_income(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_income(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "approve":
         return await svc.approve_income(
             tenant_id, entity_id, approved=True, operator_id=user_id
@@ -1359,12 +1368,21 @@ async def _dispatch_other_expense(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.kuaizhizao.services.other_expense_service import OtherExpenseService
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     svc = OtherExpenseService()
     if action == "submit":
-        return await svc.submit_expense(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_expense(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "approve":
         return await svc.approve_expense(
             tenant_id, entity_id, approved=True, operator_id=user_id

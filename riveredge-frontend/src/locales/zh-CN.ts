@@ -31330,6 +31330,10 @@ export default {
     '项目建议书供应商评审改为选填',
   'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-optional-r01.description':
     'funide-oa 项目建议书在开发要求为 D/E/F 类时，提交审核不再强制完整填写供应商评审表，可按需补填。',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-submit-r01.title':
+    '项目建议书未填供应商可提交审核',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-submit-r01.description':
+    '修复 funide-oa 租户提交项目建议书时仍提示「提交前须由采购填写供应商」的问题，提交接口已接入定制选填策略。',
   'pages.dashboard.updateLog.entries.funide-oa-bom-collab-kingdee-import-r01.title':
     'BOM 协同支持 ERP 多级 BOM 整表导入',
   'pages.dashboard.updateLog.entries.funide-oa-bom-collab-kingdee-import-r01.description':
@@ -31486,6 +31490,10 @@ export default {
     '付款申请可要求上传付款凭证',
   'pages.dashboard.updateLog.entries.payment-require-voucher-r01.description':
     '新建付款申请时可勾选「是否需要上传付款凭证」；开启后，由该申请生成的付款单在确认过账前必须上传付款凭证，未开启则仍可自行决定是否上传。',
+  'pages.dashboard.updateLog.entries.other-expense-submit-approver-snapshot-r01.title':
+    '修复其他费用收支提交审核须选审批人',
+  'pages.dashboard.updateLog.entries.other-expense-submit-approver-snapshot-r01.description':
+    '审批流配置为发起时勾选审批人时，其他费用支出/收入提交会弹出选人并写入人员快照，不再报缺少快照而无法提交。',
   'pages.dashboard.updateLog.entries.other-expense-edit-lines-amount-r01.title':
     '修复编辑其他费用收支保存报错',
   'pages.dashboard.updateLog.entries.other-expense-edit-lines-amount-r01.description':
