@@ -90,19 +90,23 @@ const UniFlowNode: React.FC<UniFlowNodeProps> = ({ type, data, selected }) => {
   const isWide = type !== 'start' && type !== 'end';
 
   return (
-    <div style={{ 
-      width: isWide ? 220 : 120, 
-      position: 'relative',
-      filter: selected ? `drop-shadow(0 0 8px ${color}33)` : 'none',
-      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-    }}>
+    <div
+      style={{
+        width: isWide ? 220 : 120,
+        position: 'relative',
+        // 禁止 filter/transform：会破坏 React Flow Handle 坐标，导致连线悬空
+        transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+      }}
+    >
       <div style={{
         background: token.colorBgContainer,
         borderRadius: token.borderRadiusLG,
         border: `1px solid ${selected ? color : token.colorBorderSecondary}`,
-        boxShadow: selected ? `0 0 0 2px ${color}22, ${token.boxShadowSecondary}` : token.boxShadowTertiary,
+        boxShadow: selected
+          ? `0 0 0 2px ${color}22, ${token.boxShadowSecondary}`
+          : token.boxShadowTertiary,
         overflow: 'hidden',
-        transition: 'all 0.3s ease',
+        transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
       }}>
         {/* Header - 带有色块指示器 */}
         <div style={{
@@ -174,7 +178,10 @@ const UniFlowNode: React.FC<UniFlowNodeProps> = ({ type, data, selected }) => {
         )}
       </div>
 
-      {/* Handles - 连接点优化 */}
+      {/*
+        Handle 位置交给 React Flow（Bottom/Top + 内置 translate），
+        禁止再写 top/bottom 负值，否则会与默认偏移叠加导致手柄/连线悬空。
+      */}
       {type !== 'end' && (
         <Handle
           type="source"
@@ -184,9 +191,8 @@ const UniFlowNode: React.FC<UniFlowNodeProps> = ({ type, data, selected }) => {
             border: `2px solid ${token.colorBgContainer}`,
             width: 10,
             height: 10,
-            bottom: -5,
             zIndex: 10,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
           }}
         />
       )}
@@ -199,9 +205,8 @@ const UniFlowNode: React.FC<UniFlowNodeProps> = ({ type, data, selected }) => {
             border: `2px solid ${token.colorBgContainer}`,
             width: 10,
             height: 10,
-            top: -5,
             zIndex: 10,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
           }}
         />
       )}

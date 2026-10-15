@@ -548,11 +548,12 @@ class CustomerFollowUpService:
         scope = str(market_scope or "").strip().lower()
         if not scope:
             return query
-        ids = await Customer.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            market_scope=scope,
-        ).values_list("id", flat=True)
+        customer_filter = Customer.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if scope == "crm":
+            customer_filter = customer_filter.filter(market_scope__in=["export", "domestic"])
+        else:
+            customer_filter = customer_filter.filter(market_scope=scope)
+        ids = await customer_filter.values_list("id", flat=True)
         id_list = list(ids)
         if not id_list:
             return None
@@ -602,9 +603,12 @@ class CustomerFollowUpService:
         customer_query = Customer.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
-            market_scope=scope,
             salesman_id__isnull=False,
         )
+        if scope == "crm":
+            customer_query = customer_query.filter(market_scope__in=["export", "domestic"])
+        elif scope:
+            customer_query = customer_query.filter(market_scope=scope)
         customer_query = await DataScopeService.apply(
             customer_query,
             tenant_id=tenant_id,
@@ -842,8 +846,11 @@ class CustomerFollowUpService:
         follow_up_records_total = len(rows)
 
         customer_query = Customer.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if market_scope and str(market_scope).strip():
-            customer_query = customer_query.filter(market_scope=str(market_scope).strip().lower())
+        scope_token = str(market_scope or "").strip().lower()
+        if scope_token == "crm":
+            customer_query = customer_query.filter(market_scope__in=["export", "domestic"])
+        elif scope_token:
+            customer_query = customer_query.filter(market_scope=scope_token)
         if owned_by_user_id is not None:
             owner_ids = await cls._owner_customer_ids(tenant_id, owned_by_user_id, market_scope)
             if not owner_ids:

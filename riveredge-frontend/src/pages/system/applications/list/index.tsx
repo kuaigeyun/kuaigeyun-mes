@@ -315,6 +315,10 @@ const ApplicationListPage: React.FC = () => {
   const [proKeySubmitting, setProKeySubmitting] = useState(false);
   const [proKeyTargetApp, setProKeyTargetApp] = useState<Application | null>(null);
   const [pendingEnableAfterActivation, setPendingEnableAfterActivation] = useState(false);
+  /** 启用/禁用进行中的应用 uuid；用于 Switch loading，避免重复点击 */
+  const [togglingActiveUuid, setTogglingActiveUuid] = useState<string | null>(null);
+  /** 开关成功后的乐观状态，列表 reload 完成前避免开关弹回 */
+  const [activeOverrides, setActiveOverrides] = useState<Record<string, boolean>>({});
   const [resetModalVisible, setResetModalVisible] = useState(false);
   const [resetTargetApp, setResetTargetApp] = useState<Application | null>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
@@ -681,24 +685,40 @@ const ApplicationListPage: React.FC = () => {
       showProPlaceholderHelp(record);
       return;
     }
+    if (togglingActiveUuid) {
+      return;
+    }
+    if (checked) {
+      const isProApp = requiresProLicense(record);
+      if (isProApp && record.can_access === false) {
+        openProLicenseKeyModal(record, true);
+        return;
+      }
+    }
     try {
+      setTogglingActiveUuid(record.uuid);
       if (checked) {
-        const isProApp = requiresProLicense(record);
-        if (isProApp && record.can_access === false) {
-          openProLicenseKeyModal(record, true);
-          return;
-        }
-
         await enableApplication(record.uuid);
         messageApi.success(t('pages.system.applications.enableSuccess'));
       } else {
         await disableApplication(record.uuid);
         messageApi.success(t('pages.system.applications.disableSuccess'));
       }
-      actionRef.current?.reload();
+      setActiveOverrides((prev) => ({ ...prev, [record.uuid]: checked }));
       refreshApplicationMenusAfterBackendMenuChange();
+      void queryClient.invalidateQueries({ queryKey: ['installedApplications'] });
+      void Promise.resolve(actionRef.current?.reload()).finally(() => {
+        setActiveOverrides((prev) => {
+          if (!(record.uuid in prev)) return prev;
+          const next = { ...prev };
+          delete next[record.uuid];
+          return next;
+        });
+      });
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'));
+    } finally {
+      setTogglingActiveUuid(null);
     }
   };
 
@@ -1585,9 +1605,18 @@ const ApplicationListPage: React.FC = () => {
             <Tooltip title={!canToggleAppLifecycle(application) ? lifecycleDisabledTooltip(application) : undefined}>
               <span style={{ display: 'inline-flex' }}>
                 <Switch
-                  checked={application.is_active}
+                  checked={
+                    activeOverrides[application.uuid] !== undefined
+                      ? activeOverrides[application.uuid]
+                      : application.is_active
+                  }
+                  loading={togglingActiveUuid === application.uuid}
                   onChange={(checked) => handleToggleActive(application, checked)}
-                  disabled={!application.is_installed || !canToggleAppLifecycle(application)}
+                  disabled={
+                    !application.is_installed
+                    || !canToggleAppLifecycle(application)
+                    || (togglingActiveUuid !== null && togglingActiveUuid !== application.uuid)
+                  }
                   checkedChildren={t('common.enabled')}
                   unCheckedChildren={t('common.disabled')}
                 />

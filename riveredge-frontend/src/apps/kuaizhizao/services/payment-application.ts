@@ -38,6 +38,8 @@ export interface PaymentApplication {
   supplierBankName?: string;
   supplierBankAccount?: string;
   notes?: string;
+  /** 勾选后，由该申请下推/取单生成的付款单必须上传付款凭证 */
+  requirePaymentVoucher?: boolean;
   attachments?: Array<Record<string, unknown>>;
   items: PaymentApplicationLine[];
   linkedPayments?: Array<{ id: number; code: string }>;

@@ -51,6 +51,10 @@ class PaymentApplication(BaseModel):
     supplier_bank_account = fields.CharField(max_length=64, null=True, description="收款账号")
 
     notes = fields.TextField(null=True, description="备注")
+    require_payment_voucher = fields.BooleanField(
+        default=False,
+        description="是否要求后续付款单上传付款凭证",
+    )
     attachments = fields.JSONField(null=True, description="附件")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

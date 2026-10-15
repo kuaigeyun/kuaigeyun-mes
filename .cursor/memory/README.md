@@ -71,6 +71,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 研发电子/结构菜单、2D/3D/模具交付物、试验委托 general | `features/funide-oa-rd-electronics-structure-menu.md` |
 | 构建 dist、deploy、H5、launch.dev、fast-deploy、开机自启 install-service | `features/fast-deploy-scripts.md` |
 | APP 转 PRO、compose、财务管理托管、数据中心占位 | `features/app-pro-migration-compose.md` |
+| 应用中心开关慢、启用禁用卡顿、ensure_permissions force | `features/app-enable-disable-perf.md` |
 | 侧栏本地生产不一致、菜单接管抢 is_active、财务管理缺分组 | `features/menu-takeover-single-source.md` |
 | 菜单同步仍平铺、menu_config 过期、只认后端 manifest | `features/menu-config-disk-manifest-source.md` |
 | KU-AI 能力矩阵、调用分析、insights 菜单、hub 加载慢 | `features/kuaiai-insights-in-hub.md` |
@@ -86,6 +87,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 建议供应商无搜索、SupplierSelectDropdown、UniDropdown 可搜 | `features/supplier-select-dropdown.md` |
 | 客户供应商多收付款账户、settlementAccounts、付款账户 | `features/partner-settlement-accounts.md` |
 | 付款申请、采购请款、push_payment_application、可请款占用 | `features/payment-application-procurement.md` |
+| 付款凭证必传、requirePaymentVoucher、付款申请要求上传凭证 | `features/payment-require-voucher.md` |
 | 其他费用收入、其他费用支出、收支类别、other_income | `features/finance-other-misc-vouchers.md` |
 | 其他费用应收应付、misc_voucher_finance_bridge、确认收款付款 | `features/finance-other-misc-ar-ap-chain.md` |
 | 应付/应收审核要点两遍、流程过了单据仍待审、FinanceService | `features/finance-ar-ap-audit-writeback.md` |
@@ -144,6 +146,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 
 | slug | 标题 | domain | 状态 |
 |------|------|--------|------|
+| `features/app-enable-disable-perf.md` | 应用启用/禁用增量权限同步 | core-platform | 已交付 |
 | `features/funide-oa-rd-electronics-structure-menu.md` | 定制研发电子/结构菜单 | funide-oa | 已交付 |
 | `features/funide-oa-drawing-detail-files-section.md` | 定制工程图纸详情图纸文件板块 | funide-oa | 已交付 |
 | `features/kuaiai-insights-in-hub.md` | KU-AI 调用分析并入能力矩阵 | kuaiai | 已交付 |
@@ -221,5 +224,6 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/pc-audit-unreview-empty-pending.md` | PC 审核反审核空壳待审与补齐写回 | approval | 已交付 |
 | `features/audit-hub-approve-button-visible.md` | 审核弹窗可审人须有审核按钮 | approval | 已交付 |
 | `features/downstream-revoke-delete-original-path.md` | 下推下游原路反审/删除门禁 | mes-production | 已交付 |
+| `features/payment-require-voucher.md` | 付款申请要求付款单上传凭证 | finance | 已交付 |
 
 Obsidian 镜像可用 wikilink，Agent 检索请用上表路径，不要只依赖 `[[...]]`。

@@ -618,6 +618,11 @@ class ApprovalInstanceService:
                 graph, current_id
             )
 
+        if instance and history:
+            await ApprovalInstanceService._heal_condition_route_history_actors(
+                tenant_id, instance, history
+            )
+
         if instance:
             user_ids.append(instance.submitter_id)
         for t in tasks:
@@ -1800,6 +1805,7 @@ class ApprovalInstanceService:
                 task.node_id,
                 process.nodes,
                 action_data,
+                decided_by=user_id,
             )
 
         # 更新任务状态
@@ -1823,13 +1829,22 @@ class ApprovalInstanceService:
         )
         if node_completed:
             await ApprovalInstanceService._advance_instance_after_node_completion(
-                tenant_id, instance, instance_status
+                tenant_id,
+                instance,
+                instance_status,
+                route_action_by=user_id if action_data.action == "approve" else None,
             )
 
         return instance
 
     @staticmethod
-    async def _create_node_tasks(tenant_id: int, instance: ApprovalInstance, node: dict) -> List[ApprovalTask]:
+    async def _create_node_tasks(
+        tenant_id: int,
+        instance: ApprovalInstance,
+        node: dict,
+        *,
+        route_action_by: Optional[int] = None,
+    ) -> List[ApprovalTask]:
         """
         为节点创建审批任务。start/end 不建任务；condition 不建任务，按条件选边后递归下一节点；cc 不建任务，发通知并推进到下一节点再递归。
         """
@@ -1855,9 +1870,9 @@ class ApprovalInstanceService:
             next_label = ""
             next_data = next_node.get("data") if isinstance(next_node.get("data"), dict) else {}
             next_label = str(next_data.get("label") or next_node.get("id") or "").strip()
-            # 选边人 = 前序审批节点通过人（写入 instance.data 决策的人），不是流程发起人
+            # 选边人 = 刚通过前序节点的审批人（route_action_by / __branch_decided_by），不是流程发起人
             route_by = await ApprovalInstanceService._resolve_condition_route_action_by(
-                tenant_id, instance
+                tenant_id, instance, preferred_user_id=route_action_by
             )
             await ApprovalInstanceService._create_approval_history(
                 tenant_id=tenant_id,
@@ -1878,7 +1893,9 @@ class ApprovalInstanceService:
                 return []
             instance.current_node = next_node.get("id")
             await instance.save()
-            return await ApprovalInstanceService._create_node_tasks(tenant_id, instance, next_node)
+            return await ApprovalInstanceService._create_node_tasks(
+                tenant_id, instance, next_node, route_action_by=route_action_by
+            )
 
         if node_type == "cc":
             # 抄送节点：不创建审批任务，可选通知抄送人，然后推进到下一节点
@@ -2230,6 +2247,9 @@ class ApprovalInstanceService:
         data = node.get("data") if isinstance(node.get("data"), dict) else {}
         return str(data.get("label") or node.get("id") or "").strip()
 
+    # instance.data 中记录「谁选的边」；条件分支履历 action_by 的真源
+    BRANCH_DECIDED_BY_KEY = "__branch_decided_by"
+
     @staticmethod
     def _condition_branch_route_key(condition_node_id: str) -> str:
         return f"__branch_true_{condition_node_id}"
@@ -2238,25 +2258,59 @@ class ApprovalInstanceService:
     async def _resolve_condition_route_action_by(
         tenant_id: int,
         instance: ApprovalInstance,
+        *,
+        preferred_user_id: Optional[int] = None,
+        at_or_before: Optional[datetime] = None,
     ) -> int:
         """
-        条件分支记录的操作人：前序审批节点最近一次通过的审批人。
-        禁止默认用流程发起人（submitter）冒充选边人。
+        条件分支操作人：前序审批人选边人。
+        优先级：显式 preferred → instance.data.__branch_decided_by → 最近通过任务 → 当前审批人。
+        禁止用流程发起人冒充选边人（仅无任何审批痕迹时才回落 submitter）。
         """
-        last = (
-            await ApprovalTask.filter(
-                tenant_id=tenant_id,
-                approval_instance_id=instance.id,
-                status="approved",
-            )
-            .order_by("-action_at", "-id")
-            .first()
+        if preferred_user_id and int(preferred_user_id) > 0:
+            return int(preferred_user_id)
+        data = instance.data if isinstance(instance.data, dict) else {}
+        decided = data.get(ApprovalInstanceService.BRANCH_DECIDED_BY_KEY)
+        if decided is not None and str(decided).strip() != "":
+            try:
+                uid = int(decided)
+                if uid > 0:
+                    return uid
+            except (TypeError, ValueError):
+                pass
+        q = ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            status="approved",
         )
+        if at_or_before is not None:
+            q = q.filter(action_at__lte=at_or_before)
+        last = await q.order_by("-action_at", "-id").first()
         if last and last.approver_id:
             return int(last.approver_id)
         if instance.current_approver_id:
             return int(instance.current_approver_id)
         return int(instance.submitter_id)
+
+    @staticmethod
+    async def _heal_condition_route_history_actors(
+        tenant_id: int,
+        instance: ApprovalInstance,
+        history: List[ApprovalHistory],
+    ) -> None:
+        """纠正误写成流程发起人的 condition_route.action_by（写回真源表）。"""
+        for h in history:
+            if ApprovalInstanceService._normalize_execution_action(h.action) != "condition_route":
+                continue
+            correct = await ApprovalInstanceService._resolve_condition_route_action_by(
+                tenant_id,
+                instance,
+                at_or_before=h.action_at,
+            )
+            if not correct or int(h.action_by or 0) == int(correct):
+                continue
+            h.action_by = int(correct)
+            await ApprovalHistory.filter(id=h.id).update(action_by=int(correct))
 
     @staticmethod
     def _infer_decision_spec_from_condition_node(
@@ -2342,6 +2396,8 @@ class ApprovalInstanceService:
         node_id: Optional[str],
         process_nodes: Any,
         action_data: ApprovalInstanceAction,
+        *,
+        decided_by: Optional[int] = None,
     ) -> None:
         """审批通过时写入分支决策；双分支条件必须带显式选择，禁止默认跳边。"""
         from core.schemas.approval_flow_schema import get_node_config, normalize_flow_graph
@@ -2382,6 +2438,8 @@ class ApprovalInstanceService:
                 condition_node_id = str(next_node.get("id") or "").strip()
         if condition_node_id:
             data[ApprovalInstanceService._condition_branch_route_key(condition_node_id)] = value
+        if decided_by and int(decided_by) > 0:
+            data[ApprovalInstanceService.BRANCH_DECIDED_BY_KEY] = int(decided_by)
         instance.data = data
         await instance.save(update_fields=["data", "updated_at"])
 
@@ -2667,6 +2725,8 @@ class ApprovalInstanceService:
         tenant_id: int,
         instance: ApprovalInstance,
         instance_status: str,
+        *,
+        route_action_by: Optional[int] = None,
     ) -> ApprovalInstance:
         """节点完成后取消同节点剩余待办，并推进到下一节点或结束流程。"""
         completed_node_id = instance.current_node
@@ -2708,7 +2768,10 @@ class ApprovalInstanceService:
                     instance.current_node = next_node.get("id")
                     await instance.save()
                     await ApprovalInstanceService._create_node_tasks(
-                        tenant_id, instance, next_node
+                        tenant_id,
+                        instance,
+                        next_node,
+                        route_action_by=route_action_by,
                     )
 
         if instance.status in ("approved", "rejected"):

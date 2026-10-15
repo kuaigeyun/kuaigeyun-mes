@@ -13,6 +13,9 @@ interface DocumentAttachmentsFieldProps {
   label?: React.ReactNode | false;
   max?: number;
   name?: string;
+  /** 为 true 时附件必填（如付款申请要求上传付款凭证） */
+  required?: boolean;
+  requiredMessage?: string;
 }
 
 export const DocumentAttachmentsField: React.FC<DocumentAttachmentsFieldProps> = ({
@@ -20,6 +23,8 @@ export const DocumentAttachmentsField: React.FC<DocumentAttachmentsFieldProps> =
   label,
   max = 10,
   name = 'attachments',
+  required = false,
+  requiredMessage,
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -38,6 +43,23 @@ export const DocumentAttachmentsField: React.FC<DocumentAttachmentsFieldProps> =
       label={label === undefined ? t('components.documentAttachments.label') : label}
       max={max}
       colProps={{ span: 24 }}
+      rules={
+        required
+          ? [
+              {
+                required: true,
+                validator: async (_: unknown, value: unknown) => {
+                  const list = Array.isArray(value) ? value : [];
+                  if (list.length === 0) {
+                    throw new Error(
+                      requiredMessage || t('components.documentAttachments.required'),
+                    );
+                  }
+                },
+              },
+            ]
+          : undefined
+      }
       icon={<InboxOutlined />}
       title={t('components.documentAttachments.dragHint')}
       description={t('components.documentAttachments.dragSubHint', { max })}

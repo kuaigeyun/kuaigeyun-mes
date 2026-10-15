@@ -100,6 +100,7 @@ class PaymentApplicationPushService:
                 "settlement_type": settlement_type,
                 "status": "Draft",
                 "notes": notes,
+                "require_payment_voucher": bool(getattr(app, "require_payment_voucher", False)),
             }
             apply_create_audit(payload, current_user)
             payment = await Payment.create(**payload)

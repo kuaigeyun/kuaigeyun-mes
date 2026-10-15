@@ -4,6 +4,22 @@
 
 本目录位于 `fast-deploy/tools/workspace/`（由部署脚本与本地开发共用）。
 
+## 行业包从哪来
+
+| 层 | 私仓 | 组装方式 |
+|----|------|----------|
+| **专业 APP** | `kuaigeyun-pro` | `generate_workspace.py` → `compose.py` |
+| **行业包**（`ind-*` / `spoke-wheel`） | **同一专业仓** `kuaigeyun-pro` | **与专业 APP 一并组装**（扫描仓内 `frontend/apps` + `backend/apps`） |
+| **定制** | `kuaigeyun-custom` | 仅 `CUSTOM_PROJECTS` 列出的项目 |
+
+应用中心报「后端包未部署…请先 workspace compose」时：对行业包执行
+
+```bash
+./fast-deploy/deploy.sh pro-apps pro
+```
+
+即可重新生成 `workspace.yaml`（含行业包）并组装，不必单独装「行业仓」。
+
 ## 一次性准备
 
 1. 将私有仓克隆到主仓**同级**目录（路径可改）；**分支一律 `develop`**（与主仓一致）：
@@ -45,8 +61,8 @@ python fast-deploy/tools/workspace/compose.py --status
 
 ```text
 kuaigeyun-pro/
-  backend/apps/{kuaiai,kuaireport,kuaiiot}/
-  frontend/apps/{kuaiai,kuaireport,kuaiiot}/
+  backend/apps/{kuaipd,kuaiplm,...,ind_relay,ind_foreign_trade,spoke_wheel}/
+  frontend/apps/{kuaipd,kuaiplm,...,ind-relay,ind-foreign-trade,spoke-wheel}/
 
 kuaigeyun-custom/
   projects/registry.yaml          # 定制项目注册（部署 CUSTOM_PROJECTS 真源）

@@ -2225,11 +2225,20 @@ class MenuService:
                 from loguru import logger
                 logger.warning(f"清除菜单缓存失败: {e}")
 
-        # 菜单同步后强制同步权限到 core_permissions，保证角色权限页「全部权限」含应用级菜单权限
+        # 菜单同步后按应用增量写入 core_permissions（禁止 force 全量，避免启用/开关应用卡顿）
         if not skip_permission_sync:
             try:
                 from core.services.authorization.permission_sync_service import PermissionSyncService
-                await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=True)
+
+                sync_app_code = str((app or {}).get("code") or "").strip()
+                if sync_app_code:
+                    await PermissionSyncService.ensure_app_permissions(
+                        tenant_id=tenant_id, app_code=sync_app_code
+                    )
+                else:
+                    await PermissionSyncService.ensure_permissions(
+                        tenant_id=tenant_id, force=False
+                    )
             except Exception as e:
                 logger.warning(f"菜单同步后权限同步失败: {e}")
 

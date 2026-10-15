@@ -153,6 +153,7 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                 supplier_bank_name=data.supplier_bank_name,
                 supplier_bank_account=data.supplier_bank_account,
                 notes=data.notes,
+                require_payment_voucher=bool(data.require_payment_voucher),
                 attachments=data.attachments,
                 created_by=created_by,
                 created_by_name=user["name"],

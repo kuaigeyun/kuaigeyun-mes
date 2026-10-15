@@ -61,7 +61,10 @@ import {
 import { linkAcceptanceNoteAfterVoucherCreate } from '../../../components/AcceptanceBillLinkFields';
 import { financeNoteService, type FinanceNote } from '../../../services/finance/note';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import {
+  mapAttachmentsToUploadList,
+  normalizeDocumentAttachments,
+} from '../../../utils/documentAttachments';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { getStatusDisplay } from '../../../constants/documentStatus';
 import { paymentCapabilityReasonMessage } from '../../../utils/paymentCapabilityMessages';
@@ -436,6 +439,7 @@ const PaymentsPage: React.FC = () => {
             source: pullAction.sourceLabel,
             code: pullPreviewData.source_code,
           }),
+        require_payment_voucher: Boolean(pullPreviewData.require_payment_voucher),
         attachments: normalizeDocumentAttachments(values.attachments),
       });
       if (pullSourceKind === 'payable') {
@@ -464,23 +468,32 @@ const PaymentsPage: React.FC = () => {
     }
   };
 
+  const paymentHasAttachments = (record: PaymentVoucher) => {
+    const list = Array.isArray(record.attachments) ? record.attachments : [];
+    return list.length > 0;
+  };
+
   const executeConfirm = async (record: PaymentVoucher) => {
+    if (record.require_payment_voucher && !paymentHasAttachments(record)) {
+      messageApi.warning(t(`${P}.requirePaymentVoucherMissing`));
+      return;
+    }
     try {
-          await paymentService.confirmPayment(record.id);
-          messageApi.success(t(`${P}.confirmSuccess`));
-    actionRef.current?.reload();
-          refreshOpenDetail();
-        } catch (e: any) {
-          messageApi.error(
-            e?.response?.data?.detail?.message ||
-              e?.response?.data?.detail ||
-              e?.message ||
-              t('common.operationFailed'),
-          );
-          // 过账中途失败时库内状态可能已变，刷新避免界面仍显示草稿
-          actionRef.current?.reload();
-          refreshOpenDetail();
-        }
+      await paymentService.confirmPayment(record.id);
+      messageApi.success(t(`${P}.confirmSuccess`));
+      actionRef.current?.reload();
+      refreshOpenDetail();
+    } catch (e: any) {
+      messageApi.error(
+        e?.response?.data?.detail?.message ||
+          e?.response?.data?.detail ||
+          e?.message ||
+          t('common.operationFailed'),
+      );
+      // 过账中途失败时库内状态可能已变，刷新避免界面仍显示草稿
+      actionRef.current?.reload();
+      refreshOpenDetail();
+    }
   };
 
   const executeCancelVoucher = async (record: PaymentVoucher) => {
@@ -516,8 +529,15 @@ const PaymentsPage: React.FC = () => {
     }
   };
 
-  const openEdit = (record: PaymentVoucher) => {
-    setEditingRecord(record);
+  const openEdit = async (record: PaymentVoucher) => {
+    try {
+      const full = await paymentService.getPayment(record.id);
+      setEditingRecord(full);
+    } catch (e: any) {
+      messageApi.error(
+        e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t('common.loadFailed'),
+      );
+    }
   };
 
   const handleUpdate = async (values: any) => {
@@ -1276,7 +1296,11 @@ const PaymentsPage: React.FC = () => {
                   partnerFieldName="supplier_id"
                 />
                 <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 3 }} colProps={financeColFull} />
-                <DocumentAttachmentsField category="payment_attachments" />
+                <DocumentAttachmentsField
+                  category="payment_attachments"
+                  required={Boolean(pullPreviewData?.require_payment_voucher)}
+                  requiredMessage={t(`${P}.requirePaymentVoucherMissing`)}
+                />
               </ProForm>
             ) : null}
           </div>
@@ -1361,6 +1385,9 @@ const PaymentsPage: React.FC = () => {
                 bank_account_id: editingRecord.bank_account_id,
                 bank_account: editingRecord.bank_account,
                 notes: editingRecord.notes,
+                attachments: mapAttachmentsToUploadList(
+                  editingRecord.attachments as Parameters<typeof mapAttachmentsToUploadList>[0],
+                ),
               }
             : undefined
         }
@@ -1415,7 +1442,11 @@ const PaymentsPage: React.FC = () => {
           partnerFieldName="supplier_id"
         />
         <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
-        <DocumentAttachmentsField category="payment_attachments" />
+        <DocumentAttachmentsField
+          category="payment_attachments"
+          required={Boolean(editingRecord?.require_payment_voucher)}
+          requiredMessage={t(`${P}.requirePaymentVoucherMissing`)}
+        />
       </ModalForm>
 
       <FinanceVoucherDetailDrawer

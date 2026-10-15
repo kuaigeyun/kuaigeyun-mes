@@ -135,9 +135,10 @@ def test_explicit_decision_on_approve_wins_over_infer():
 
 @pytest.mark.asyncio
 async def test_condition_route_action_by_uses_last_approver_not_submitter():
-    instance = SimpleNamespace(id=7, submitter_id=100, current_approver_id=None)
+    instance = SimpleNamespace(id=7, submitter_id=100, current_approver_id=None, data={})
     last_task = SimpleNamespace(approver_id=22)
     qs = MagicMock()
+    qs.filter.return_value = qs
     qs.order_by.return_value.first = AsyncMock(return_value=last_task)
     with patch(
         "core.services.approval.approval_instance_service.ApprovalTask.filter",
@@ -145,6 +146,39 @@ async def test_condition_route_action_by_uses_last_approver_not_submitter():
     ):
         actor = await ApprovalInstanceService._resolve_condition_route_action_by(1, instance)
     assert actor == 22
+
+
+@pytest.mark.asyncio
+async def test_condition_route_action_by_prefers_decided_by_and_explicit():
+    instance = SimpleNamespace(
+        id=7,
+        submitter_id=100,
+        current_approver_id=None,
+        data={ApprovalInstanceService.BRANCH_DECIDED_BY_KEY: 33},
+    )
+    actor = await ApprovalInstanceService._resolve_condition_route_action_by(1, instance)
+    assert actor == 33
+    actor2 = await ApprovalInstanceService._resolve_condition_route_action_by(
+        1, instance, preferred_user_id=44
+    )
+    assert actor2 == 44
+
+
+@pytest.mark.asyncio
+async def test_apply_decision_persists_decided_by():
+    graph = _gm_branch_graph()
+    instance = SimpleNamespace(data={}, save=None)
+
+    async def _save(**kwargs):
+        pass
+
+    instance.save = _save
+    spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, graph["nodes"][0])
+    action = SimpleNamespace(instance_data_patch={spec["field"]: True})
+    await ApprovalInstanceService._apply_decision_on_approve(
+        instance, "n2", graph, action, decided_by=22
+    )
+    assert instance.data.get(ApprovalInstanceService.BRANCH_DECIDED_BY_KEY) == 22
 
 
 def test_condition_route_history_belongs_to_condition_node_only():

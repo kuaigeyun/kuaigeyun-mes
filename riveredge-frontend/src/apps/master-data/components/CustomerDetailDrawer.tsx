@@ -39,6 +39,8 @@ export interface CustomerDetailDrawerProps {
   customerUuid: string | null;
   onClose: () => void;
   footer?: (customer: Customer) => React.ReactNode;
+  /** 行业插件等走自身权限读详情时传入 */
+  getCustomer?: (uuid: string) => Promise<Customer>;
 }
 
 export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
@@ -46,6 +48,7 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
   customerUuid,
   onClose,
   footer,
+  getCustomer,
 }) => {
   const { t } = useTranslation();
   const { basicUpdatedAtEnabled, timeFieldHidden } = useDetailDrawerFeatures();
@@ -92,7 +95,7 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
       setDetailLoading(true);
       setDetailError(null);
       try {
-        const detail = await customerApi.get(uuid);
+        const detail = await (getCustomer ? getCustomer(uuid) : customerApi.get(uuid));
         setCustomerDetail(detail);
       } catch (error) {
         setCustomerDetail(null);
@@ -101,7 +104,7 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
         setDetailLoading(false);
       }
     },
-    [t],
+    [getCustomer, t],
   );
 
   useEffect(() => {

@@ -44,6 +44,86 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-rd-archive-merge-module-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.description',
+  },
+  {
+    id: 'ind-foreign-trade-unified-crm-r01',
+    date: '2026-10-15',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-foreign-trade-unified-crm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ind-foreign-trade-unified-crm-r01.description',
+  },
+  {
+    id: 'ind-foreign-trade-crm-gapfill-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-foreign-trade-crm-gapfill-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ind-foreign-trade-crm-gapfill-r01.description',
+  },
+  {
+    id: 'ind-foreign-trade-unitable-3bucket-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-foreign-trade-unitable-3bucket-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ind-foreign-trade-unitable-3bucket-r01.description',
+  },
+  {
+    id: 'industry-pack-menu-bind-wipe-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.industry-pack-menu-bind-wipe-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.industry-pack-menu-bind-wipe-r01.description',
+  },
+  {
+    id: 'payment-require-voucher-r01',
+    date: '2026-10-15',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-require-voucher-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-require-voucher-r01.description',
+  },
+  {
+    id: 'app-enable-disable-perf-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.app-enable-disable-perf-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-enable-disable-perf-r01.description',
+  },
+  {
+    id: 'audit-modal-sticky-footer-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-modal-sticky-footer-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-modal-sticky-footer-r01.description',
+  },
+  {
+    id: 'audit-condition-route-actor-r02',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-condition-route-actor-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-condition-route-actor-r02.description',
+  },
+  {
+    id: 'audit-flow-handle-anchor-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-flow-handle-anchor-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-flow-handle-anchor-r01.description',
+  },
+  {
     id: 'delivery-gantt-progress-bar-r01',
     date: '2026-10-15',
     type: 'improvement',

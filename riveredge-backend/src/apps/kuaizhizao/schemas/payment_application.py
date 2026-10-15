@@ -50,6 +50,11 @@ class PaymentApplicationCreate(BaseModel):
     supplier_bank_name: Optional[str] = Field(None, alias="supplierBankName")
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
     notes: Optional[str] = None
+    require_payment_voucher: bool = Field(
+        False,
+        alias="requirePaymentVoucher",
+        description="是否要求后续付款单上传付款凭证",
+    )
     attachments: Optional[List[dict]] = None
     items: List[PaymentApplicationLineCreate] = Field(..., min_length=1)
 
@@ -66,6 +71,11 @@ class PaymentApplicationUpdate(BaseModel):
     supplier_bank_name: Optional[str] = Field(None, alias="supplierBankName")
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
     notes: Optional[str] = None
+    require_payment_voucher: Optional[bool] = Field(
+        None,
+        alias="requirePaymentVoucher",
+        description="是否要求后续付款单上传付款凭证",
+    )
     attachments: Optional[List[dict]] = None
     items: Optional[List[PaymentApplicationLineCreate]] = None
 
@@ -97,6 +107,11 @@ class PaymentApplicationResponse(UuidStrCoerceMixin, BaseSchema):
     supplier_bank_name: Optional[str] = Field(None, alias="supplierBankName")
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
     notes: Optional[str] = None
+    require_payment_voucher: bool = Field(
+        False,
+        alias="requirePaymentVoucher",
+        description="是否要求后续付款单上传付款凭证",
+    )
     attachments: Optional[List[dict]] = None
     items: List[PaymentApplicationLineResponse] = []
     linked_payments: Optional[List[Dict[str, Any]]] = Field(None, alias="linkedPayments")

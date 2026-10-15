@@ -4,7 +4,12 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
-import { ProFormDatePicker, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import {
+  ProFormDatePicker,
+  ProFormSelect,
+  ProFormSwitch,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
 import { App, Button, Col, Descriptions, Form, InputNumber, Modal, Row, Select, Space, Table } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -170,6 +175,7 @@ const PaymentApplicationsPage: React.FC = () => {
         applicationDate: coerceFormDate(full.applicationDate) ?? dayjs(),
         expectedPaymentDate: coerceFormDate(full.expectedPaymentDate),
         notes: full.notes,
+        requirePaymentVoucher: Boolean(full.requirePaymentVoucher),
         items: (full.items ?? []).map((line) => ({
           lineKind: line.lineKind ?? 'goods',
           payableId: line.payableId ?? line.sourceId,
@@ -405,6 +411,7 @@ const PaymentApplicationsPage: React.FC = () => {
       applicationDate: toApiDateString(values.applicationDate),
       expectedPaymentDate: toApiDateString(values.expectedPaymentDate),
       notes: values.notes,
+      requirePaymentVoucher: Boolean(values.requirePaymentVoucher),
       items,
     };
     if (editId) {
@@ -542,6 +549,9 @@ const PaymentApplicationsPage: React.FC = () => {
               <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.remainingAmount')}>
                 {formatCurrencyAmount(detail.remainingAmount)}
               </Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.requirePaymentVoucher')}>
+                {detail.requirePaymentVoucher ? t('common.yes') : t('common.no')}
+              </Descriptions.Item>
             </Descriptions>
             {detail.linkedPayments && detail.linkedPayments.length > 0 ? (
               <Descriptions column={1} size="small" style={{ marginTop: 16 }}>
@@ -634,6 +644,7 @@ const PaymentApplicationsPage: React.FC = () => {
           if (editId == null) {
             formRef.current?.setFieldsValue({
               applicationDate: dayjs(),
+              requirePaymentVoucher: false,
               items: [{ lineKind: 'goods' }],
             });
           }
@@ -725,6 +736,13 @@ const PaymentApplicationsPage: React.FC = () => {
               name="notes"
               label={t('app.kuaizhizao.paymentApplication.notes')}
               fieldProps={{ rows: 2 }}
+            />
+          </Col>
+          <Col span={24}>
+            <ProFormSwitch
+              name="requirePaymentVoucher"
+              label={t('app.kuaizhizao.paymentApplication.requirePaymentVoucher')}
+              extra={t('app.kuaizhizao.paymentApplication.requirePaymentVoucherHint')}
             />
           </Col>
         </Row>

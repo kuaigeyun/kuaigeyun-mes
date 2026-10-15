@@ -1008,176 +1008,192 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
         destroyOnHidden
 
-        styles={{ body: { paddingTop: 12 } }}
+        styles={{
+          body: {
+            paddingTop: 12,
+            paddingBottom: 0,
+            maxHeight: 'calc(100vh - 120px)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          },
+        }}
 
       >
 
-        <AuditHubDetailPanel
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingRight: 4 }}>
 
-          entityName={entityName}
+          <AuditHubDetailPanel
 
-          flowStatus={flowStatus}
+            entityName={entityName}
 
-          flowLoading={flowLoading}
+            flowStatus={flowStatus}
 
-        />
-
-
-
-        {simpleFlowHint && (
-
-          <Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 12 }}>
-
-            {simpleFlowHint}
-
-          </Text>
-
-        )}
-
-
-
-        <Divider style={{ margin: '16px 0' }} />
-
-
-
-        {hasReject && (
-
-          <Input.TextArea
-
-            value={reason}
-
-            onChange={(e) => setReason(e.target.value)}
-
-            rows={3}
-
-            placeholder="如需驳回，请输入驳回原因（可选）"
-
-            style={{ marginBottom: 12 }}
+            flowLoading={flowLoading}
 
           />
 
-        )}
+          {simpleFlowHint && (
 
+            <Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 12 }}>
 
+              {simpleFlowHint}
 
-        {flowAssigneeBlockHint ? (
-
-          <Alert
-
-            type="info"
-
-            showIcon
-
-            title={flowAssigneeBlockHint}
-
-            style={{ marginBottom: 12 }}
-
-          />
-
-        ) : null}
-
-        {nodeDecision && effectiveHubActions.some((a) => a.action === 'approve' && a.canExecute) ? (
-          <div
-            style={{
-              marginBottom: 12,
-              padding: '10px 12px',
-              border: '1px solid rgba(0, 0, 0, 0.06)',
-              borderRadius: 6,
-              background: '#f7f8fa',
-            }}
-          >
-            <Text strong style={{ display: 'block', marginBottom: 8 }}>
-              {nodeDecision.label}
             </Text>
-            <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-              {t('components.uniAudit.branchDecisionHint')}
-            </Text>
-            <Radio.Group
-              value={
-                branchDecision === null ? undefined : branchDecision ? 'true' : 'false'
-              }
-              onChange={(e) => setBranchDecision(e.target.value === 'true')}
-              buttonStyle="solid"
+
+          )}
+
+        </div>
+
+        <div
+          style={{
+            flex: '0 0 auto',
+            marginTop: 12,
+            paddingTop: 12,
+            paddingBottom: 16,
+            borderTop: '1px solid rgba(0, 0, 0, 0.06)',
+            background: '#fff',
+          }}
+        >
+
+          {hasReject && (
+
+            <Input.TextArea
+
+              value={reason}
+
+              onChange={(e) => setReason(e.target.value)}
+
+              rows={3}
+
+              placeholder="如需驳回，请输入驳回原因（可选）"
+
+              style={{ marginBottom: 12 }}
+
+            />
+
+          )}
+
+          {flowAssigneeBlockHint ? (
+
+            <Alert
+
+              type="info"
+
+              showIcon
+
+              title={flowAssigneeBlockHint}
+
+              style={{ marginBottom: 12 }}
+
+            />
+
+          ) : null}
+
+          {nodeDecision && effectiveHubActions.some((a) => a.action === 'approve' && a.canExecute) ? (
+            <div
+              style={{
+                marginBottom: 12,
+                padding: '10px 12px',
+                border: '1px solid rgba(0, 0, 0, 0.06)',
+                borderRadius: 6,
+                background: '#f7f8fa',
+              }}
             >
-              <Radio.Button value="true">
-                {t('components.uniAudit.branchDecisionYes', {
-                  name: nodeDecision.trueBranchLabel || t('common.yes'),
-                })}
-              </Radio.Button>
-              <Radio.Button value="false">
-                {t('components.uniAudit.branchDecisionNo', {
-                  name: nodeDecision.falseBranchLabel || t('common.no'),
-                })}
-              </Radio.Button>
-            </Radio.Group>
-          </div>
-        ) : null}
-
-        {effectiveHubActions.length > 0 ? (
-
-          <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
-
-            <Space wrap>
-
-            {effectiveHubActions.map((item) => (
-
-              <Button
-
-                key={item.action}
-
-                type={item.primary ? 'primary' : 'default'}
-
-                danger={item.danger}
-
-                disabled={!item.canExecute}
-
-                loading={busyAction === item.action}
-
-                title={item.canExecute ? undefined : (item.disabledReason || t('components.uniAudit.noPermission'))}
-
-                icon={
-
-                  item.action === 'approve' ? <CheckCircleOutlined />
-
-                    : item.action === 'reject' ? <CloseCircleOutlined />
-
-                      : item.action === 'withdraw' ? <RollbackOutlined />
-
-                        : <AuditOutlined />
-
+              <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                {nodeDecision.label}
+              </Text>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+                {t('components.uniAudit.branchDecisionHint')}
+              </Text>
+              <Radio.Group
+                value={
+                  branchDecision === null ? undefined : branchDecision ? 'true' : 'false'
                 }
-
-                onClick={() => handleHubAction(item)}
-
+                onChange={(e) => setBranchDecision(e.target.value === 'true')}
+                buttonStyle="solid"
               >
+                <Radio.Button value="true">
+                  {t('components.uniAudit.branchDecisionYes', {
+                    name: nodeDecision.trueBranchLabel || t('common.yes'),
+                  })}
+                </Radio.Button>
+                <Radio.Button value="false">
+                  {t('components.uniAudit.branchDecisionNo', {
+                    name: nodeDecision.falseBranchLabel || t('common.no'),
+                  })}
+                </Radio.Button>
+              </Radio.Group>
+            </div>
+          ) : null}
 
-                {item.title}
+          {effectiveHubActions.length > 0 ? (
 
-              </Button>
+            <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
 
-            ))}
+              <Space wrap>
 
-            </Space>
+              {effectiveHubActions.map((item) => (
 
-            <Button onClick={onCancel}>{t('common.close')}</Button>
+                <Button
 
-          </Flex>
+                  key={item.action}
 
-        ) : (
+                  type={item.primary ? 'primary' : 'default'}
 
-          <>
+                  danger={item.danger}
 
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前阶段没有可执行的审核操作" />
+                  disabled={!item.canExecute}
 
-            <Flex justify="flex-end" style={{ marginTop: 12 }}>
+                  loading={busyAction === item.action}
+
+                  title={item.canExecute ? undefined : (item.disabledReason || t('components.uniAudit.noPermission'))}
+
+                  icon={
+
+                    item.action === 'approve' ? <CheckCircleOutlined />
+
+                      : item.action === 'reject' ? <CloseCircleOutlined />
+
+                        : item.action === 'withdraw' ? <RollbackOutlined />
+
+                          : <AuditOutlined />
+
+                  }
+
+                  onClick={() => handleHubAction(item)}
+
+                >
+
+                  {item.title}
+
+                </Button>
+
+              ))}
+
+              </Space>
 
               <Button onClick={onCancel}>{t('common.close')}</Button>
 
             </Flex>
 
-          </>
+          ) : (
 
-        )}
+            <>
+
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前阶段没有可执行的审核操作" />
+
+              <Flex justify="flex-end" style={{ marginTop: 12 }}>
+
+                <Button onClick={onCancel}>{t('common.close')}</Button>
+
+              </Flex>
+
+            </>
+
+          )}
+
+        </div>
 
         <UniAuditAdvancedActionModal
           state={advancedAction}

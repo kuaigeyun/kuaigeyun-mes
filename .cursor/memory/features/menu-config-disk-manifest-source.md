@@ -36,3 +36,5 @@ standard: 写 core_menus 前用 ApplicationService.bind_menu_config_to_disk_mani
 ## 踩坑
 
 库内 kuaicaiwu `menu_config` 曾长期是平铺快照；kuaizhizao 已分组但被接管隐藏。侧栏用 kuaicaiwu 时看起来永远平。本节点无 compose 时读不到磁盘包，bind 只能保留库内快照，须在有包的节点跑同步。
+
+**行业包壳例外**：`industry-pack` 磁盘 `menu_config.children` 恒为 `[]`（子菜单运行时聚合）。`bind_menu_config_to_disk_manifest` 必须保留传入的聚合 children 再写 `core_menus`，禁止用空数组冲掉；且不要把聚合树回写 `core_applications.menu_config`（会触发 stale-manifest）。见 `features/app-enable-disable-perf.md` / 行业包菜单服务。

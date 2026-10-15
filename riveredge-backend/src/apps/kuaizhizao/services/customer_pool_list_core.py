@@ -175,8 +175,11 @@ def apply_customer_pool_list_filters(
         query = query.filter(region_text__icontains=str(region_text).strip())
     if follow_status and str(follow_status).strip():
         query = query.filter(follow_status=str(follow_status).strip().lower())
-    if market_scope and str(market_scope).strip():
-        query = query.filter(market_scope=str(market_scope).strip().lower())
+    scope_token = str(market_scope or "").strip().lower()
+    if scope_token == "crm":
+        query = query.filter(market_scope__in=["export", "domestic"])
+    elif scope_token:
+        query = query.filter(market_scope=scope_token)
     if country_code and str(country_code).strip():
         query = query.filter(country_code__icontains=str(country_code).strip())
     query = apply_customer_pool_datetime_range(

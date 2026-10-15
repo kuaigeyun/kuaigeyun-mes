@@ -1077,18 +1077,63 @@ class ApplicationService:
             )
 
             await ScheduledJobPresetService.sync_presets_for_tenant(tenant_id)
-        if application.get('is_installed') and application.get('menu_config') and not is_industry_module_app_code(app_code) and not is_industry_pack_shell_code(app_code):
+        if (
+            application.get("is_installed")
+            and application.get("menu_config")
+            and not is_industry_module_app_code(app_code)
+            and not is_industry_pack_shell_code(app_code)
+        ):
+            from core.models.menu import Menu
+            from core.services.authorization.permission_sync_service import PermissionSyncService
             from core.services.system.menu_service import MenuService
-            # 重新同步菜单，确保菜单状态与应用状态一致
-            await MenuService.sync_menus_from_application_config(
+
+            # 安装时已写入菜单树；启用热路径只翻转 is_active + 增量权限。
+            # 结构变更走「同步清单/菜单」，避免每次开关都全量 rebuild 菜单树。
+            existing_menu_count = await Menu.filter(
                 tenant_id=tenant_id,
                 application_uuid=str(uuid),
-                menu_config=application['menu_config'],
-                is_active=True,
-                preserve_existing_is_active=False,
-            )
-        else:
-            # 如果应用没有菜单配置，直接更新现有菜单状态
+                deleted_at__isnull=True,
+            ).count()
+            if existing_menu_count == 0:
+                await MenuService.sync_menus_from_application_config(
+                    tenant_id=tenant_id,
+                    application_uuid=str(uuid),
+                    menu_config=application["menu_config"],
+                    is_active=True,
+                    preserve_existing_is_active=False,
+                )
+            else:
+                conn = await get_db_connection()
+                try:
+                    await conn.execute(
+                        """
+                        UPDATE core_menus
+                        SET is_active = TRUE, updated_at = NOW()
+                        WHERE tenant_id = $1 AND application_uuid = $2 AND deleted_at IS NULL
+                        """,
+                        tenant_id,
+                        str(uuid),
+                    )
+                finally:
+                    await conn.close()
+                if app_code:
+                    try:
+                        await PermissionSyncService.ensure_app_permissions(
+                            tenant_id=tenant_id, app_code=app_code
+                        )
+                    except Exception as e:
+                        from loguru import logger
+
+                        logger.warning(
+                            "应用 {} 启用后权限增量同步失败 tenant_id={}: {}",
+                            app_code,
+                            tenant_id,
+                            e,
+                        )
+        elif not is_industry_module_app_code(app_code) and not is_industry_pack_shell_code(
+            app_code
+        ):
+            # 无 menu_config：直接更新现有菜单状态
             conn = await get_db_connection()
             try:
                 menu_update_query = """
@@ -1923,6 +1968,38 @@ class ApplicationService:
             raise ValidationError(f"应用 {code} 的 manifest 缺少 version，不能同步菜单")
 
         incoming = ApplicationService._normalize_menu_config_field(menu_config)
+
+        # 行业包壳：磁盘 menu_config.children 恒为空占位；子菜单由
+        # IndustryPackMenuService 运行时聚合后传入。禁止用空 children 冲掉聚合结果。
+        # 聚合树只用于写 core_menus，不回写 core_applications.menu_config（壳磁盘真源
+        # 仍为 children=[]；回写会触发 stale-manifest 校验且与磁盘真源冲突）。
+        if is_industry_pack_shell_code(code):
+            incoming_children = (
+                list(incoming.get("children") or [])
+                if isinstance(incoming, dict)
+                else []
+            )
+            merged = {
+                "title": disk_menu.get("title") or (incoming or {}).get("title"),
+                "icon": disk_menu.get("icon") or (incoming or {}).get("icon"),
+                "path": disk_menu.get("path") or (incoming or {}).get("path"),
+                "permission": disk_menu.get("permission")
+                or (incoming or {}).get("permission"),
+                "children": incoming_children,
+            }
+            if incoming and incoming.get("sort_order") is not None:
+                merged["sort_order"] = incoming.get("sort_order")
+            elif disk_menu.get("sort_order") is not None:
+                merged["sort_order"] = disk_menu.get("sort_order")
+            to_use = ApplicationService._normalize_menu_config_field(merged) or merged
+            logger.info(
+                "menu_config_industry_pack_shell_merged tenant={} app={} children={}",
+                tenant_id,
+                application_uuid,
+                len(incoming_children),
+            )
+            return to_use
+
         if (
             ApplicationService.stable_menu_config_digest(incoming)
             == ApplicationService.stable_menu_config_digest(disk_menu)

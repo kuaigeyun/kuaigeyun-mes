@@ -84,6 +84,7 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
 
   return (
     <div
+      className="uni-audit-flow-preview"
       style={{
         width: '100%',
         height,
@@ -95,6 +96,15 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
         ...style,
       }}
     >
+      {/* 只读预览：隐藏手柄圆点，连线仍按 Handle 锚点贴边 */}
+      <style>{`
+        .uni-audit-flow-preview .react-flow__handle {
+          opacity: 0;
+          pointer-events: none;
+          border: none !important;
+          box-shadow: none !important;
+        }
+      `}</style>
       <ReactFlow
         nodes={nodes}
         edges={edges}

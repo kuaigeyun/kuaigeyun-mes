@@ -2632,6 +2632,7 @@ export default {
   'components.documentAttachments.dragHint': '点击或拖拽文件到此处上传',
   'components.documentAttachments.dragSubHint': '支持多文件上传，最多 {{max}} 个',
   'components.documentAttachments.openFailed': '附件打开失败，请稍后重试',
+  'components.documentAttachments.required': '请上传附件',
 
   // DictionarySelect
   'components.dictionarySelect.loadOptionsFailed': '加载{{label}}选项失败',
@@ -3425,6 +3426,12 @@ export default {
   'app.ind-foreign-trade.name': '外贸销售',
   'app.ind-foreign-trade.menu.dashboard': '工作台',
   'app.ind-foreign-trade.menu.exportCustomers': '外贸客户',
+  'app.ind-foreign-trade.menu.salesCustomers': '销售客户',
+  'app.ind-foreign-trade.market.all': '全部',
+  'app.ind-foreign-trade.market.export': '外贸',
+  'app.ind-foreign-trade.market.domestic': '国内',
+  'app.ind-foreign-trade.field.marketScope': '市场',
+  'app.ind-foreign-trade.createDomesticCustomer': '新建国内客户',
   'app.ind-foreign-trade.menu.inquiryImport': '询盘导入',
   'app.ind-foreign-trade.menu.followUps': '客户跟进',
   'app.ind-foreign-trade.field.country': '国家',
@@ -3436,6 +3443,8 @@ export default {
   'app.ind-foreign-trade.dashboard.inactiveHint': '连续7天未新增跟进',
   'app.ind-foreign-trade.dashboard.recordsHint': '累计跟进 {{count}} 条',
   'app.ind-foreign-trade.exportFileName': '外贸客户_{{date}}.csv',
+  'app.ind-foreign-trade.followUpExportFileName': '外贸客户跟进_{{date}}.csv',
+  'app.ind-foreign-trade.dashboard.drillFollowUps': '查看跟进',
   'app.ind-foreign-trade.import.button': '导入询盘',
   'app.ind-foreign-trade.import.title': '导入外贸询盘',
   'app.ind-foreign-trade.import.hint':
@@ -9070,6 +9079,9 @@ export default {
   'app.kuaizhizao.paymentApplication.status': '状态',
   'app.kuaizhizao.paymentApplication.applicationDate': '申请日期',
   'app.kuaizhizao.paymentApplication.notes': '备注',
+  'app.kuaizhizao.paymentApplication.requirePaymentVoucher': '是否需要上传付款凭证',
+  'app.kuaizhizao.paymentApplication.requirePaymentVoucherHint':
+    '开启后，由该申请生成的付款单在确认前必须上传付款凭证',
   'app.kuaizhizao.paymentApplication.lines': '申请明细',
   'app.kuaizhizao.paymentApplication.payableCode': '应付单号',
   'app.kuaizhizao.paymentApplication.selectSupplierFirst': '请先选择供应商',
@@ -20534,6 +20546,7 @@ export default {
   'app.kuaicaiwu.payment.settlementType.normal': '普通付款',
   'app.kuaicaiwu.payment.settlementType.prepayment': '预付款',
   'app.kuaicaiwu.payment.createSuccess': '付款单已创建（草稿），请确认后正式入账',
+  'app.kuaicaiwu.payment.requirePaymentVoucherMissing': '该付款单要求上传付款凭证，请先上传后再确认',
   'app.kuaicaiwu.payment.confirmSuccess': '确认成功',
   'app.kuaicaiwu.payment.voidSuccess': '作废成功',
   'app.kuaicaiwu.payment.batchDeleted': '已删除 {{count}} 条付款单',
@@ -31460,6 +31473,46 @@ export default {
     '其他费用收支类别接口改挂快制造主仓',
   'pages.dashboard.updateLog.entries.finance-misc-categories-kuaizhizao-api-r01.description':
     '收支类别与其他费用收入/支出 API 迁入快制造主仓路由，新建类别不再报接口不存在；过账挂账仍衔接轻财务应收应付。',
+  'pages.dashboard.updateLog.entries.payment-require-voucher-r01.title':
+    '付款申请可要求上传付款凭证',
+  'pages.dashboard.updateLog.entries.payment-require-voucher-r01.description':
+    '新建付款申请时可勾选「是否需要上传付款凭证」；开启后，由该申请生成的付款单在确认过账前必须上传付款凭证，未开启则仍可自行决定是否上传。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.title':
+    '定制 OA 研发项目列表可正常打开',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.description':
+    '补全研发项目体系清单合并判断模块，修复「研发项目」列表加载时报缺少 Python 模块的问题。',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-unified-crm-r01.title':
+    '外贸销售插件内统一内外贸客户跟进',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-unified-crm-r01.description':
+    '销售客户菜单支持全部/外贸/国内视图，内贸可手工新建与统一筛选导出；跟进与工作台统计覆盖内外贸，无需再进快制造客户池。',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-crm-gapfill-r01.title':
+    '外贸销售补齐询盘归属与跟进管理',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-crm-gapfill-r01.description':
+    '询盘导入与新建外贸客户自动归属当前销售；客户跟进支持待跟进筛选、下次跟进与导出；工作台可按业务员钻取跟进；客户列表展示项目描述与 D/已成交级别。',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-unitable-3bucket-r01.title':
+    '外贸客户与客户跟进列表列宽对齐三桶规范',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-unitable-3bucket-r01.description':
+    '外贸客户、客户跟进列表按 KeepWidth / RemainderFlex 定宽，「所需生产能力」等表头完整显示；工作台与询盘导入非列表页保持原交互。',
+  'pages.dashboard.updateLog.entries.industry-pack-menu-bind-wipe-r01.title':
+    '启用行业应用后侧栏能显示行业菜单',
+  'pages.dashboard.updateLog.entries.industry-pack-menu-bind-wipe-r01.description':
+    '修复行业包子菜单被空壳清单冲掉的问题；启用模块时同步授予行业包入口与模块权限，侧栏可看到外贸销售等入口。',
+  'pages.dashboard.updateLog.entries.app-enable-disable-perf-r01.title':
+    '应用中心开关应用更快',
+  'pages.dashboard.updateLog.entries.app-enable-disable-perf-r01.description':
+    '启用或禁用应用时改为按应用增量同步权限，并避免每次开关都全量重建菜单树，响应明显加快。',
+  'pages.dashboard.updateLog.entries.audit-modal-sticky-footer-r01.title':
+    '审核弹窗底栏固定仅内容区滚动',
+  'pages.dashboard.updateLog.entries.audit-modal-sticky-footer-r01.description':
+    '审核弹窗流程与节点记录在上方滚动；驳回原因、待办提示、分支选择与操作按钮固定在底部，滚动时始终可见。',
+  'pages.dashboard.updateLog.entries.audit-condition-route-actor-r02.title':
+    '条件分支执行人按前序审批人选边并回写旧记录',
+  'pages.dashboard.updateLog.entries.audit-condition-route-actor-r02.description':
+    '选边时写入选边人真源；条件分支履历记前序通过人；打开审核概况时纠正误写成流程发起人的历史记录。',
+  'pages.dashboard.updateLog.entries.audit-flow-handle-anchor-r01.title':
+    '审批流程图连线贴合节点连接点',
+  'pages.dashboard.updateLog.entries.audit-flow-handle-anchor-r01.description':
+    '修正流程节点手柄与 React Flow 默认偏移叠加导致的连线悬空；审核预览隐藏手柄圆点，连线贴边。',
   'pages.dashboard.updateLog.entries.audit-execution-badge-success-color-r01.title':
     '审核通过徽章改用语义成功色',
   'pages.dashboard.updateLog.entries.audit-execution-badge-success-color-r01.description':
