@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'misc-voucher-submit-initiator-select-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.description',
+  },
+  {
+    id: 'quality-inspection-export-route-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.description',
+  },
+  {
     id: 'pull-source-display-echo-r01',
     date: '2026-10-15',
     type: 'fix',

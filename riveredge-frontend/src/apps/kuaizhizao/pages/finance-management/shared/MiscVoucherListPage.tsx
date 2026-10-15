@@ -671,6 +671,8 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                     {...rowActionKind('skip')}
                     record={row}
                     entityType={auditEntityType}
+                    auditNodeKey={auditEntityType}
+                    workflowAuditEnabled={auditEnabled}
                     entityName={t(menuTitleKey)}
                     statusField="status"
                     {...miscWorkflowStatuses}
@@ -750,6 +752,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
         SALES_DOC_LIST_FIELD_RANK,
       ),
     [
+      auditEnabled,
       auditEntityType,
       codeField,
       i18nPrefix,
@@ -1038,6 +1041,8 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
             <UniWorkflowActions
               record={detailRow}
               entityType={auditEntityType}
+              auditNodeKey={auditEntityType}
+              workflowAuditEnabled={auditEnabled}
               entityName={t(menuTitleKey)}
               statusField="status"
               {...miscWorkflowStatuses}

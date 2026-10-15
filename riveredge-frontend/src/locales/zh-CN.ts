@@ -31101,10 +31101,18 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.title':
+    '修复检验业务列表导出全部报错',
+  'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.description':
+    '来料/过程/成品检验导出接口路由注册顺序已调整，不再把 export 误当成检验单 ID，导出全部可正常下载 Excel。',
   'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.title':
     '修复接入设备查看数据趋势图选点位后空白',
   'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.description':
     '趋势图 Tab 改为可见时再挂载图表并固定容器高度；数值字段兼容字符串小数；无数据时给出明确空态提示。',
+  'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.title':
+    '其他收支提交会弹出发起人自选审批人',
+  'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.description':
+    '列表行无 audit 快照时，工作流按钮改按单据 entityType 识别是否启用人工审核，避免误跳过发起人自选弹窗导致「缺少人员快照」无法提交。',
   'pages.dashboard.updateLog.entries.pull-source-display-echo-r01.title':
     '取单通用：来源单据回显即可，不必开查看',
   'pages.dashboard.updateLog.entries.pull-source-display-echo-r01.description':

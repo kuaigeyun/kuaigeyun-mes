@@ -211,9 +211,13 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
       ? (record.audit as { phase: string; enabled?: boolean; allowed_actions?: string[]; entity_type?: string })
       : null;
   const auditEntityType = (auditState?.entity_type || '').trim();
-  const resolvedEntityType = entityType || inferredNodeKey || auditEntityType;
+  const resolvedEntityType = (entityType || inferredNodeKey || auditEntityType || '').trim();
 
-  const inferredAuditEnabled = useAuditRequired(inferredNodeKey || auditEntityType, false);
+  // 列表行可能无 record.audit：须用 entityType / nodeKey 查业务配置，禁止空 key → false 误跳过发起人自选
+  const inferredAuditEnabled = useAuditRequired(
+    inferredNodeKey || (entityType || '').trim() || auditEntityType,
+    false,
+  );
   const fallbackManualAuditEnabled = workflowAuditEnabled ?? (resolvedEntityType ? inferredAuditEnabled : false);
   const resolvedResource = (
     resourcePrefix
