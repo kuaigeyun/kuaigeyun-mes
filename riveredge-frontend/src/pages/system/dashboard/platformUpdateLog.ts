@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'sales-order-list-line-materials-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.description',
+  },
+  {
+    id: 'frontend-perf-wo-outbound-quote-r02',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.description',
+  },
+  {
     id: 'remove-equipment-spot-check-plan-r01',
     date: '2026-10-15',
     type: 'improvement',

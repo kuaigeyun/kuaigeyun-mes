@@ -5720,9 +5720,11 @@ const SalesOrdersPage: React.FC = () => {
           }}
           request={async (params: any, sort: any, _filter: any, searchFormValues: any, meta?: UniTableRequestMeta): Promise<any> => {
             const isPrefetch = meta?.purpose === 'prefetch';
+            // 订单视图「明细」预览列与明细表格扁平行都依赖 items；须始终 include_items
+            //（对标报价单/采购订单列表），禁止仅在 detail 视图才带上导致预览全为「-」）
             const apiParams = resolveSalesOrderListApiParams(params, sort, searchFormValues, {
               salesmanId: resolveListSalesmanId(salesmanFilterIdRef.current, searchFormValues),
-              includeItems: dataViewModeRef.current === 'detail',
+              includeItems: true,
             }) as SalesOrderListParams;
 
             const toFlatRows = (orders: SalesOrder[], writeRowKeyMap: boolean): SalesOrderItemRow[] => {

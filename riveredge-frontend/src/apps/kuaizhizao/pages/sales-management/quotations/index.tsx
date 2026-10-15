@@ -115,10 +115,6 @@ import {
 import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { getQuotationLifecycle, buildQuotationLifecycleValueEnum, resolveQuotationListLifecycleParams } from '../../../utils/quotationLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import {
-  DocumentTrackingTimelineBody,
-  useDocumentTracking,
-} from '../../../../../components/document-tracking-panel';
 import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
@@ -235,6 +231,9 @@ const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport }))
 );
 const LazySyncFromDatasetModal = lazy(() => import('../../../../../components/sync-from-dataset-modal'));
+const LazyQuotationDetailTimelinePane = lazy(
+  () => import('./components/QuotationDetailTimelinePane'),
+);
 
 /** 列表快速筛选：DB status → 生命周期展示（筛选值仍为后端 status） */
 function getQuotationStatusFilterEnum(t: (key: string) => string) {
@@ -871,10 +870,6 @@ const QuotationsPage: React.FC = () => {
   }, []);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [quotationDetail, setQuotationDetail] = useState<Quotation | null>(null);
-  const quotationTracking = useDocumentTracking(
-    detailDrawerVisible && quotationDetail ? 'quotation' : undefined,
-    quotationDetail?.id
-  );
   /** 默认 false：配置未加载时不应误判为「已开审核」，否则会出现未开审核仍显示「撤回提交」等 */
   const quotationAuditRequired = useAuditRequired('quotation', false);
   const quotationLifecycleDetail = useMemo(
@@ -4692,19 +4687,18 @@ const QuotationsPage: React.FC = () => {
         }
         timeline={
           quotationDetail?.id != null ? (
-            <>
-              {quotationTracking.loading && (
+            <Suspense
+              fallback={
                 <div style={{ textAlign: 'center', padding: 24 }}>
                   <Spin />
                 </div>
-              )}
-              {quotationTracking.error && !quotationTracking.loading && (
-                <Typography.Text type="danger">{quotationTracking.error}</Typography.Text>
-              )}
-              {quotationTracking.data && !quotationTracking.loading && (
-                <DocumentTrackingTimelineBody data={quotationTracking.data} />
-              )}
-            </>
+              }
+            >
+              <LazyQuotationDetailTimelinePane
+                open={detailDrawerVisible}
+                quotationId={quotationDetail.id}
+              />
+            </Suspense>
           ) : undefined
         }
       
