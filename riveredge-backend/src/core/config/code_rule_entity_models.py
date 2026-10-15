@@ -51,10 +51,6 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
         "apps.kuaizhizao.models.equipment_ops",
         "EquipmentSpotCheck",
     ),
-    "equipment_spot_check_plan_code": (
-        "apps.kuaizhizao.models.equipment_spot_check_plan",
-        "EquipmentSpotCheckPlan",
-    ),
     "equipment_route_patrol_code": (
         "apps.kuaizhizao.models.equipment_ops",
         "EquipmentRoutePatrol",

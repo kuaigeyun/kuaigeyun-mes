@@ -1301,9 +1301,62 @@ def _append_fk_orphan_cleanup(
     import_tables: set[str],
     tenant_ids: set[int],
     table_column_map: dict[str, list[str]],
+    passes: int = 3,
 ) -> None:
-    """删除租户范围内引用已不存在父表行的孤儿数据（源库可能存在的历史脏数据）。"""
+    """删除租户范围内引用已不存在父表行的孤儿数据（源库可能存在的历史脏数据）。
+
+    多轮执行：上一轮删除父行后，下一轮才能清掉仍指向它们的子行。
+    自引用外键不在此删除整行（见 `_append_self_referential_fk_nullify`）。
+    """
     tenant_sql = ", ".join(str(t) for t in sorted(tenant_ids))
+    for _ in range(max(1, int(passes))):
+        for row in fk_rows:
+            child = row.get("child_table")
+            parent = row.get("parent_table")
+            child_col = row.get("child_column")
+            parent_col = row.get("parent_column")
+            if not child or not parent or not child_col or not parent_col:
+                continue
+            if child == parent:
+                # 自引用：保留行，导入结束后将悬空键置空
+                continue
+            if child not in import_tables:
+                continue
+            if "tenant_id" not in table_column_map.get(child, []):
+                continue
+            parent_has_tenant = "tenant_id" in table_column_map.get(parent, [])
+            child_has_tenant = "tenant_id" in table_column_map.get(child, [])
+            if parent_has_tenant and child_has_tenant:
+                exists_clause = (
+                    f'SELECT 1 FROM "{parent}" p '
+                    f'WHERE p."{parent_col}" = c."{child_col}" '
+                    f"AND p.tenant_id = c.tenant_id"
+                )
+            else:
+                exists_clause = (
+                    f'SELECT 1 FROM "{parent}" p WHERE p."{parent_col}" = c."{child_col}"'
+                )
+            script_lines.append(
+                f'DELETE FROM "{child}" c WHERE c.tenant_id IN ({tenant_sql}) '
+                f'AND c."{child_col}" IS NOT NULL '
+                f"AND NOT EXISTS ({exists_clause});"
+            )
+
+
+def _append_self_referential_fk_nullify(
+    script_lines: list[str],
+    *,
+    fk_rows: list[dict[str, Any]],
+    import_tables: set[str],
+    tenant_ids: set[int],
+    table_column_map: dict[str, list[str]],
+) -> None:
+    """将租户范围内悬空的自引用外键置空（如 core_departments.parent_id）。
+
+    重建 FK 前必须保证同租户父行存在；跨租户同 id 命中也不能保留，否则会串租户树。
+    """
+    tenant_sql = ", ".join(str(t) for t in sorted(tenant_ids))
+    seen: set[tuple[str, str]] = set()
     for row in fk_rows:
         child = row.get("child_table")
         parent = row.get("parent_table")
@@ -1311,26 +1364,23 @@ def _append_fk_orphan_cleanup(
         parent_col = row.get("parent_column")
         if not child or not parent or not child_col or not parent_col:
             continue
-        if child not in import_tables:
+        if child != parent or child not in import_tables:
             continue
         if "tenant_id" not in table_column_map.get(child, []):
             continue
-        parent_has_tenant = "tenant_id" in table_column_map.get(parent, [])
-        child_has_tenant = "tenant_id" in table_column_map.get(child, [])
-        if parent_has_tenant and child_has_tenant:
-            exists_clause = (
-                f'SELECT 1 FROM "{parent}" p '
-                f'WHERE p."{parent_col}" = c."{child_col}" '
-                f"AND p.tenant_id = c.tenant_id"
-            )
-        else:
-            exists_clause = (
-                f'SELECT 1 FROM "{parent}" p WHERE p."{parent_col}" = c."{child_col}"'
-            )
+        key = (str(child), str(child_col))
+        if key in seen:
+            continue
+        seen.add(key)
         script_lines.append(
-            f'DELETE FROM "{child}" c WHERE c.tenant_id IN ({tenant_sql}) '
+            f'UPDATE "{child}" c SET "{child_col}" = NULL '
+            f"WHERE c.tenant_id IN ({tenant_sql}) "
             f'AND c."{child_col}" IS NOT NULL '
-            f"AND NOT EXISTS ({exists_clause});"
+            f"AND NOT EXISTS ("
+            f'SELECT 1 FROM "{parent}" p '
+            f'WHERE p."{parent_col}" = c."{child_col}" '
+            f"AND p.tenant_id = c.tenant_id"
+            f");"
         )
 
 
@@ -1463,6 +1513,14 @@ def _run_tenant_restore_transaction(
             )
 
         _append_fk_orphan_cleanup(
+            script_lines,
+            fk_rows=fk_rows,
+            import_tables=import_tables,
+            tenant_ids=tenant_ids_to_clear,
+            table_column_map=table_column_map,
+        )
+        # 孤儿删除可能先清掉父部门；自引用键在重建约束前统一置空
+        _append_self_referential_fk_nullify(
             script_lines,
             fk_rows=fk_rows,
             import_tables=import_tables,

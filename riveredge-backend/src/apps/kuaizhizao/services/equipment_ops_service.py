@@ -882,75 +882,12 @@ class EquipmentSpotCheckService:
     scheme_service = EquipmentInspectionSchemeService()
 
     async def _locked_header(self, tenant_id: int, row_id: int) -> EquipmentSpotCheck:
-        row = await self.get(tenant_id, row_id)
-        if row.period_key and row.plan_id:
-            from apps.kuaizhizao.models.equipment_spot_check_plan import EquipmentSpotCheckPlan
-
-            plan = await EquipmentSpotCheckPlan.filter(
-                tenant_id=tenant_id, id=row.plan_id, deleted_at__isnull=True,
-            ).select_for_update().first()
-            if not plan:
-                raise ValidationError("来源点检计划不可用")
         row = await EquipmentSpotCheck.filter(
             tenant_id=tenant_id, id=row_id, deleted_at__isnull=True,
         ).select_for_update().first()
         if not row:
             raise NotFoundError(f"点检单不存在: {row_id}")
         return row
-
-    async def _normalize_task_results(
-        self, tenant_id: int, header: EquipmentSpotCheck, data: SpotCheckUpdate,
-    ) -> SpotCheckUpdate:
-        from apps.kuaizhizao.models.equipment_spot_check_plan import EquipmentSpotCheckPlan
-
-        plan = await EquipmentSpotCheckPlan.filter(tenant_id=tenant_id, id=header.plan_id).first()
-        if not plan or plan.status not in ("已发布", "执行中"):
-            raise ValidationError("来源点检计划当前不允许提交")
-        if header.scheduled_at and resolve_business_datetime() < header.scheduled_at:
-            raise ValidationError("尚未到计划点检时间")
-        if data.status is not None and data.status != "待审核":
-            raise ValidationError("实际点检后只能提交待审核")
-        if "check_date" in data.model_fields_set and data.check_date != header.check_date:
-            raise ValidationError("计划任务的执行日期不可修改")
-        if header.capture_mode == "B":
-            _assert_spot_check_capture_payload("B", attachments=data.attachments, lines=[])
-            return data.model_copy(update={"lines": []})
-        expected = await self._load_lines(tenant_id, header.id)
-        submitted = data.lines or []
-        by_no = {line.line_no: line for line in submitted}
-        if len(by_no) != len(submitted) or set(by_no) != {line.line_no for line in expected}:
-            raise ValidationError("请填写计划任务的全部点检项")
-        normalized = []
-        for frozen in expected:
-            result = by_no[frozen.line_no]
-            if result.item_id != frozen.item_id:
-                raise ValidationError("计划任务的点检项不可替换")
-            value_type = (frozen.value_type or "boolean").strip().lower()
-            if value_type == "numeric":
-                try:
-                    measured = Decimal(str(result.measured_value or "").strip().replace(",", ""))
-                    if not measured.is_finite():
-                        raise ValueError()
-                except (ValueError, ArithmeticError):
-                    raise ValidationError(f"点检项「{frozen.item_name}」必须填写有效实测数值")
-            elif value_type in ("boolean", "bool", "是/否"):
-                if result.is_pass is None:
-                    raise ValidationError(f"点检项「{frozen.item_name}」必须填写判定结果")
-            elif not str(result.measured_value or "").strip():
-                raise ValidationError(f"点检项「{frozen.item_name}」必须填写实际结果")
-            normalized.append(SpotCheckLineInput(
-                **{key: getattr(frozen, key) for key in (
-                    "line_no", "item_id", "item_code", "item_name", "requirement",
-                    "method", "judgment_standard", "value_type", "unit",
-                    "numeric_min", "numeric_max", "photo_required",
-                )},
-                measured_value=result.measured_value, is_pass=result.is_pass,
-                attachments=result.attachments, remark=result.remark,
-            ))
-        _assert_spot_check_capture_payload(
-            header.capture_mode or "A", attachments=data.attachments, lines=normalized,
-        )
-        return data.model_copy(update={"lines": normalized})
 
     async def _resolve_scheme_id(
         self,
@@ -1056,8 +993,6 @@ class EquipmentSpotCheckService:
         operator_name: Optional[str] = None,
         current_user: Optional[User] = None,
     ) -> EquipmentSpotCheck:
-        if data.plan_id is not None or data.plan_uuid is not None:
-            raise ValidationError("来源计划点检必须先生成任务，再填写任务提交")
         equipment = await _get_equipment_or_raise(tenant_id, data.equipment_id)
         _reject_scrapped_equipment(equipment)
         scheme_id = await self._resolve_scheme_id(tenant_id, data.equipment_id, data.scheme_id)
@@ -1080,8 +1015,6 @@ class EquipmentSpotCheckService:
                 equipment_code=equipment.code,
                 equipment_name=equipment.name,
                 scheme_id=scheme.id,
-                plan_id=getattr(data, "plan_id", None),
-                plan_uuid=getattr(data, "plan_uuid", None),
                 capture_mode=capture_mode,
                 check_date=data.check_date or date.today(),
                 inspector_id=(
@@ -1237,10 +1170,6 @@ class EquipmentSpotCheckService:
             apply_update_audit(header, current_user)
             await header.save()
             await SpotCheckReminderService.on_spot_check_reviewed(tenant_id, header)
-            if header.period_key and header.plan_id:
-                from apps.kuaizhizao.services.equipment_spot_check_plan_service import EquipmentSpotCheckPlanService
-
-                await EquipmentSpotCheckPlanService.refresh_completion(tenant_id, header.plan_id)
             return header
 
     async def reject(
@@ -1300,7 +1229,6 @@ class EquipmentSpotCheckService:
         uuid: Optional[str] = None,
         scheme_domain: Optional[str] = None,
         scheme_id: Optional[int] = None,
-        plan_uuid: Optional[str] = None,
     ) -> tuple[List[EquipmentSpotCheck], int]:
         from apps.kuaizhizao.services.equipment_list_core import (
             SPOT_CHECK_SORTABLE_FIELDS,
@@ -1321,8 +1249,6 @@ class EquipmentSpotCheckService:
             qs = qs.filter(uuid=uuid.strip())
         if scheme_id is not None:
             qs = qs.filter(scheme_id=scheme_id)
-        if plan_uuid:
-            qs = qs.filter(plan_uuid=plan_uuid)
         if scheme_domain:
             domain = _normalize_scheme_domain(scheme_domain)
             domain_scheme_ids = list(
@@ -1375,11 +1301,9 @@ class EquipmentSpotCheckService:
     async def update(self, tenant_id: int, row_id: int, data: SpotCheckUpdate, current_user: Optional[User] = None) -> EquipmentSpotCheck:
         async with in_transaction():
             header = await self._locked_header(tenant_id, row_id)
-            if header.status not in ("待执行", "待审核", "已驳回"):
-                raise ValidationError("仅待执行、待审核或已驳回的点检单可填写")
+            if header.status not in ("待审核", "已驳回"):
+                raise ValidationError("仅待审核或已驳回的点检单可编辑")
             prev_status = header.status
-            if header.period_key:
-                data = await self._normalize_task_results(tenant_id, header, data)
             update_data = data.model_dump(exclude_unset=True, exclude={"lines"})
             if data.status is not None and data.status != "待审核":
                 raise ValidationError("请通过审核操作变更点检状态")
@@ -1487,16 +1411,14 @@ class EquipmentSpotCheckService:
             header.reviewed_by_name = None
             header.reviewed_at = None
             await header.save()
-            if prev_status in ("待执行", "已驳回") and header.scheme_id:
+            if prev_status == "已驳回" and header.scheme_id:
                 from apps.kuaizhizao.services.spot_check_reminder_service import (
                     SpotCheckReminderService,
                 )
 
-                scheme = None
-                if not header.period_key:
-                    scheme, _ = await self.scheme_service.get_with_lines(
-                        tenant_id, header.scheme_id
-                    )
+                scheme, _ = await self.scheme_service.get_with_lines(
+                    tenant_id, header.scheme_id
+                )
                 await SpotCheckReminderService.on_spot_check_created(
                     tenant_id, header, scheme
                 )
@@ -1514,16 +1436,10 @@ class EquipmentSpotCheckService:
                     await EquipmentLineRebindService.clear_force_spot_for_equipment(
                         tenant_id, equipment, current_user=current_user
                     )
-            if header.period_key and header.plan_id:
-                from apps.kuaizhizao.services.equipment_spot_check_plan_service import EquipmentSpotCheckPlanService
-
-                await EquipmentSpotCheckPlanService.refresh_completion(tenant_id, header.plan_id)
             return header
 
     async def delete(self, tenant_id: int, row_id: int) -> None:
         header = await self.get(tenant_id, row_id)
-        if header.period_key:
-            raise ValidationError("计划任务不可单独删除，请取消来源计划")
         if header.status not in ("待审核", "已驳回"):
             raise ValidationError("仅待审核或已驳回的点检单可删除")
         header.deleted_at = resolve_business_datetime()

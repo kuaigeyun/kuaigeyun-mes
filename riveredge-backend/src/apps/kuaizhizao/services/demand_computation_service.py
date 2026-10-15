@@ -10,6 +10,7 @@ Date: 2025-01-14
 """
 
 import asyncio
+import random
 from typing import List, Optional, Dict, Any, Tuple, Set
 from datetime import datetime, timedelta, date, timezone, time
 from decimal import Decimal, ROUND_CEILING
@@ -3853,6 +3854,20 @@ class DemandComputationService(AppBaseService):
             raise BusinessLogicError("所选明细均不可下推，请重新选择")
         return selected_material_ids
 
+    async def _pick_random_active_supplier_id(self, tenant_id: int) -> Optional[int]:
+        """正式下推缺默认供应商时，从组织启用供应商中随机取一个。"""
+        from apps.master_data.models.supplier import Supplier
+
+        rows = await Supplier.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).values_list("id", flat=True)
+        ids = [int(x) for x in rows if int(x or 0) > 0]
+        if not ids:
+            return None
+        return int(random.choice(ids))
+
     async def generate_work_orders_and_purchase_orders(
         self,
         tenant_id: int,
@@ -3864,6 +3879,8 @@ class DemandComputationService(AppBaseService):
         selected_item_ids: Optional[List[int]] = None,
         include_sales_order_attachments: bool = False,
         work_order_granularity: Optional[str] = None,
+        fill_missing_supplier: Optional[str] = None,
+        omit_document_notes: bool = False,
     ) -> Dict[str, Any]:
         """
         从需求计算结果一键生成工单和采购单
@@ -3877,10 +3894,43 @@ class DemandComputationService(AppBaseService):
             push_mode: draft=草稿下推，confirm=正式下推（自动下达/提交）；缺省读组织配置
             selected_item_ids: 可选，仅下推所选计算明细（按物料聚合）；未传则下推全部剩余
             work_order_granularity: grouped=按需求行编组工单，individual=独立工单
+            fill_missing_supplier: 正式下推缺默认供应商时的策略；\"random\"=随机启用供应商
+            omit_document_notes: True 时工单/采购单/委外单不写「从需求计算自动生成」类备注
             
         Returns:
             Dict: 包含生成的工单和采购单信息
         """
+        prev_omit_notes = bool(getattr(self, "_omit_document_notes", False))
+        self._omit_document_notes = bool(omit_document_notes)
+        try:
+            return await self._generate_work_orders_and_purchase_orders_body(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+                created_by=created_by,
+                generate_mode=generate_mode,
+                allow_draft=allow_draft,
+                push_mode=push_mode,
+                selected_item_ids=selected_item_ids,
+                include_sales_order_attachments=include_sales_order_attachments,
+                work_order_granularity=work_order_granularity,
+                fill_missing_supplier=fill_missing_supplier,
+            )
+        finally:
+            self._omit_document_notes = prev_omit_notes
+
+    async def _generate_work_orders_and_purchase_orders_body(
+        self,
+        tenant_id: int,
+        computation_id: int,
+        created_by: int,
+        generate_mode: str = "all",
+        allow_draft: bool = False,
+        push_mode: Optional[str] = None,
+        selected_item_ids: Optional[List[int]] = None,
+        include_sales_order_attachments: bool = False,
+        work_order_granularity: Optional[str] = None,
+        fill_missing_supplier: Optional[str] = None,
+    ) -> Dict[str, Any]:
         resolved_push_mode = str(push_mode or "").strip().lower()
         if resolved_push_mode not in ("draft", "confirm"):
             if allow_draft:
@@ -4007,6 +4057,34 @@ class DemandComputationService(AppBaseService):
         
         # 按供应商分组采购件（物料来源控制增强）
         purchase_items_by_supplier: Dict[int, List[DemandComputationItem]] = {}
+        # 正式下推时跳过的无默认供应商采购件（不阻断其余物料下推）
+        skipped_purchase_no_supplier: List[str] = []
+        filled_random_supplier_labels: List[str] = []
+        fill_supplier_mode = str(fill_missing_supplier or "").strip().lower()
+        random_supplier_id: Optional[int] = None
+
+        async def _resolve_purchase_group_key(
+            item: Any, supplier_id: Optional[int]
+        ) -> Optional[int]:
+            nonlocal random_supplier_id
+            if supplier_id:
+                return int(supplier_id)
+            if allow_draft:
+                return PURCHASE_ORDER_NO_SUPPLIER_GROUP
+            if push_as_confirm and fill_supplier_mode == "random":
+                if random_supplier_id is None:
+                    random_supplier_id = await self._pick_random_active_supplier_id(
+                        tenant_id
+                    )
+                if random_supplier_id:
+                    code = str(
+                        getattr(item, "material_code", None) or item.material_id or ""
+                    ).strip()
+                    name = str(getattr(item, "material_name", None) or "").strip()
+                    label = f"{code} {name}".strip() or f"物料#{item.material_id}"
+                    filled_random_supplier_labels.append(label)
+                    return int(random_supplier_id)
+            return None
         
         use_group_path = (
             wo_granularity == "grouped"
@@ -4111,11 +4189,7 @@ class DemandComputationService(AppBaseService):
                     if item.material_source_config:
                         sc = resolve_computation_item_source_config(item.material_source_config)
                         supplier_id = sc.get("default_supplier_id")
-                    group_key = None
-                    if supplier_id:
-                        group_key = supplier_id
-                    elif allow_draft:
-                        group_key = PURCHASE_ORDER_NO_SUPPLIER_GROUP
+                    group_key = await _resolve_purchase_group_key(item, supplier_id)
                     if group_key is not None:
                         push_lines = self._resolve_purchase_push_lines(item, remaining_qty)
                         if group_key not in purchase_items_by_supplier:
@@ -4124,6 +4198,16 @@ class DemandComputationService(AppBaseService):
                             purchase_items_by_supplier[group_key].append(
                                 self._build_purchase_push_item(item, line)
                             )
+                        created_po_material_ids.add(item.material_id)
+                    elif push_as_confirm:
+                        code = str(
+                            getattr(item, "material_code", None)
+                            or item.material_id
+                            or ""
+                        ).strip()
+                        name = str(getattr(item, "material_name", None) or "").strip()
+                        label = f"{code} {name}".strip() or f"物料#{item.material_id}"
+                        skipped_purchase_no_supplier.append(label)
                         created_po_material_ids.add(item.material_id)
                     
             elif source_type == SOURCE_TYPE_OUTSOURCE:
@@ -4196,11 +4280,7 @@ class DemandComputationService(AppBaseService):
                         if item.material_source_config:
                             sc = resolve_computation_item_source_config(item.material_source_config)
                             supplier_id = sc.get("default_supplier_id")
-                        group_key = None
-                        if supplier_id:
-                            group_key = supplier_id
-                        elif allow_draft:
-                            group_key = PURCHASE_ORDER_NO_SUPPLIER_GROUP
+                        group_key = await _resolve_purchase_group_key(item, supplier_id)
                         if group_key is not None:
                             push_lines = self._resolve_purchase_push_lines(item, remaining_qty)
                             if group_key not in purchase_items_by_supplier:
@@ -4209,6 +4289,16 @@ class DemandComputationService(AppBaseService):
                                 purchase_items_by_supplier[group_key].append(
                                     self._build_purchase_push_item(item, line)
                                 )
+                            created_po_material_ids.add(item.material_id)
+                        elif push_as_confirm:
+                            code = str(
+                                getattr(item, "material_code", None)
+                                or item.material_id
+                                or ""
+                            ).strip()
+                            name = str(getattr(item, "material_name", None) or "").strip()
+                            label = f"{code} {name}".strip() or f"物料#{item.material_id}"
+                            skipped_purchase_no_supplier.append(label)
                             created_po_material_ids.add(item.material_id)
         
         # 建立需求计算→工单的追溯关系（支持全链路追溯）
@@ -4263,12 +4353,47 @@ class DemandComputationService(AppBaseService):
                 if "关联关系已存在" not in str(e):
                     raise
         
+        # 正式下推：缺供应商可 random 填入；仍无法填入的跳过，不阻断工单等其它结果
+        push_warnings: List[str] = []
+        if push_as_confirm and filled_random_supplier_labels:
+            sample = "、".join(filled_random_supplier_labels[:8])
+            more = (
+                f" 等共 {len(filled_random_supplier_labels)} 条"
+                if len(filled_random_supplier_labels) > 8
+                else ""
+            )
+            push_warnings.append(
+                f"未配置默认供应商，已随机指定供应商 #{random_supplier_id}："
+                f"{sample}{more}"
+            )
+        if push_as_confirm and skipped_purchase_no_supplier:
+            sample = "、".join(skipped_purchase_no_supplier[:8])
+            more = (
+                f" 等共 {len(skipped_purchase_no_supplier)} 条"
+                if len(skipped_purchase_no_supplier) > 8
+                else ""
+            )
+            push_warnings.append(
+                f"未配置默认供应商且无可用供应商，已跳过采购下推：{sample}{more}"
+            )
+            logger.info(
+                "demand_computation {} confirm push skipped {} buy items without default supplier",
+                computation_id,
+                len(skipped_purchase_no_supplier),
+            )
         if (
             generate_mode == "purchase_only"
             and push_as_confirm
             and not purchase_items_by_supplier
         ):
-            raise BusinessLogicError("无已配置默认供应商的采购件，无法正式下推采购订单")
+            if not push_warnings:
+                push_warnings.append(
+                    "无已配置默认供应商的采购件，已跳过采购订单下推"
+                )
+            logger.info(
+                "demand_computation {} purchase_only confirm: no PO generated (all buy items skipped or empty)",
+                computation_id,
+            )
 
         # 按供应商分组生成采购订单（物料来源控制增强）
         for supplier_id, items_for_supplier in purchase_items_by_supplier.items():
@@ -4334,6 +4459,8 @@ class DemandComputationService(AppBaseService):
             "purchase_order_count": len(purchase_orders),
             "work_order_groups": work_order_groups,
             "work_order_group_count": len(work_order_groups),
+            "warnings": push_warnings,
+            "skipped_purchase_no_supplier": skipped_purchase_no_supplier,
         }
 
     async def _apply_push_confirm_to_generated_orders(
@@ -6324,6 +6451,8 @@ class DemandComputationService(AppBaseService):
         purchase_order_item_ids: Optional[List[int]] = None,
         include_sales_order_attachments: bool = False,
         work_order_granularity: Optional[str] = None,
+        fill_missing_supplier: Optional[str] = None,
+        omit_document_notes: bool = False,
     ) -> Dict[str, Any]:
         """
         一键下推：按配置执行工单、采购申请/采购单、委外工单。
@@ -6334,6 +6463,7 @@ class DemandComputationService(AppBaseService):
         production_item_ids: 可选，仅下推所选计算明细对应生产/委外件
         purchase_order_item_ids: 可选，仅下推所选计算明细对应采购件到采购订单
         work_order_granularity: grouped=组工单，individual=独立工单
+        omit_document_notes: True 时下游单据不写自动生成备注（造数用）
         """
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
         if not computation:
@@ -6364,6 +6494,7 @@ class DemandComputationService(AppBaseService):
                 push_mode=resolved_push_mode,
                 selected_item_ids=production_item_ids,
                 work_order_granularity=work_order_granularity,
+                omit_document_notes=omit_document_notes,
             )
             results["work_orders"] = r.get("work_orders", [])
             results["outsource_work_orders"] = r.get("outsource_work_orders", [])
@@ -6417,14 +6548,23 @@ class DemandComputationService(AppBaseService):
                 push_mode=resolved_push_mode,
                 selected_item_ids=purchase_order_item_ids,
                 include_sales_order_attachments=include_sales_order_attachments,
+                fill_missing_supplier=fill_missing_supplier,
+                omit_document_notes=omit_document_notes,
             )
             results["purchase_orders"] = r.get("purchase_orders", [])
+            warn = r.get("warnings") or []
+            if warn:
+                results.setdefault("warnings", []).extend(warn)
+            skipped = r.get("skipped_purchase_no_supplier") or []
+            if skipped:
+                results["skipped_purchase_no_supplier"] = skipped
 
         return {
             "success": True,
             "message": "一键下推完成",
             "push_mode": resolved_push_mode,
             "results": results,
+            "warnings": list(results.get("warnings") or []),
         }
 
     async def _create_work_order_from_item(
@@ -6503,10 +6643,12 @@ class DemandComputationService(AppBaseService):
             )
             
             # 创建工单（物料来源控制增强）
-            remarks = f"从需求计算 {computation.computation_code} 自动生成"
-            if is_outsource:
-                remarks += "（委外工单）"
-            
+            remarks = None
+            if not getattr(self, "_omit_document_notes", False):
+                remarks = f"从需求计算 {computation.computation_code} 自动生成"
+                if is_outsource:
+                    remarks += "（委外工单）"
+
             work_order_data = WorkOrderCreate(
                 code_rule="WORK_ORDER_CODE",
                 product_id=item.material_id,
@@ -6652,7 +6794,11 @@ class DemandComputationService(AppBaseService):
                 total_amount=total_amount,
                 planned_start_date=planned_start_date,
                 planned_end_date=planned_end_date,
-                remarks=f"从需求计算 {computation.computation_code} 自动生成",
+                remarks=(
+                    None
+                    if getattr(self, "_omit_document_notes", False)
+                    else f"从需求计算 {computation.computation_code} 自动生成"
+                ),
             )
             
             outsource_service = OutsourceWorkOrderService()
@@ -6795,8 +6941,11 @@ class DemandComputationService(AppBaseService):
                 "status": "草稿",
                 "source_type": "demand_computation",
                 "source_id": computation.id,
-                "notes": f"从需求计算 {computation.computation_code} 自动生成",
             }
+            if not getattr(self, "_omit_document_notes", False):
+                order_data["notes"] = (
+                    f"从需求计算 {computation.computation_code} 自动生成"
+                )
             # 采购员：优先供应商归属采购员，否则用下推操作人（避免列表采购员空白）
             _sup = (
                 await Supplier.get_or_none(tenant_id=tenant_id, id=int(supplier_id))
@@ -6935,8 +7084,11 @@ class DemandComputationService(AppBaseService):
                 "status": "草稿",
                 "source_type": "demand_computation",
                 "source_id": computation.id,
-                "notes": f"从需求计算 {computation.computation_code} 自动生成（按供应商分组）",
             }
+            if not getattr(self, "_omit_document_notes", False):
+                order_data["notes"] = (
+                    f"从需求计算 {computation.computation_code} 自动生成（按供应商分组）"
+                )
             if supplier and getattr(supplier, "buyer_id", None):
                 order_data["buyer_id"] = int(supplier.buyer_id)
                 order_data["buyer_name"] = (

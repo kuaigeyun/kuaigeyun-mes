@@ -1,5 +1,5 @@
 /**
- * 设备点检 / 保养执行造数面板（按点检计划 / 保养计划）
+ * 设备点检 / 保养执行造数面板（按点检单模板 / 保养计划）
  */
 
 import React, { lazy, Suspense, useMemo, useState } from 'react';
@@ -29,7 +29,8 @@ import { getDepartmentTree, type DepartmentTreeItem } from '../../../../../servi
 import { getRoleList } from '../../../../../services/role';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { workGroupApi } from '../../../../master-data/services/factory';
-import { maintenancePlanApi, spotCheckPlanApi } from '../../../services/equipment';
+import { maintenancePlanApi } from '../../../services/equipment';
+import { spotChecksApi } from '../../../services/equipmentOps';
 import {
   executeEquipmentOpsGenerate,
   previewEquipmentOpsGenerate,
@@ -119,15 +120,15 @@ export default function EquipmentOpsGeneratePanel({
   const [importModalVisible, setImportModalVisible] = useState(false);
 
   const useWorkSchedule = Form.useWatch('use_work_schedule', form);
-  const selectedSpotPlanIds = Form.useWatch('spot_check_plan_ids', form) as number[] | undefined;
+  const selectedSpotCheckIds = Form.useWatch('spot_check_ids', form) as number[] | undefined;
   const selectedMaintPlanIds = Form.useWatch('maintenance_plan_ids', form) as
     | number[]
     | undefined;
   const spotCheckImportTemplate = useMemo(() => buildSpotCheckImportTemplate(t), [t]);
 
-  const spotPlansQuery = useQuery({
-    queryKey: ['kuaizhizao', 'equipment-ops-generate', 'spot-check-plans', selectedTenantId],
-    queryFn: async () => listItems(await spotCheckPlanApi.list({ skip: 0, limit: 200 })),
+  const spotChecksQuery = useQuery({
+    queryKey: ['kuaizhizao', 'equipment-ops-generate', 'spot-checks', selectedTenantId],
+    queryFn: async () => listItems(await spotChecksApi.list({ skip: 0, limit: 200 })),
     enabled: ready,
     retry: 1,
   });
@@ -169,13 +170,13 @@ export default function EquipmentOpsGeneratePanel({
     retry: 1,
   });
 
-  const spotPlanOptions = useMemo(
+  const spotCheckOptions = useMemo(
     () =>
-      (spotPlansQuery.data || []).map((p: any) => ({
+      (spotChecksQuery.data || []).map((p: any) => ({
         value: Number(p.id),
-        label: `${p.plan_no || p.id} ${p.plan_name || ''}`.trim(),
+        label: `${p.document_no || p.id} ${p.equipment_name || p.equipment_code || ''}`.trim(),
       })),
-    [spotPlansQuery.data],
+    [spotChecksQuery.data],
   );
 
   const maintPlanOptions = useMemo(
@@ -189,7 +190,9 @@ export default function EquipmentOpsGeneratePanel({
 
   const planBoundEquipmentOptions = useMemo(() => {
     const spotIdSet = new Set(
-      (selectedSpotPlanIds || []).map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0),
+      (selectedSpotCheckIds || [])
+        .map((x) => Number(x))
+        .filter((n) => Number.isFinite(n) && n > 0),
     );
     const maintIdSet = new Set(
       (selectedMaintPlanIds || [])
@@ -209,20 +212,17 @@ export default function EquipmentOpsGeneratePanel({
         if (!byId.has(id)) byId.set(id, label);
       }
     };
-    for (const p of spotPlansQuery.data || []) {
+    for (const p of spotChecksQuery.data || []) {
       if (!spotIdSet.has(Number(p.id))) continue;
-      pushItems(p.equipment_items);
-      if (!Array.isArray(p.equipment_items) || p.equipment_items.length === 0) {
-        const eid = Number(p.equipment_id);
-        if (Number.isFinite(eid) && eid > 0) {
-          pushItems([
-            {
-              id: eid,
-              code: p.equipment_code || p.equipment_uuid,
-              name: p.equipment_name,
-            },
-          ]);
-        }
+      const eid = Number(p.equipment_id);
+      if (Number.isFinite(eid) && eid > 0) {
+        pushItems([
+          {
+            id: eid,
+            code: p.equipment_code,
+            name: p.equipment_name,
+          },
+        ]);
       }
     }
     for (const p of maintPlansQuery.data || []) {
@@ -245,9 +245,9 @@ export default function EquipmentOpsGeneratePanel({
       .sort((a, b) => a[0] - b[0])
       .map(([value, label]) => ({ value, label }));
   }, [
-    selectedSpotPlanIds,
+    selectedSpotCheckIds,
     selectedMaintPlanIds,
-    spotPlansQuery.data,
+    spotChecksQuery.data,
     maintPlansQuery.data,
   ]);
 
@@ -332,7 +332,7 @@ export default function EquipmentOpsGeneratePanel({
 
   const buildPayload = async (): Promise<EquipmentOpsGeneratePayload> => {
     const values = await form.validateFields();
-    const spotIds = (Array.isArray(values.spot_check_plan_ids) ? values.spot_check_plan_ids : [])
+    const spotIds = (Array.isArray(values.spot_check_ids) ? values.spot_check_ids : [])
       .map((x: unknown) => Number(x))
       .filter((n: number) => Number.isFinite(n) && n > 0);
     const maintIds = (
@@ -358,7 +358,7 @@ export default function EquipmentOpsGeneratePanel({
     }
     const weekdays: number[] = Array.isArray(values.weekdays) ? values.weekdays : [0, 1, 2, 3, 4];
     return {
-      spot_check_plan_ids: spotIds,
+      spot_check_ids: spotIds,
       maintenance_plan_ids: maintIds,
       equipment_ids: equipmentIds,
       anchor_start: range[0].startOf('day').toISOString(),
@@ -473,7 +473,7 @@ export default function EquipmentOpsGeneratePanel({
           form={form}
           layout="vertical"
           initialValues={{
-            spot_check_plan_ids: [],
+            spot_check_ids: [],
             maintenance_plan_ids: [],
             equipment_ids: [],
             use_work_schedule: true,
@@ -487,17 +487,17 @@ export default function EquipmentOpsGeneratePanel({
           }}
         >
           <Form.Item
-            name="spot_check_plan_ids"
-            label={t('app.kuaizhizao.equipmentOpsGenerate.spotCheckPlans')}
+            name="spot_check_ids"
+            label={t('app.kuaizhizao.equipmentOpsGenerate.spotChecks')}
           >
             <Select
               mode="multiple"
               allowClear
               showSearch
               optionFilterProp="label"
-              loading={spotPlansQuery.isLoading}
-              placeholder={t('app.kuaizhizao.equipmentOpsGenerate.spotCheckPlansPlaceholder')}
-              options={spotPlanOptions}
+              loading={spotChecksQuery.isLoading}
+              placeholder={t('app.kuaizhizao.equipmentOpsGenerate.spotChecksPlaceholder')}
+              options={spotCheckOptions}
               style={{ maxWidth: 720 }}
             />
           </Form.Item>
@@ -828,7 +828,7 @@ export default function EquipmentOpsGeneratePanel({
           <Typography.Paragraph>
             {t('app.kuaizhizao.equipmentOpsGenerate.previewSummary', {
               equipment: preview.equipment_count,
-              spotPlans: preview.spot_check_plan_count ?? 0,
+              spotPlans: preview.spot_check_seed_count ?? 0,
               spotTargets: preview.spot_check_targets,
               spotDocs: preview.spot_check_docs,
               maintPlans: preview.maintenance_plan_count ?? 0,

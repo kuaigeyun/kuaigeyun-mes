@@ -15,6 +15,7 @@ import {
   DatePicker,
   Form,
   InputNumber,
+  Progress,
   Radio,
   Result,
   Row,
@@ -56,6 +57,7 @@ import {
   getFlowOperatorDefaults,
   previewFlowGenerate,
   type FlowExecuteResult,
+  type FlowGenerateJob,
   type FlowGeneratePayload,
   type FlowPreviewResult,
   type FlowSourceType,
@@ -132,6 +134,7 @@ export default function FlowDataGeneratePage() {
   const [result, setResult] = useState<FlowExecuteResult | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [loadingExecute, setLoadingExecute] = useState(false);
+  const [executeJob, setExecuteJob] = useState<FlowGenerateJob | null>(null);
   const [orderKeyword, setOrderKeyword] = useState('');
   const [sourceType, setSourceType] = useState<FlowSourceType>('sales_order');
 
@@ -561,11 +564,11 @@ export default function FlowDataGeneratePage() {
       onOk: async () => {
         setLoadingExecute(true);
         setResult(null);
+        setExecuteJob(null);
         try {
           const payload = await buildPayload();
-          const data = await executeFlowGenerate(payload);
+          const data = await executeFlowGenerate(payload, (job) => setExecuteJob(job));
           if (!data.success) {
-            // 后端失败应抛 400；若仍返回 success=false，按未写入处理
             message.error(
               (data.errors || []).join('；') ||
                 t('app.kuaizhizao.flowDataGenerate.executePartial'),
@@ -574,7 +577,15 @@ export default function FlowDataGeneratePage() {
             return;
           }
           setResult(data);
-          message.success(t('app.kuaizhizao.flowDataGenerate.executeOk'));
+          if ((data.errors || []).length > 0) {
+            message.warning(
+              t('app.kuaizhizao.flowDataGenerate.executePartialOk', {
+                skipped: data.errors!.length,
+              }),
+            );
+          } else {
+            message.success(t('app.kuaizhizao.flowDataGenerate.executeOk'));
+          }
           void sourceDocQuery.refetch();
         } catch (e) {
           setResult(null);
@@ -1086,24 +1097,72 @@ export default function FlowDataGeneratePage() {
                   order: preview.order_code,
                   warehouse: preview.warehouse_name,
                 })}
+                {preview.process_material_code
+                  ? ` ${t('app.kuaizhizao.flowDataGenerate.previewMaterial', {
+                      code: preview.process_material_code,
+                    })}`
+                  : ''}
               </Typography.Paragraph>
               {(preview.warnings || []).map((w) => (
                 <Alert key={w} type="warning" showIcon style={{ marginBottom: 8 }} title={w} />
               ))}
               <Table
                 size="small"
-                rowKey={(r) => `${r.step_key}-${r.issued_at}`}
+                rowKey={(r, idx) => `${r.step_key}-${r.issued_at}-${idx}`}
                 pagination={false}
+                scroll={{ x: 720 }}
                 dataSource={preview.steps}
                 columns={[
-                  { title: t('app.kuaizhizao.flowDataGenerate.colLabel'), dataIndex: 'label' },
+                  {
+                    title: t('app.kuaizhizao.flowDataGenerate.colLabel'),
+                    dataIndex: 'label',
+                    width: 200,
+                  },
                   {
                     title: t('app.kuaizhizao.flowDataGenerate.colIssuedAt'),
                     dataIndex: 'issued_at',
+                    width: 180,
                     render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm:ss'),
+                  },
+                  {
+                    title: t('app.kuaizhizao.flowDataGenerate.colFlowMode'),
+                    dataIndex: 'flow_mode',
+                    width: 100,
+                    render: (v?: string | null) => v || '-',
+                  },
+                  {
+                    title: t('app.kuaizhizao.flowDataGenerate.colNote'),
+                    dataIndex: 'note',
+                    ellipsis: true,
+                    render: (v?: string | null) => v || '-',
                   },
                 ]}
               />
+            </Card>
+          )}
+
+          {(loadingExecute || executeJob) && (
+            <Card
+              size="small"
+              style={{ marginTop: 16 }}
+              title={t('app.kuaizhizao.flowDataGenerate.executeProgress')}
+            >
+              <Progress
+                percent={Math.max(0, Math.min(100, Number(executeJob?.progress ?? 0)))}
+                status={
+                  executeJob?.status === 'failed'
+                    ? 'exception'
+                    : executeJob?.status === 'succeeded'
+                      ? 'success'
+                      : 'active'
+                }
+              />
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
+                {executeJob?.message ||
+                  (loadingExecute
+                    ? t('app.kuaizhizao.flowDataGenerate.executeProgressWaiting')
+                    : '')}
+              </Typography.Paragraph>
             </Card>
           )}
 
@@ -1112,13 +1171,13 @@ export default function FlowDataGeneratePage() {
               size="small"
               style={{ marginTop: 16 }}
               title={
-                result.success
-                  ? t('app.kuaizhizao.flowDataGenerate.resultOk')
-                  : t('app.kuaizhizao.flowDataGenerate.resultPartial')
+                (result.errors || []).length > 0
+                  ? t('app.kuaizhizao.flowDataGenerate.resultPartial')
+                  : t('app.kuaizhizao.flowDataGenerate.resultOk')
               }
             >
               {(result.errors || []).map((e) => (
-                <Alert key={e} type="error" showIcon style={{ marginBottom: 8 }} title={e} />
+                <Alert key={e} type="warning" showIcon style={{ marginBottom: 8 }} title={e} />
               ))}
               {(result.outsource_notes || []).map((n) => (
                 <Alert key={n} type="info" showIcon style={{ marginBottom: 8 }} title={n} />
@@ -1131,7 +1190,7 @@ export default function FlowDataGeneratePage() {
                         ([k, uid]) =>
                           `${t(`app.kuaizhizao.flowDataGenerate.step.${k}`, { defaultValue: k })}=#${uid}`,
                       )
-                      .join(' · '),
+                      .join('、'),
                   })}
                 </Typography.Paragraph>
               )}
