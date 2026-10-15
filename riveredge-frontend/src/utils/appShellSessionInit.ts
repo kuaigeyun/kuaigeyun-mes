@@ -4,7 +4,7 @@
  * 登录后：先用本地缓存占位立刻进入工作台，再经 React Query 单次拉取并刷新。
  */
 import { applyAppShellLanguageFromCloud, applyLanguageFromLocalCache } from '../config/i18n';
-import { getToken, getTenantId } from './auth';
+import { getToken, getTenantId, isInfraSuperAdminFromToken } from './auth';
 import { getSessionCurrentUser } from './sessionCurrentUser';
 import { isKuaireportSharedBrowsePath } from './kuaireportSharedPath';
 import { useConfigStore } from '../stores/configStore';
@@ -82,7 +82,7 @@ export function refreshAppShellFromApi(options?: { force?: boolean }): Promise<v
         queryFn: fetchActiveLanguageList,
         staleTime: options?.force ? 0 : undefined,
       }),
-      userId != null && tenantId != null
+      userId != null && tenantId != null && !isInfraSuperAdminFromToken()
         ? queryClient.fetchQuery({
             queryKey: userPreferenceQueryKey,
             queryFn: fetchUserPreferenceRecord,

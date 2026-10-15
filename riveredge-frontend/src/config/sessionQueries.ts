@@ -88,6 +88,10 @@ export async function fetchSiteSettingRecord(): Promise<SiteSetting | null> {
 }
 
 export async function fetchUserPreferenceRecord(): Promise<UserPreference | null> {
+  // 平台超管为虚拟身份，个人偏好 API 仅接受 core_users
+  if (isInfraSuperAdminFromToken()) {
+    return null;
+  }
   try {
     return await getUserPreference();
   } catch (error) {
