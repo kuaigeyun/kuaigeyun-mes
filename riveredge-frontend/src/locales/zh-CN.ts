@@ -5811,6 +5811,32 @@ export default {
   'app.kuaiplm.rdProjects.systemArchive.fillStatus.uploaded': '已上传',
   'app.kuaiplm.rdProjects.systemArchive.fillStatus.linked': '已关联',
   'app.kuaiplm.rdProjects.systemArchive.fillStatus.missing_marked': '待补',
+  'app.kuaiplm.rdProjects.systemArchive.compositeStatus.linkedAccepted': '已关联 已验收',
+  'app.kuaiplm.rdProjects.systemArchive.compositeStatus.uploadedAccepted': '已上传 已验收',
+  'app.kuaiplm.rdProjects.systemArchive.compositeStatus.linkedPending': '已关联 待验收',
+  'app.kuaiplm.rdProjects.systemArchive.compositeStatus.uploadedPending': '已上传 待验收',
+  'app.kuaiplm.rdProjects.systemArchive.compositeStatus.linkedRejected': '已关联 已驳回',
+  'app.kuaiplm.rdProjects.systemArchive.compositeStatus.uploadedRejected': '已上传 已驳回',
+  'app.kuaiplm.rdProjects.systemArchive.withdrawAcceptance': '撤回修改',
+  'app.kuaiplm.rdProjects.systemArchive.withdrawAcceptanceConfirm': '撤回验收后将恢复为待验收，可重新关联或修改内容，是否继续？',
+  'app.kuaiplm.rdProjects.systemArchive.withdrawAcceptanceSuccess': '已撤回验收，可继续修改',
+  'app.kuaiplm.rdProjects.systemArchive.viewLinked': '查看关联',
+  'app.kuaiplm.rdProjects.systemArchive.viewUploaded': '查看文件',
+  'app.kuaiplm.rdProjects.systemArchive.relink': '改关联',
+  'app.kuaiplm.rdProjects.systemArchive.reupload': '重新上传',
+  'app.kuaiplm.rdProjects.systemArchive.viewLinkedTitle': '查看关联单据',
+  'app.kuaiplm.rdProjects.systemArchive.viewLinkedTargetType': '关联类型',
+  'app.kuaiplm.rdProjects.systemArchive.viewLinkedOpenList': '打开单据列表',
+  'app.kuaiplm.rdProjects.systemArchive.viewLinkedOpenFailed': '暂无法打开该类型单据列表',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.project_proposal': '项目建议书',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.rd_deliverable': '研发交付物',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.prototype_build_sheet': '样机制作书',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.lab_request': '实验委托',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.bom_collaboration': 'BOM 协同',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.trial_flow': '试产流程',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.mold_sample_order': '模具打样单',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.kuaioa_form_request': '审批表单',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.qms_system_document': '体系文件',
   'app.kuaiplm.rdProjects.systemArchive.acceptanceStatus.none': '未验收',
   'app.kuaiplm.rdProjects.systemArchive.acceptanceStatus.pending': '待验收',
   'app.kuaiplm.rdProjects.systemArchive.acceptanceStatus.accepted': '已验收',
@@ -5969,6 +5995,13 @@ export default {
   'app.kuaiplm.rdProjects.detail.task.updateSuccess': '任务已更新',
   'app.kuaiplm.rdProjects.detail.task.deleteConfirm': '删除任务？',
   'app.kuaiplm.rdProjects.detail.deliverable.createTitle': '新建交付物',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocument': '关联单据',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocumentTitle': '关联单据',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocumentDeliverable': '交付物',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocumentDeliverableRequired': '请选择要关联的交付物',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocumentTarget': '业务单据',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocumentTargetRequired': '请选择要关联的业务单据',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocumentEmpty': '当前阶段没有支持关联单据的体系交付物',
   'app.kuaiplm.rdProjects.detail.deliverable.editTitle': '编辑交付物',
   'app.kuaiplm.rdProjects.detail.deliverable.name': '交付物名称',
   'app.kuaiplm.rdProjects.detail.deliverable.typePlaceholder': '如：材料部品规格书',
@@ -6601,7 +6634,13 @@ export default {
   'app.funide-oa.projectProposal.validation.projectCodeRequired': '请填写项目代号',
   'app.funide-oa.projectProposal.validation.projectNameRequired': '请填写项目名称',
   'app.funide-oa.projectProposal.placeholders.titleOptional': '选填；不填则使用项目名称',
+  'app.funide-oa.projectProposal.fields.rdProject': '研发项目',
   'app.funide-oa.projectProposal.fields.title': '标题',
+  'app.funide-oa.projectProposal.actions.pushRdProject': '下推研发项目',
+  'app.funide-oa.projectProposal.messages.pushRdSuccess': '已下推研发项目并建立关联',
+  'app.funide-oa.rdProjects.form.sourceProposal': '关联项目建议书',
+  'app.funide-oa.rdProjects.form.sourceProposalPlaceholder': '选择已审核的项目建议书',
+  'app.funide-oa.rdProjects.detail.sourceProposal': '项目建议书',
   'app.funide-oa.projectProposal.fields.summary': '摘要',
   'app.funide-oa.projectProposal.fields.devRequirementsSummary': '开发要求概述',
   'app.funide-oa.projectProposal.fields.customer': '客户',
@@ -31330,6 +31369,50 @@ export default {
     '项目建议书供应商评审改为选填',
   'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-optional-r01.description':
     'funide-oa 项目建议书在开发要求为 D/E/F 类时，提交审核不再强制完整填写供应商评审表，可按需补填。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-simplify-r01.title':
+    '体系交付物操作列按状态精简',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-simplify-r01.description':
+    '已验收仅保留查看关联或查看文件与撤回修改；已有内容时不再显示标记待补；已关联显示改关联，已上传显示重新上传。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-view-linked-r01.title':
+    '体系交付物支持查看关联单据',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-view-linked-r01.description':
+    '已关联的体系预置交付物在操作列可点「查看关联」预览关联单号与名称，项目建议书可查看主要字段，并可在新标签打开对应列表定位。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-status-composite-r01.title':
+    '体系交付物状态合并展示与撤回验收',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-status-composite-r01.description':
+    '已关联且已验收合并为一条绿色状态「已关联 已验收」；操作列提供「撤回修改」恢复待验收并保留关联内容，便于重新调整。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-status-r01.title':
+    '修复关联后交付物状态仍显示缺项',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-status-r01.description':
+    '合并模式下工作台刷新不再用旧体系归档表覆盖交付物关联；关联成功保存后状态应显示「已关联」，并同步回写体系归档行。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-save-r01.title':
+    '修复研发交付物关联单据保存无效',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-save-r01.description':
+    '关联项目建议书保存时会正确写入关联 ID 并提示失败原因；已审核/已下发且尚未绑定项目的建议书可在当前研发项目工作台完成关联。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-layout-r01.title':
+    '研发交付物操作列不再挤出表格外',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-layout-r01.description':
+    '工作台交付物表操作列支持换行并加宽，验收状态改在状态列展示；含「打开工程对象」等多按钮行不再溢出列宽。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-system-archive-delete-r01.title':
+    '体系交付物与关联单据可删除',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-system-archive-delete-r01.description':
+    '研发项目工作台中体系预置交付物（含关联单据行）在待提交或已驳回状态下可删除，与普通交付物一致；已关联内容仍可用「清除」仅去掉关联与附件。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-column-r02.title':
+    '修复研发工作台交付物类型列仍显示内部码',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-column-r02.description':
+    '福尼特研发项目工作台交付物「类型」列已改为与体系清单一致的中文展示，不再把 system_archive:project_proposal 等内部码直接显示在表格里。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-document-r01.title':
+    '研发交付物区块增加关联单据',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-document-r01.description':
+    '研发项目工作台各阶段「交付物名称」标题旁新增「关联单据」，与「新建交付物」并列；可选择体系交付物并关联项目建议书等业务单据，行内「关联」同样支持单据搜索选择。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-system-archive-r01.title':
+    '研发交付物类型显示体系预置中文名',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-system-archive-r01.description':
+    '工作台交付物「类型」列不再展示 system_archive:project_proposal 等内部码，改为项目建议书等与体系清单一致的中文名称。',
+  'pages.dashboard.updateLog.entries.funide-oa-proposal-rd-project-link-r01.title':
+    '项目建议书与研发项目双向关联',
+  'pages.dashboard.updateLog.entries.funide-oa-proposal-rd-project-link-r01.description':
+    '已审核建议书可下推创建研发项目；下发研发时自动建项并关联。研发项目编辑页可选择关联建议书，列表与工作台展示互链入口。',
   'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-submit-r01.title':
     '项目建议书未填供应商可提交审核',
   'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-submit-r01.description':

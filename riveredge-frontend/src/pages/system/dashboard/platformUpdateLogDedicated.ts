@@ -9,6 +9,129 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-rd-deliverable-actions-simplify-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-simplify-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-simplify-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-view-linked-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-view-linked-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-view-linked-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-status-composite-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-status-composite-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-status-composite-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-link-status-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-status-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-status-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-link-save-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-save-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-save-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-actions-layout-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-layout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-layout-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-system-archive-delete-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-system-archive-delete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-system-archive-delete-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-type-column-r02',
+    date: '2026-10-15',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-column-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-column-r02.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-link-document-r01',
+    date: '2026-10-15',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-document-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-document-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-type-system-archive-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-system-archive-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-system-archive-r01.description',
+  },
+  {
+    id: 'funide-oa-proposal-rd-project-link-r01',
+    date: '2026-10-15',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-proposal-rd-project-link-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-proposal-rd-project-link-r01.description',
+  },
+  {
+    id: 'funide-oa-project-proposal-supplier-submit-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-submit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-submit-r01.description',
+  },
+  {
     id: 'funide-oa-bom-collab-kingdee-import-r01',
     date: '2026-10-15',
     type: 'feature',

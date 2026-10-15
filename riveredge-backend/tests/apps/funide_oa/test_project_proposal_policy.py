@@ -14,7 +14,7 @@ from apps.funide_oa.project_proposal_policy import (
 @pytest.mark.asyncio
 async def test_supplier_assessment_optional_when_funide_enabled():
     with patch(
-        "core.services.application.enabled_apps.resolve_enabled_app_codes",
+        "core.services.system.installed_feature_scope.get_installed_application_codes",
         new=AsyncMock(return_value=frozenset({"kuaiplm", "funide-oa"})),
     ):
         assert await funide_project_proposal_supplier_assessment_optional(1) is True
@@ -23,7 +23,7 @@ async def test_supplier_assessment_optional_when_funide_enabled():
 @pytest.mark.asyncio
 async def test_supplier_assessment_required_without_funide():
     with patch(
-        "core.services.application.enabled_apps.resolve_enabled_app_codes",
+        "core.services.system.installed_feature_scope.get_installed_application_codes",
         new=AsyncMock(return_value=frozenset({"kuaiplm"})),
     ):
         assert await funide_project_proposal_supplier_assessment_optional(1) is False
