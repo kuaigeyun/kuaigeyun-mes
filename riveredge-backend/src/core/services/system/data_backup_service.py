@@ -21,7 +21,7 @@ from core.services.system.backup_storage import (
     store_backup_file_path,
 )
 from core.schemas.data_backup import DataBackupCreate
-from core.tasks.dispatcher import TaskEvent, dispatch_event
+from core.tasks.dispatcher import TaskEvent, dispatch_event, execute_event_handlers
 from core.utils.timezone_utils import resolve_business_datetime
 
 
@@ -526,6 +526,8 @@ class DataBackupService:
         from core.services.system.data_backup_policy import ensure_local_backup_file
 
         resolved_path = await ensure_local_backup_file(backup)
+        # 队列只带可移植路径（通常为 basename）；Worker 侧按 backup_uuid 再 ensure_local
+        stored_path = store_backup_file_path(resolved_path)
 
         metadata = read_backup_metadata(resolved_path)
         backup_scope = metadata.get("backup_scope", backup.backup_scope)
@@ -551,25 +553,60 @@ class DataBackupService:
         backup.restore_started_at = resolve_business_datetime()
         backup.restore_completed_at = None
         backup.restore_error_message = None
+        if backup.file_path != stored_path:
+            backup.file_path = stored_path
         await backup.save()
 
+        event = TaskEvent(
+            name="database/restore.requested",
+            data={
+                "backup_uuid": str(backup.uuid),
+                "target_tenant_id": effective_target,
+                "source_tenant_id": src,
+                "file_path": stored_path,
+                "create_pre_restore_backup": create_pre_restore_backup,
+                "backup_scope": backup_scope,
+                "record_backup_scope": backup.backup_scope,
+                "allow_global_restore": allow_global_restore,
+            },
+            id=f"restore-{backup.uuid}",
+        )
+        storage = str(getattr(backup, "storage_backend", None) or "local").strip().lower()
+
         try:
-            task_ids = await dispatch_event(
-                TaskEvent(
-                    name="database/restore.requested",
-                    data={
-                        "backup_uuid": str(backup.uuid),
-                        "target_tenant_id": effective_target,
-                        "source_tenant_id": src,
-                        "file_path": resolved_path,
-                        "create_pre_restore_backup": create_pre_restore_backup,
-                        "backup_scope": backup_scope,
-                        "record_backup_scope": backup.backup_scope,
-                        "allow_global_restore": allow_global_restore,
-                    },
-                    id=f"restore-{backup.uuid}",
+            if storage in ("", "local"):
+                # 本机 zip：共享 PG broker 上其它主机 Worker 看不到文件，必须在已 ensure_local 的进程内执行
+                run_id = f"local-restore-{backup.uuid}-{uuid4().hex[:8]}"
+
+                async def _run_local_restore() -> None:
+                    try:
+                        await execute_event_handlers(
+                            event_name=event.name,
+                            data=event.data or {},
+                            event_id=event.id,
+                            run_id=run_id,
+                        )
+                    except Exception as exc:
+                        logger.exception("本机恢复任务异常 uuid={}: {}", backup.uuid, exc)
+                        row = await DataBackup.get_or_none(uuid=backup.uuid)
+                        if row and row.restore_status == "running":
+                            row.restore_status = "failed"
+                            row.restore_error_message = (
+                                "本机恢复任务异常: "
+                                f"{DataBackupService._flatten_exception_message(exc)}"
+                            )
+                            row.restore_completed_at = resolve_business_datetime()
+                            await row.save()
+
+                asyncio.create_task(_run_local_restore())
+                logger.info(
+                    "已在本机调度恢复任务（local storage）: {} run_id={}",
+                    backup.uuid,
+                    run_id,
                 )
-            )
+                return True
+
+            task_ids = await dispatch_event(event)
             if not task_ids:
                 raise RuntimeError("未注册 database/restore.requested 处理器，请确认 Worker 已启动")
             logger.info(f"已分发恢复任务: {backup.uuid} task_id={task_ids[0]}")

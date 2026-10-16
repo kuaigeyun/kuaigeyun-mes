@@ -243,14 +243,48 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
 
     backup_dir = resolve_data_backup_dir()
 
-    zip_path = resolve_backup_file_path(file_path) or ""
+    # 真源：DB 记录 + 本机/对象存储拉取；禁止只信队列里的绝对路径（跨机 Worker / 僵死进程会误报不存在）
+    from core.services.system.data_backup_policy import ensure_local_backup_file
+
+    zip_path = ""
+    resolve_hint = file_path
+    try:
+        if not backup_uuid:
+            raise ValueError("恢复任务缺少 backup_uuid")
+        backup_row = await DataBackup.get(uuid=str(backup_uuid))
+        resolve_hint = backup_row.file_path or file_path
+        zip_path = await ensure_local_backup_file(backup_row)
+    except ValueError as e:
+        msg = f"备份文件不存在，无法恢复: {resolve_hint} ({e})"
+        logger.error(msg)
+        await _mark_restore_status(
+            backup_uuid,
+            status="failed",
+            error_message=msg,
+            mark_completed=True,
+        )
+        return
+    except Exception as e:
+        msg = f"无法加载备份记录以恢复: {backup_uuid} ({e})"
+        logger.exception(msg)
+        await _mark_restore_status(
+            backup_uuid,
+            status="failed",
+            error_message=msg,
+            mark_completed=True,
+        )
+        return
+
     if zip_path and os.path.exists(zip_path):
         metadata = read_backup_metadata(zip_path)
         if source_tenant_id is None and metadata.get("source_tenant_id") is not None:
             source_tenant_id = metadata["source_tenant_id"]
 
     if not zip_path or not os.path.exists(zip_path):
-        msg = f"备份文件不存在，无法恢复: {file_path}"
+        msg = (
+            f"备份文件不存在，无法恢复: {resolve_hint}"
+            f" (backup_dir={backup_dir})"
+        )
         logger.error(msg)
         await _mark_restore_status(
             backup_uuid,

@@ -1,4 +1,9 @@
-"""PostgreSQL 用例仅允许显式指定的一次性 codex 测试容器。"""
+"""PostgreSQL 用例仅允许显式指定的一次性 codex 测试容器。
+
+纯函数用例（CSV 偏移 / FK 映射）不依赖容器，可随时跑。
+事务层碰撞用例仍验证：未 remap 时外租户主键冲突整单回滚、不误删。
+跨租户恢复的避让在 restore_tenant_backup_from_dump → _remap_import_plan_serial_ids_if_needed。
+"""
 import os
 import subprocess
 import tempfile
@@ -8,6 +13,57 @@ from types import SimpleNamespace
 import pytest
 
 from core.services.system import data_backup_jobs as jobs
+
+
+def test_shift_csv_int_columns_adds_offset_and_skips_null():
+    csv_text = "id,parent_id,name\n1,10,a\n,20,b\nnull,30,c\n"
+    out = jobs._shift_csv_int_columns(csv_text, {"id": 1000, "parent_id": 500})
+    assert out.splitlines() == [
+        "id,parent_id,name",
+        "1001,510,a",
+        ",520,b",
+        "null,530,c",
+    ]
+
+
+def test_shift_csv_int_columns_noop_when_offset_zero():
+    csv_text = "id,name\n1,a\n"
+    assert jobs._shift_csv_int_columns(csv_text, {"id": 0}) == csv_text
+
+
+def test_serial_id_pk_tables_skips_composite_pk():
+    plan = {
+        "a": (["id", "name"], "id,name\n1,x\n"),
+        "b": (["id", "name"], "id,name\n1,x\n"),
+    }
+    assert jobs._serial_id_pk_tables(plan, {"a": ["id"], "b": ["id", "name"]}) == ["a"]
+
+
+def test_serial_id_pk_tables_includes_unique_id_without_pk():
+    plan = {
+        "core_apis": (["id", "code"], "id,code\n1,x\n"),
+    }
+    assert jobs._serial_id_pk_tables(
+        plan, {}, unique_id_tables={"core_apis"}
+    ) == ["core_apis"]
+
+
+def test_fk_columns_to_serial_parents_maps_child_cols():
+    plan = {
+        "parents": (["id"], "id\n1\n"),
+        "children": (["id", "parent_id"], "id,parent_id\n1,1\n"),
+    }
+    fk_rows = [
+        {
+            "child_table": "children",
+            "parent_table": "parents",
+            "child_column": "parent_id",
+            "parent_column": "id",
+        }
+    ]
+    assert jobs._fk_columns_to_serial_parents(fk_rows, {"parents"}, plan) == {
+        "children": {"parent_id": "parents"}
+    }
 
 
 def restore(composite=False):
