@@ -1804,6 +1804,11 @@ class ApplicationService:
             expected_parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(
                 manifest_menu_config
             )
+            root_title = ""
+            root_path = ""
+            if isinstance(manifest_menu_config, dict):
+                root_title = str(manifest_menu_config.get("title") or "").strip()
+                root_path = str(manifest_menu_config.get("path") or "").strip()
             if expected_parents:
                 by_id = {menu.id: menu for menu in rows}
                 by_path = {
@@ -1816,8 +1821,18 @@ class ApplicationService:
                     if not row or row.parent_id is None:
                         continue
                     parent = by_id.get(row.parent_id)
-                    if not parent or parent.name != expected_parent_title:
+                    if not parent:
                         return True
+                    if parent.name == expected_parent_title:
+                        continue
+                    # 根节点 name 常被写成应用显示名，与 manifest title key 不等；按根 path 判定
+                    if (
+                        root_path
+                        and expected_parent_title == root_title
+                        and str(parent.path or "").strip() == root_path
+                    ):
+                        continue
+                    return True
         return False
 
     @staticmethod

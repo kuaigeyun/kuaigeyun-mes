@@ -3782,6 +3782,7 @@ export default {
   'app.kuaioa.menu.assets': '资产台账',
   'app.kuaioa.menu.announcements': '公告通知',
   'app.kuaioa.menu.seal': '用章申请',
+  'app.kuaioa.menu.expense': '报销单',
   'app.kuaioa.common.revoke': '撤销',
   'app.kuaioa.common.purpose': '用途',
   'app.kuaioa.common.applicant': '申请人',
@@ -4362,6 +4363,30 @@ export default {
   'app.kuaioa.seal.documentName': '用章文件',
   'app.kuaioa.seal.copies': '份数',
   'app.kuaioa.seal.takeOut': '外带',
+  'app.kuaioa.expense.createButton': '新建报销单',
+  'app.kuaioa.expense.entityName': '费用报销单',
+  'app.kuaioa.expense.code': '报销单号',
+  'app.kuaioa.expense.title': '标题',
+  'app.kuaioa.expense.companyName': '公司名称',
+  'app.kuaioa.expense.expenseType': '费用类型',
+  'app.kuaioa.expense.payee': '收款人',
+  'app.kuaioa.expense.totalAmount': '总金额',
+  'app.kuaioa.expense.yuan': '元',
+  'app.kuaioa.expense.lines': '明细',
+  'app.kuaioa.expense.linesRequired': '请至少添加一条报销明细',
+  'app.kuaioa.expense.department': '用款部门',
+  'app.kuaioa.expense.content': '报销内容',
+  'app.kuaioa.expense.amount': '金额',
+  'app.kuaioa.expense.addLine': '+ 添加明细',
+  'app.kuaioa.expense.copyLine': '复制',
+  'app.kuaioa.expense.vouchers': '费用凭证',
+  'app.kuaioa.expense.type.travel': '差旅费',
+  'app.kuaioa.expense.type.meal': '餐费',
+  'app.kuaioa.expense.type.office': '办公费',
+  'app.kuaioa.expense.type.transport': '交通费',
+  'app.kuaioa.expense.type.entertainment': '招待费',
+  'app.kuaioa.expense.type.training': '培训费',
+  'app.kuaioa.expense.type.other': '其他',
   'app.kuaicaiwu.common.code': '编号',
   'app.kuaicaiwu.menu.group.finance-receipts': '收款管理',
   'app.kuaicaiwu.menu.group.finance-payments': '付款管理',
@@ -31159,10 +31184,18 @@ export default {
     '修复采购订单撤回提交报错',
   'pages.dashboard.updateLog.entries.purchase-order-withdraw-submit-r01.description':
     '待审核采购订单撤回提交时因服务未挂业务配置依赖而失败；现已修复，提交人可正常撤回到草稿后重新提交。',
+  'pages.dashboard.updateLog.entries.menu-sync-root-parent-align-r01.title':
+    '修复定制应用菜单同步后仍提示待同步',
+  'pages.dashboard.updateLog.entries.menu-sync-root-parent-align-r01.description':
+    '根菜单显示名与清单 title 键不一致时不再误判层级过期；轻办公清单版本同步提升后可正常写入菜单，本地与生产共用库时两侧弹窗可一并消除。',
   'pages.dashboard.updateLog.entries.quality-complaint-detail-descriptions-r01.title':
     '修复质量投诉详情抽屉打开报错',
   'pages.dashboard.updateLog.entries.quality-complaint-detail-descriptions-r01.description':
     '打开质量投诉详情时误把字段配置对象直接渲染为页面内容导致应用加载失败；现改为标准 Descriptions 展示，可正常查看详情。',
+  'pages.dashboard.updateLog.entries.kuaioa-expense-reimbursement-r01.title':
+    '轻办公新增费用报销单',
+  'pages.dashboard.updateLog.entries.kuaioa-expense-reimbursement-r01.description':
+    '行政办公下新增报销单：申请人、公司、费用类型、多行明细与凭证附件，并独立配置审核流程。',
   'pages.dashboard.updateLog.entries.finance-payment-source-print-r01.title':
     '付款单详情展示来源单据并支持打印导出',
   'pages.dashboard.updateLog.entries.finance-payment-source-print-r01.description':
