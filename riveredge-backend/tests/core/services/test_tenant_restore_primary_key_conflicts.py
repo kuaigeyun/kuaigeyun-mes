@@ -158,22 +158,69 @@ async def test_global_unique_uuid_duplicate_in_backup_fails():
 
 
 async def test_global_unique_non_uuid_conflict_raises_clear_error():
-    """非 uuid 单列唯一列冲突时提前报人话错误，不等 COPY 才暴露。"""
+    """无规律唯一值冲突时提前报人话错误，不等 COPY 才暴露。"""
 
     class Connection:
         async def execute_query_dict(self, sql, args=None):
             if "FROM pg_index" in sql:
-                return [{"table_name": "orders", "column_name": "order_no"}]
-            return [{"v": "NO-001"}]
+                return [{"table_name": "contacts", "column_name": "phone"}]
+            return [{"v": "13800000000"}]
 
-    with pytest.raises(ValueError, match="唯一列 order_no 与目标库已有数据冲突"):
+    with pytest.raises(ValueError, match="唯一列 phone 与目标库已有数据冲突"):
         await jobs._remap_import_plan_global_unique_uuids_if_needed(
-            {"orders": (["tenant_id", "order_no"], "tenant_id,order_no\n2,NO-001\n")},
+            {"contacts": (["tenant_id", "phone"], "tenant_id,phone\n3,13800000000\n")},
             target_tenant_id=3,
-            table_column_map={},
+            table_column_map={"contacts": ["tenant_id", "phone"]},
             fk_rows=[],
             conn=Connection(),
         )
+
+
+async def test_sequential_code_conflict_remaps_after_db_max():
+    """KG000001 类业务编码冲突时按库内最大序号重排，FK 子表同步跟随。"""
+
+    class Connection:
+        async def execute_query_dict(self, sql, args=None):
+            if "FROM pg_index" in sql:
+                return [{"table_name": "core_open_api_accounts", "column_name": "acct_id"}]
+            if "LIKE" in sql:
+                return [{"v": "KG000001"}, {"v": "KG000007"}]
+            return [{"v": "KG000001"}]
+
+    remapped = await jobs._remap_import_plan_global_unique_uuids_if_needed(
+        {
+            "core_open_api_accounts": (
+                ["tenant_id", "acct_id"],
+                "tenant_id,acct_id\n9,KG000001\n9,KG000002\n",
+            ),
+            "core_open_api_logs": (
+                ["tenant_id", "acct_id"],
+                "tenant_id,acct_id\n9,KG000001\n",
+            ),
+        },
+        target_tenant_id=9,
+        table_column_map={
+            "core_open_api_accounts": ["tenant_id", "acct_id"],
+            "core_open_api_logs": ["tenant_id", "acct_id"],
+        },
+        fk_rows=[
+            {
+                "child_table": "core_open_api_logs",
+                "child_column": "acct_id",
+                "parent_table": "core_open_api_accounts",
+                "parent_column": "acct_id",
+            }
+        ],
+        conn=Connection(),
+    )
+    parent_codes = jobs._extract_csv_column_values(
+        remapped["core_open_api_accounts"][1], "acct_id"
+    )
+    assert parent_codes == ["KG000008", "KG000009"]
+    child_codes = jobs._extract_csv_column_values(
+        remapped["core_open_api_logs"][1], "acct_id"
+    )
+    assert child_codes == ["KG000008"]
 
 
 async def test_tenant_id_unique_table_dedupes_instead_of_failing():

@@ -1557,6 +1557,17 @@ def _dedupe_csv_on_column_keep_last(csv_text: str, column: str) -> tuple[str, in
     return buffer.getvalue(), dropped
 
 
+def _split_sequential_code(value: str) -> tuple[str, int, int] | None:
+    """拆分 `KG000001` 这类前缀+数字编码，返回 (前缀, 数字, 数字位宽）。"""
+    import re
+
+    match = re.fullmatch(r"([A-Za-z_\-]+)(\d+)", (value or "").strip())
+    if not match:
+        return None
+    prefix, digits = match.group(1), match.group(2)
+    return prefix, int(digits), len(digits)
+
+
 def _remap_csv_single_column_values(
     csv_text: str,
     column: str,
@@ -1598,15 +1609,15 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
     conn,
     max_attempts: int = 2,
 ) -> dict[str, tuple[list[str], str]]:
-    """跨租户恢复：全局唯一列（uuid 等）与目标库其它租户冲突时重新生成。
+    """跨租户恢复：全局唯一列与目标库其它租户冲突时重排或拦截。
 
     背景：serial id 避让只处理了主键 id，但 apps_* 表的 uuid 上有全局唯一索引
     （如 idx_apps_kuaicaiwu_gl_book_settings_uuid）。同一份备份恢复到第二个租户时，
     DELETE 只清目标租户，其它租户残留的相同 uuid 会让 COPY 直接报 duplicate key。
-    此时仅对真正冲突的 uuid 值生成新 uuid，并同步改写指向这些值 uuid 列的外键引用。
-
-    非 uuid 命名的单列唯一列无法安全重写：冲突时直接抛人话错误，避免 COPY 阶段
-    才报 cryptic 的 duplicate key。注意跨租户恢复后源 UUID 不保留（已重排）。
+    - uuid 类列：冲突值生成新 uuid，并同步改写指向这些值的外键引用；
+    - `KG000001` 类前缀+数字业务编码：按前缀取库内最大序号后整体重排，FK 同步跟随；
+    - 无规律值（手机号/证件号等）：无法安全重写，提前抛人话错误。
+    注意跨租户恢复后源 UUID/业务编码不保留（已重排）。
     """
     import uuid as _uuid
 
@@ -1657,8 +1668,12 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
                     f"备份表 {table} 的唯一列 {col} 存在重复值，无法安全跨租户恢复: "
                     f"{sorted(duplicate_values)[:3]}"
                 )
-    # 非 uuid 唯一列：与库内全量冲突时提前报人话错误
+    # 非 uuid 唯一列：优先尝试安全的自动重排，实在无法重排才提前报人话错误
     # （目标租户旧行会在事务内 DELETE，探测时排除，避免把自己误判为冲突）
+    # `KG000001` 这类前缀+数字编码：按前缀取库内最大序号后整体重排，并同步改写
+    # 有 FK 约束的子表引用；手机号/证件号等无规律值无法重排，只能报错。
+    code_value_maps: dict[str, dict[str, str]] = {}
+    code_parents: dict[str, str] = {}
     for table, cols in other_unique.items():
         _columns, csv_text = import_plan[table]
         has_tenant_col = "tenant_id" in (table_column_map.get(table) or [])
@@ -1679,15 +1694,70 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
                     f'WHERE "{col}"::text = ANY($1::text[]) LIMIT 1',
                     [values],
                 )
-            if hits:
+            if not hits:
+                continue
+            parts = [_split_sequential_code(v) for v in values]
+            if any(p is None for p in parts) or len({p[0] for p in parts}) != 1:
                 sample = sorted({str(r.get("v", "")) for r in hits if r.get("v")})[:3]
                 raise ValueError(
                     f"备份表 {table} 的唯一列 {col} 与目标库已有数据冲突"
                     f"（如 {sample}），跨租户恢复无法自动重写该列，"
                     "请先在目标库清理冲突行或联系管理员处理"
                 )
-    if not uuid_candidate:
+            prefix = parts[0][0]
+            width = max(p[2] for p in parts)
+            existing_rows = await conn.execute_query_dict(
+                f'SELECT "{col}" AS v FROM "{table}" WHERE "{col}" LIKE $1 LIMIT 100000',
+                [f"{prefix}%"],
+            )
+            max_no = 0
+            for r in existing_rows or []:
+                p = _split_sequential_code(str(r.get("v") or ""))
+                if p is not None and p[0] == prefix:
+                    max_no = max(max_no, p[1])
+            remap: dict[str, str] = {}
+            for v in dict.fromkeys(values):
+                max_no += 1
+                remap[v] = f"{prefix}{str(max_no).zfill(width)}"
+            code_value_maps[table] = remap
+            code_parents[table] = col
+            logger.warning(
+                "租户恢复业务编码避让: table={} column={} prefix={} remapped={}",
+                table,
+                col,
+                prefix,
+                len(remap),
+            )
+    if not uuid_candidate and not code_value_maps:
         return import_plan
+
+    if code_value_maps:
+        # 业务编码先改写（确定性重排，无需像 UUID 那样多轮复检），FK 子表同步跟随
+        code_fk_refs: dict[str, dict[str, tuple[str, str]]] = {}
+        for row in fk_rows or []:
+            child = row.get("child_table")
+            parent = row.get("parent_table")
+            child_col = row.get("child_column")
+            parent_col = row.get("parent_column")
+            if not child or not parent or not child_col or not parent_col:
+                continue
+            if parent not in code_value_maps:
+                continue
+            if parent_col != code_parents.get(parent):
+                continue
+            if child not in import_plan or child_col not in import_plan[child][0]:
+                continue
+            code_fk_refs.setdefault(child, {})[str(child_col)] = (parent, code_parents[parent])
+        for table, (columns, csv_text) in list(import_plan.items()):
+            if table in code_value_maps:
+                csv_text = _remap_csv_single_column_values(
+                    csv_text, code_parents[table], code_value_maps[table]
+                )
+            for child_col, (parent, _pcol) in code_fk_refs.get(table, {}).items():
+                csv_text = _remap_csv_single_column_values(
+                    csv_text, child_col, code_value_maps[parent]
+                )
+            import_plan[table] = (columns, csv_text)
 
     remapped: dict[str, tuple[list[str], str]] = dict(import_plan)
     total_remapped = 0
@@ -1762,6 +1832,11 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
         logger.warning(
             "跨租户恢复后源 UUID 已重排 {} 个（目标租户内为新值），请勿用源系统单号直接对账",
             total_remapped,
+        )
+    if code_value_maps:
+        logger.warning(
+            "跨租户恢复后业务编码已重排 {} 张表，目标租户内为新编码",
+            len(code_value_maps),
         )
     return remapped
 
