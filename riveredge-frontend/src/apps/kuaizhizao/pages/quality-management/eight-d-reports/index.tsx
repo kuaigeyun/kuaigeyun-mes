@@ -51,7 +51,7 @@ const EightDReportsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const currentUser = useCurrentUser();
   const actionRef = useRef<ActionType>(null);
   const createFormRef = useRef<any>(null);
@@ -67,10 +67,13 @@ const EightDReportsPage: React.FC = () => {
   const eightDStatusValueEnum = useMemo(() => buildEightDStatusValueEnum(t), [t]);
   const eightDSeverityValueEnum = useMemo(() => buildEightDSeverityValueEnum(t), [t]);
 
-  const openWorkbench = (row: Quality8DReport) => {
-    if (!row.id) return;
-    navigate(`${WORKBENCH_PATH}/${row.id}`);
-  };
+  const openWorkbench = useCallback(
+    (row: Quality8DReport) => {
+      if (!row.id) return;
+      navigate(`${WORKBENCH_PATH}/${row.id}`);
+    },
+    [navigate],
+  );
 
   const openEdit = useCallback(async (row: Quality8DReport) => {
     if (!row.id) return;
@@ -113,17 +116,13 @@ const EightDReportsPage: React.FC = () => {
     }
   }, [messageApi, t]);
 
+  // 旧抽屉深链 ?report_id=：只 replace 到工作台路径（path 变化会自然丢掉 query）。
+  // 禁止再 setSearchParams：相对 navigate('?') 会在绝对跳转未落地前抢回列表。
   React.useEffect(() => {
     const reportId = Number(searchParams.get('report_id'));
-    if (Number.isFinite(reportId) && reportId > 0) {
-      navigate(`${WORKBENCH_PATH}/${reportId}`, { replace: true });
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete('report_id');
-        return next;
-      });
-    }
-  }, [searchParams, navigate, setSearchParams]);
+    if (!Number.isFinite(reportId) || reportId <= 0) return;
+    navigate(`${WORKBENCH_PATH}/${reportId}`, { replace: true });
+  }, [searchParams, navigate]);
 
   const columns: ProColumns<Quality8DReport>[] = useMemo(
     () => alignProColumns<Quality8DReport>([
@@ -336,7 +335,10 @@ const EightDReportsPage: React.FC = () => {
           <Button
             key="detail"
             {...rowActionOpenWorkbench()}
-            onClick={() => openWorkbench(row)}
+            onClick={(e) => {
+              e.stopPropagation();
+              openWorkbench(row);
+            }}
           />,
           gates.update.allowed ? (
             <Button
@@ -385,7 +387,10 @@ const EightDReportsPage: React.FC = () => {
               {...rowActionLabelKeep()}
               disabled={gates.transition.disabled}
               title={gates.transition.title}
-              onClick={() => openWorkbench(row)}
+              onClick={(e) => {
+                e.stopPropagation();
+                openWorkbench(row);
+              }}
             >
               {t('app.kuaizhizao.eightD.actions.transition')}
             </Button>
@@ -394,7 +399,7 @@ const EightDReportsPage: React.FC = () => {
       },
     },
   ], GLOBAL_DOC_LIST_FIELD_RANK),
-    [t, canUpdate, canDelete, canClose, canPrint, eightDStatusValueEnum, eightDSeverityValueEnum, messageApi, modalApi, openPrint, openEdit],
+    [t, canUpdate, canDelete, canClose, canPrint, eightDStatusValueEnum, eightDSeverityValueEnum, messageApi, modalApi, openPrint, openEdit, openWorkbench],
   );
 
   return (

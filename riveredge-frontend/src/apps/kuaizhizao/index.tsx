@@ -537,8 +537,9 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/traceability" element={withPageSuspense(TraceabilityPage)} />
       <Route path="quality-management/inspection-plans" element={withPageSuspense(InspectionPlansPage)} />
       <Route path="quality-management/nonconforming-ledger" element={withPageSuspense(NonconformingLedgerPage)} />
-      <Route path="quality-management/eight-d-reports" element={withPageSuspense(EightDReportsPage)} />
+      {/* :id 工作台在前，与交付项目 projects/:id 一致，避免与列表路由歧义 */}
       <Route path="quality-management/eight-d-reports/:id" element={withPageSuspense(EightDWorkbenchPage)} />
+      <Route path="quality-management/eight-d-reports" element={withPageSuspense(EightDReportsPage)} />
       <Route path="quality-management/quality-complaints" element={withPageSuspense(QualityComplaintsPage)} />
       <Route path="quality-management/supplier-evaluations" element={withPageSuspense(SupplierEvaluationsPage)} />
       <Route path="quality-management/oqc-inspection" element={withPageSuspense(OQCInspectionPage)} />
