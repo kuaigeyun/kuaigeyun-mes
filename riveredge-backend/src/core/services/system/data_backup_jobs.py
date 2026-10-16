@@ -135,8 +135,10 @@ def resolve_pg_client_bin(name: str) -> str:
         _PG_BIN_CACHE[key] = which
         return which
 
-    _PG_BIN_CACHE[key] = key
-    return key
+    raise FileNotFoundError(
+        f"未找到 PostgreSQL 客户端 {exe}：请安装客户端并加入 PATH，"
+        "或在环境变量 / .env 设置 PG_BIN_DIR 指向 bin 目录"
+    )
 
 
 def _is_platform_level_table(table: str) -> bool:
@@ -422,6 +424,54 @@ def _append_tenant_junction_deletes(script_lines: list[str], tenant_ids: set[int
     )
 
 
+def _append_tenant_junction_orphan_cleanup(
+    script_lines: list[str],
+    tenant_ids: set[int],
+) -> None:
+    """
+    导入后清理无 tenant_id 的关联表孤儿行。
+
+    跨租户恢复会整体偏移用户/角色 id；备份里可能残留指向未导出用户的角色绑定，
+    通用 `_append_fk_orphan_cleanup` 因无 tenant_id 会跳过这些表，重建 FK 时失败。
+    仅删除「挂在本目标租户用户/角色上」的悬空绑定，不碰其它租户的关联行。
+    """
+    tenant_sql = ", ".join(str(t) for t in sorted(tenant_ids))
+    script_lines.append(
+        f'DELETE FROM "core_user_roles" ur '
+        f"WHERE ("
+        f'ur.user_id IN (SELECT id FROM "core_users" WHERE tenant_id IN ({tenant_sql})) '
+        f'OR ur.role_id IN (SELECT id FROM "core_roles" WHERE tenant_id IN ({tenant_sql}))'
+        f") AND ("
+        f'NOT EXISTS (SELECT 1 FROM "core_users" u WHERE u.id = ur.user_id) '
+        f'OR NOT EXISTS (SELECT 1 FROM "core_roles" r WHERE r.id = ur.role_id)'
+        f");"
+    )
+    script_lines.append(
+        f'DELETE FROM "core_role_permissions" rp '
+        f'WHERE rp.role_id IN (SELECT id FROM "core_roles" WHERE tenant_id IN ({tenant_sql})) '
+        f'AND ('
+        f'NOT EXISTS (SELECT 1 FROM "core_roles" r WHERE r.id = rp.role_id) '
+        f'OR NOT EXISTS (SELECT 1 FROM "core_permissions" p WHERE p.id = rp.permission_id)'
+        f");"
+    )
+    script_lines.append(
+        f'DELETE FROM "core_policy_bindings" pb '
+        f"WHERE ("
+        f'pb.policy_id IN (SELECT id FROM "core_access_policies" WHERE tenant_id IN ({tenant_sql})) '
+        f"OR (pb.subject_type = 'user' AND pb.subject_id IN "
+        f'(SELECT id FROM "core_users" WHERE tenant_id IN ({tenant_sql}))) '
+        f"OR (pb.subject_type = 'role' AND pb.subject_id IN "
+        f'(SELECT id FROM "core_roles" WHERE tenant_id IN ({tenant_sql})))'
+        f") AND ("
+        f'NOT EXISTS (SELECT 1 FROM "core_access_policies" p WHERE p.id = pb.policy_id) '
+        f"OR (pb.subject_type = 'user' AND NOT EXISTS ("
+        f'SELECT 1 FROM "core_users" u WHERE u.id = pb.subject_id)) '
+        f"OR (pb.subject_type = 'role' AND NOT EXISTS ("
+        f'SELECT 1 FROM "core_roles" r WHERE r.id = pb.subject_id))'
+        f");"
+    )
+
+
 def _pack_backup_zip(
     *,
     backup_dir: str,
@@ -459,7 +509,8 @@ def _pack_backup_zip(
                                     os.path.relpath(file_path, upload_dir),
                                 )
                                 zipf.write(file_path, arcname)
-                        logger.info("租户隔离备份仅打包 uploads 子目录: {}", tenant_upload_dir)
+
+                    logger.info("租户隔离备份仅打包 uploads 子目录: {}", tenant_upload_dir)
                     else:
                         logger.info("租户隔离备份未发现 uploads 子目录，跳过: {}", tenant_upload_dir)
                 elif backup_scope == "tenant":
@@ -1169,6 +1220,431 @@ def _rewrite_csv_tenant_id(csv_text: str, target_tenant_id: int) -> str:
     return buffer.getvalue()
 
 
+def _shift_csv_int_columns(
+    csv_text: str,
+    column_offsets: dict[str, int],
+) -> str:
+    """将 CSV 中指定整型列加上 offset（空/null 单元格不动）。"""
+    effective = {col: int(off) for col, off in column_offsets.items() if int(off)}
+    if not effective:
+        return csv_text
+    _ensure_csv_field_limit()
+    lines = csv_text.splitlines()
+    if len(lines) <= 1:
+        return csv_text
+    reader = csv.reader(lines)
+    header = next(reader, [])
+    indexes = {
+        col: header.index(col) for col in effective if col in header
+    }
+    if not indexes:
+        return csv_text
+    out_rows: list[list[str]] = [header]
+    for row in reader:
+        padded = row + [""] * max(0, len(header) - len(row))
+        for col, idx in indexes.items():
+            raw = padded[idx].strip()
+            if not raw or raw.lower() == "null":
+                continue
+            try:
+                padded[idx] = str(int(raw) + effective[col])
+            except ValueError:
+                continue
+        out_rows.append(padded[: len(header)])
+    from io import StringIO
+
+    buffer = StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerows(out_rows)
+    return buffer.getvalue()
+
+
+def _serial_id_pk_tables(
+    import_plan: dict[str, tuple[list[str], str]],
+    table_pk_map: dict[str, list[str]],
+    *,
+    unique_id_tables: set[str] | None = None,
+) -> list[str]:
+    """
+    需要按自增 id 做跨租户避让的表：
+    - 单列 PRIMARY KEY (id)
+    - 或仅有「单列 id 唯一索引/约束」而无 PK（如历史库 core_apis 的 uidx_core_apis_id）
+    """
+    extra = unique_id_tables or set()
+    tables: list[str] = []
+    for table, (columns, _csv) in import_plan.items():
+        if "id" not in columns:
+            continue
+        if table_pk_map.get(table) == ["id"] or table in extra:
+            tables.append(table)
+    return tables
+
+
+async def _load_unique_id_only_tables(conn, table_names: list[str]) -> set[str]:
+    """查出「单列 id 唯一」的表（含无 PRIMARY KEY 仅 uidx 的情况）。"""
+    if not table_names:
+        return set()
+    rows = await conn.execute_query_dict(
+        """
+        SELECT DISTINCT t.relname AS table_name
+        FROM pg_index i
+        JOIN pg_class t ON t.oid = i.indrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        JOIN pg_attribute a
+          ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
+        WHERE n.nspname = 'public'
+          AND i.indisunique
+          AND i.indnkeyatts = 1
+          AND a.attname = 'id'
+          AND t.relname = ANY($1::text[])
+        """,
+        [table_names],
+    )
+    return {
+        str(r["table_name"])
+        for r in rows
+        if r.get("table_name")
+    }
+
+
+def _fk_columns_to_serial_parents(
+    fk_rows: list[dict[str, Any]],
+    serial_tables: set[str],
+    import_plan: dict[str, tuple[list[str], str]],
+) -> dict[str, dict[str, str]]:
+    """
+    child_table -> { child_column -> parent_table }
+    仅当父表在 serial_tables 且子列会出现在导入 CSV 中。
+    """
+    mapping: dict[str, dict[str, str]] = defaultdict(dict)
+    for row in fk_rows:
+        child = row.get("child_table")
+        parent = row.get("parent_table")
+        child_col = row.get("child_column")
+        parent_col = row.get("parent_column")
+        if not child or not parent or not child_col or parent_col != "id":
+            continue
+        if parent not in serial_tables or child not in import_plan:
+            continue
+        columns = import_plan[child][0]
+        if child_col not in columns:
+            continue
+        mapping[child][str(child_col)] = str(parent)
+    return dict(mapping)
+
+
+async def _remap_import_plan_serial_ids_if_needed(
+    import_plan: dict[str, tuple[list[str], str]],
+    *,
+    target_tenant_id: int,
+    table_pk_map: dict[str, list[str]],
+    table_column_map: dict[str, list[str]],
+    fk_rows: list[dict[str, Any]],
+    conn,
+) -> dict[str, tuple[list[str], str]]:
+    """
+    跨平台/跨租户恢复：备份内自增 id 常与目标库其它租户占用的主键冲突。
+
+    旧逻辑曾按主键全局 DELETE 腾位（会误删其它租户），已废弃。
+    现仅在探测到「备份 id 被非目标租户占用」时，对所有单列 id 主键/唯一表统一加
+    offset=MAX(id)，并同步改写指向这些表的整型外键列，避免撞车且不碰其它租户行。
+    """
+    unique_id_tables = await _load_unique_id_only_tables(
+        conn, sorted(import_plan.keys())
+    )
+    # 已有 PK(id) 的不必进 extra；extra 专收「无 PK、仅 unique(id)」如 core_apis
+    unique_id_only = {
+        t
+        for t in unique_id_tables
+        if table_pk_map.get(t) != ["id"]
+    }
+    serial_tables = _serial_id_pk_tables(
+        import_plan,
+        table_pk_map,
+        unique_id_tables=unique_id_only,
+    )
+    if not serial_tables:
+        return import_plan
+
+    need_remap = False
+    for table in serial_tables:
+        _columns, csv_text = import_plan[table]
+        ids = [
+            int(v)
+            for v in _extract_csv_column_values(csv_text, "id")
+            if v.lstrip("-").isdigit()
+        ]
+        if not ids:
+            continue
+        has_tenant_col = "tenant_id" in (table_column_map.get(table) or [])
+        if has_tenant_col:
+            # 目标租户行会在事务内 DELETE；只关心其它租户（及 tenant_id 为空）占用的 id
+            conflicts = await conn.execute_query_dict(
+                f'''
+                SELECT 1 AS hit
+                FROM "{table}"
+                WHERE id = ANY($1::bigint[])
+                  AND tenant_id IS DISTINCT FROM $2
+                LIMIT 1
+                ''',
+                [ids, int(target_tenant_id)],
+            )
+        else:
+            conflicts = await conn.execute_query_dict(
+                f'''
+                SELECT 1 AS hit
+                FROM "{table}"
+                WHERE id = ANY($1::bigint[])
+                LIMIT 1
+                ''',
+                [ids],
+            )
+        if conflicts:
+            need_remap = True
+            break
+
+    if not need_remap:
+        return import_plan
+
+    fk_map = _fk_columns_to_serial_parents(
+        fk_rows, set(serial_tables), import_plan
+    )
+    remapped: dict[str, tuple[list[str], str]] = import_plan
+    # MAX(id) 与后续 psql COPY 之间库内可能新增行；从原始 CSV 重算并校验，避免 offset 过时撞车
+    for attempt in range(1, 4):
+        offsets: dict[str, int] = {}
+        for table in serial_tables:
+            rows = await conn.execute_query_dict(
+                f'SELECT COALESCE(MAX(id), 0) AS max_id FROM "{table}"'
+            )
+            offsets[table] = int(rows[0]["max_id"] or 0) if rows else 0
+
+        remapped = {}
+        for table, (columns, csv_text) in import_plan.items():
+            col_offsets: dict[str, int] = {}
+            if table in offsets and "id" in columns:
+                col_offsets["id"] = offsets[table]
+            for child_col, parent_table in fk_map.get(table, {}).items():
+                parent_off = offsets.get(parent_table, 0)
+                if parent_off:
+                    col_offsets[child_col] = parent_off
+            if col_offsets:
+                csv_text = _shift_csv_int_columns(csv_text, col_offsets)
+                if attempt == 1:
+                    logger.info(
+                        "租户恢复主键避让: table={} offsets={}",
+                        table,
+                        col_offsets,
+                    )
+            remapped[table] = (columns, csv_text)
+
+        collision_table: str | None = None
+        for table in serial_tables:
+            _columns, csv_text = remapped[table]
+            ids = [
+                int(v)
+                for v in _extract_csv_column_values(csv_text, "id")
+                if v.lstrip("-").isdigit()
+            ]
+            if not ids:
+                continue
+            has_tenant_col = "tenant_id" in (table_column_map.get(table) or [])
+            if has_tenant_col:
+                hits = await conn.execute_query_dict(
+                    f'''
+                    SELECT 1 AS hit
+                    FROM "{table}"
+                    WHERE id = ANY($1::bigint[])
+                      AND tenant_id IS DISTINCT FROM $2
+                    LIMIT 1
+                    ''',
+                    [ids, int(target_tenant_id)],
+                )
+            else:
+                hits = await conn.execute_query_dict(
+                    f'''
+                    SELECT 1 AS hit
+                    FROM "{table}"
+                    WHERE id = ANY($1::bigint[])
+                    LIMIT 1
+                    ''',
+                    [ids],
+                )
+            if hits:
+                collision_table = table
+                break
+        if collision_table is None:
+            break
+        logger.warning(
+            "主键避让后仍冲突 table={} attempt={}，按最新 MAX(id) 重算",
+            collision_table,
+            attempt,
+        )
+
+    logger.warning(
+        "检测到备份主键与目标库其它租户冲突，已对 {} 张 id 表做整体偏移后再导入",
+        len(serial_tables),
+    )
+    return remapped
+
+
+async def _load_single_col_unique_columns_async(conn, table_names: list[str]) -> dict[str, list[str]]:
+    """查出各表单列唯一列 {table: [col]}（排除主键列）。"""
+    if not table_names:
+        return {}
+    rows = await conn.execute_query_dict(
+        """
+        SELECT DISTINCT t.relname AS table_name, a.attname AS column_name
+        FROM pg_index i
+        JOIN pg_class t ON t.oid = i.indrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        JOIN pg_attribute a
+          ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
+        LEFT JOIN pg_constraint c
+          ON c.conrelid = t.oid AND c.contype = 'p'
+          AND a.attnum = ANY(c.conkey)
+        WHERE n.nspname = 'public'
+          AND i.indisunique
+          AND i.indnkeyatts = 1
+          AND t.relname = ANY($1::text[])
+          AND c.oid IS NULL
+        """,
+        [table_names],
+    )
+    out: dict[str, list[str]] = {}
+    for r in rows or []:
+        t = str(r.get("table_name") or "")
+        c = str(r.get("column_name") or "")
+        if t and c:
+            out.setdefault(t, []).append(c)
+    return out
+
+
+def _remap_csv_single_column_values(
+    csv_text: str,
+    column: str,
+    value_map: dict[str, str],
+) -> str:
+    """按 value_map 改写 CSV 某一列的值（空值不动）。"""
+    if not value_map:
+        return csv_text
+    _ensure_csv_field_limit()
+    lines = csv_text.splitlines()
+    if len(lines) <= 1:
+        return csv_text
+    reader = csv.reader(lines)
+    header = next(reader, [])
+    if column not in header:
+        return csv_text
+    idx = header.index(column)
+    out_rows: list[list[str]] = [header]
+    for row in reader:
+        padded = row + [""] * max(0, len(header) - len(row))
+        cell = padded[idx]
+        if cell and cell in value_map:
+            padded[idx] = value_map[cell]
+        out_rows.append(padded[: len(header)])
+    from io import StringIO
+
+    buffer = StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerows(out_rows)
+    return buffer.getvalue()
+
+
+async def _remap_import_plan_global_unique_uuids_if_needed(
+    import_plan: dict[str, tuple[list[str], str]],
+    *,
+    target_tenant_id: int,
+    table_column_map: dict[str, list[str]],
+    fk_rows: list[dict[str, Any]],
+    conn,
+) -> dict[str, tuple[list[str], str]]:
+    """跨租户恢复：全局唯一列（uuid 等）与目标库其它租户冲突时重新生成。
+
+    背景：serial id 避让只处理了主键 id，但 apps_* 表的 uuid 上有全局唯一索引
+    （如 idx_apps_kuaicaiwu_gl_book_settings_uuid）。同一份备份恢复到第二个租户时，
+    DELETE 只清目标租户，其它租户残留的相同 uuid 会让 COPY 直接报 duplicate key。
+    此时为冲突表的 uuid 列生成新 uuid，并同步改写指向这些表 uuid 列的外键引用。
+    """
+    import uuid as _uuid
+
+    unique_map = await _load_single_col_unique_columns_async(
+        conn, sorted(import_plan.keys())
+    )
+    # 仅自动处理 uuid 类文本列；其它唯一列无法安全推导，冲突时抛明确错误
+    candidate: dict[str, str] = {}
+    for table, cols in unique_map.items():
+        columns = import_plan.get(table, ([], ""))[0]
+        for col in cols:
+            if col not in columns:
+                continue
+            if col.lower() == "uuid" or col.lower().endswith("_uuid"):
+                candidate[table] = col
+                break
+    if not candidate:
+        return import_plan
+
+    # 收集备份中的 uuid 值并探测与库内其它行的冲突（全局唯一，不分租户；
+    # 目标租户旧行会在事务内 DELETE，仍按全库探测，误删风险为零）
+    value_maps: dict[str, dict[str, str]] = {}
+    for table, col in candidate.items():
+        _columns, csv_text = import_plan[table]
+        values = [v for v in _extract_csv_column_values(csv_text, col) if v]
+        if not values:
+            continue
+        hits = await conn.execute_query_dict(
+            f'SELECT "{col}" AS v FROM "{table}" WHERE "{col}" = ANY($1::text[]) LIMIT 1',
+            [values],
+        )
+        if not hits:
+            # 备份内部自重复也会触发唯一冲突，同样需要重写
+            seen: set[str] = set()
+            dup = any(v in seen or seen.add(v) for v in values)
+            if not dup:
+                continue
+        value_maps[table] = {v: str(_uuid.uuid4()) for v in dict.fromkeys(values)}
+
+    if not value_maps:
+        return import_plan
+
+    # 子表外键引用父表 uuid 列时同步改写
+    fk_uuid_refs: dict[str, dict[str, tuple[str, str]]] = {}
+    for row in fk_rows or []:
+        child = row.get("child_table")
+        parent = row.get("parent_table")
+        child_col = row.get("child_column")
+        parent_col = row.get("parent_column")
+        if not child or not parent or not child_col or not parent_col:
+            continue
+        if parent not in value_maps:
+            continue
+        parent_uuid_col = candidate.get(parent)
+        if parent_col != parent_uuid_col:
+            continue
+        if child not in import_plan or child_col not in import_plan[child][0]:
+            continue
+        fk_uuid_refs.setdefault(child, {})[str(child_col)] = (parent, parent_uuid_col)
+
+    remapped: dict[str, tuple[list[str], str]] = {}
+    for table, (columns, csv_text) in import_plan.items():
+        if table in value_maps:
+            col = candidate[table]
+            csv_text = _remap_csv_single_column_values(csv_text, col, value_maps[table])
+            logger.warning(
+                "租户恢复全局唯一列避让: table={} column={} remapped={}",
+                table,
+                col,
+                len(value_maps[table]),
+            )
+        for child_col, (parent, _pcol) in fk_uuid_refs.get(table, {}).items():
+            csv_text = _remap_csv_single_column_values(
+                csv_text, child_col, value_maps[parent]
+            )
+        remapped[table] = (columns, csv_text)
+    return remapped
+
+
 def _psql_env() -> dict[str, str]:
     env = os.environ.copy()
     env["PGPASSWORD"] = infra_settings.DB_PASSWORD
@@ -1475,7 +1951,11 @@ def _run_tenant_restore_transaction(
     # 源编号只用于导入映射；目标数据库中的同编号租户不属于本次恢复授权范围。
     import_tables = set(import_plan.keys())
 
-    with tempfile.TemporaryDirectory(prefix="tenant_restore_") as tmpdir:
+    # 勿依赖 tempfile.gettempdir()：本机 TEMP 短路径不可写时会回落到 cwd，
+    # 与业务目录缠在一起；统一落到备份目录下的可写临时夹。
+    restore_tmp_root = os.path.join(resolve_data_backup_dir(), "tmp_tenant_restore")
+    os.makedirs(restore_tmp_root, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="tenant_restore_", dir=restore_tmp_root) as tmpdir:
         script_lines: list[str] = ["BEGIN;"]
         _append_drop_import_table_fk_constraints(script_lines, fk_constraints)
         _append_tenant_junction_deletes(script_lines, tenant_ids_to_clear)
@@ -1519,6 +1999,7 @@ def _run_tenant_restore_transaction(
             tenant_ids=tenant_ids_to_clear,
             table_column_map=table_column_map,
         )
+        _append_tenant_junction_orphan_cleanup(script_lines, tenant_ids_to_clear)
         # 孤儿删除可能先清掉父部门；自引用键在重建约束前统一置空
         _append_self_referential_fk_nullify(
             script_lines,
@@ -1542,9 +2023,51 @@ def _run_tenant_restore_transaction(
             f.write("\n")
 
         cmd = [*_psql_base_cmd(), "-f", script_path]
-        result = subprocess.run(cmd, env=_psql_env(), capture_output=True, text=True)
+        # Windows 默认 gbk；psql 报错常含 UTF-8 表名，strict 解码会截断输出丢掉 ERROR 行
+        result = subprocess.run(
+            cmd,
+            env=_psql_env(),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         if result.returncode != 0:
-            err = (result.stderr or result.stdout or "").strip()
+            combined = "\n".join(
+                part for part in (result.stderr or "", result.stdout or "") if part
+            ).strip()
+            # psql 成功步骤(ALTER/DELETE/COPY)也进 stderr；真正 ERROR 行才是根因
+            error_lines = [
+                line
+                for line in combined.splitlines()
+                if "ERROR:" in line
+                or "FATAL:" in line
+                or line.startswith("DETAIL:")
+                or line.startswith("HINT:")
+                or line.startswith("CONTEXT:")
+            ]
+            err = "\n".join(error_lines) if error_lines else combined[-2000:]
+            logger.error(
+                "psql 租户恢复失败 returncode={} stderr_len={} stdout_len={} err_preview={}",
+                result.returncode,
+                len(result.stderr or ""),
+                len(result.stdout or ""),
+                err[:500],
+            )
+            # 落盘完整输出与脚本尾部，便于排查（临时目录即将销毁）
+            try:
+                backup_dir = resolve_data_backup_dir()
+                dump_path = os.path.join(backup_dir, "last_tenant_restore_psql.log")
+                with open(dump_path, "w", encoding="utf-8") as dump_f:
+                    dump_f.write(f"returncode={result.returncode}\ncmd={' '.join(cmd)}\n\n")
+                    dump_f.write("--- STDERR ---\n")
+                    dump_f.write(result.stderr or "")
+                    dump_f.write("\n--- STDOUT ---\n")
+                    dump_f.write(result.stdout or "")
+                kept_sql = os.path.join(backup_dir, "last_tenant_restore.sql")
+                shutil.copy2(script_path, kept_sql)
+            except OSError:
+                pass
             raise RuntimeError(f"租户级恢复事务失败（已回滚）: {err[:2000]}")
 
 
@@ -1778,6 +2301,23 @@ async def restore_tenant_backup_from_dump(
         len(fk_constraints),
     )
 
+    fk_rows_list = fk_rows if isinstance(fk_rows, list) else []
+    import_plan = await _remap_import_plan_serial_ids_if_needed(
+        import_plan,
+        target_tenant_id=int(target_tenant_id),
+        table_pk_map=dict(table_pk_map),
+        table_column_map=dict(table_column_map),
+        fk_rows=fk_rows_list,
+        conn=conn,
+    )
+    import_plan = await _remap_import_plan_global_unique_uuids_if_needed(
+        import_plan,
+        target_tenant_id=int(target_tenant_id),
+        table_column_map=dict(table_column_map),
+        fk_rows=fk_rows_list,
+        conn=conn,
+    )
+
     logger.info(
         "租户级恢复开始: target_tenant_id={}, tables={}, importable={}",
         target_tenant_id,
@@ -1794,7 +2334,7 @@ async def restore_tenant_backup_from_dump(
         table_pk_map=dict(table_pk_map),
         table_column_meta=dict(table_column_meta),
         table_column_map=dict(table_column_map),
-        fk_rows=fk_rows if isinstance(fk_rows, list) else [],
+        fk_rows=fk_rows_list,
         fk_constraints=fk_constraints if isinstance(fk_constraints, list) else [],
     )
 
