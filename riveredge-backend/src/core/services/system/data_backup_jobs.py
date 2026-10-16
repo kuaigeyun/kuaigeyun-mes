@@ -1558,89 +1558,142 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
     table_column_map: dict[str, list[str]],
     fk_rows: list[dict[str, Any]],
     conn,
+    max_attempts: int = 2,
 ) -> dict[str, tuple[list[str], str]]:
     """跨租户恢复：全局唯一列（uuid 等）与目标库其它租户冲突时重新生成。
 
     背景：serial id 避让只处理了主键 id，但 apps_* 表的 uuid 上有全局唯一索引
     （如 idx_apps_kuaicaiwu_gl_book_settings_uuid）。同一份备份恢复到第二个租户时，
     DELETE 只清目标租户，其它租户残留的相同 uuid 会让 COPY 直接报 duplicate key。
-    此时为冲突表的 uuid 列生成新 uuid，并同步改写指向这些表 uuid 列的外键引用。
+    此时仅对真正冲突的 uuid 值生成新 uuid，并同步改写指向这些值 uuid 列的外键引用。
+
+    非 uuid 命名的单列唯一列无法安全重写：冲突时直接抛人话错误，避免 COPY 阶段
+    才报 cryptic 的 duplicate key。注意跨租户恢复后源 UUID 不保留（已重排）。
     """
     import uuid as _uuid
 
     unique_map = await _load_single_col_unique_columns_async(
         conn, sorted(import_plan.keys())
     )
-    # 仅自动处理 uuid 类文本列；其它唯一列无法安全推导，冲突时抛明确错误
-    candidate: dict[str, str] = {}
+    uuid_candidate: dict[str, str] = {}
+    other_unique: dict[str, list[str]] = {}
     for table, cols in unique_map.items():
         columns = import_plan.get(table, ([], ""))[0]
         for col in cols:
             if col not in columns:
                 continue
             if col.lower() == "uuid" or col.lower().endswith("_uuid"):
-                candidate[table] = col
-                break
-    if not candidate:
-        return import_plan
-
-    # 收集备份中的 uuid 值并探测与库内其它行的冲突（全局唯一，不分租户；
-    # 目标租户旧行会在事务内 DELETE，仍按全库探测，误删风险为零）
-    value_maps: dict[str, dict[str, str]] = {}
-    for table, col in candidate.items():
+                uuid_candidate.setdefault(table, col)
+            else:
+                other_unique.setdefault(table, []).append(col)
+    # 备份内部自重复：导入必败，提前报人话错误
+    for table, cols in {**{t: [c] for t, c in uuid_candidate.items()}, **other_unique}.items():
         _columns, csv_text = import_plan[table]
-        values = [v for v in _extract_csv_column_values(csv_text, col) if v]
-        if not values:
-            continue
-        hits = await conn.execute_query_dict(
-            f'SELECT "{col}" AS v FROM "{table}" WHERE "{col}" = ANY($1::text[]) LIMIT 1',
-            [values],
-        )
-        if not hits:
-            # 备份内部自重复也会触发唯一冲突，同样需要重写
+        for col in cols:
+            values = [v for v in _extract_csv_column_values(csv_text, col) if v]
             seen: set[str] = set()
-            dup = any(v in seen or seen.add(v) for v in values)
-            if not dup:
+            duplicate_values = {value for value in values if value in seen or seen.add(value)}
+            if duplicate_values:
+                raise ValueError(
+                    f"备份表 {table} 的唯一列 {col} 存在重复值，无法安全跨租户恢复: "
+                    f"{sorted(duplicate_values)[:3]}"
+                )
+    # 非 uuid 唯一列：与库内全量冲突时提前报人话错误
+    for table, cols in other_unique.items():
+        _columns, csv_text = import_plan[table]
+        for col in cols:
+            values = [v for v in _extract_csv_column_values(csv_text, col) if v]
+            if not values:
                 continue
-        value_maps[table] = {v: str(_uuid.uuid4()) for v in dict.fromkeys(values)}
-
-    if not value_maps:
+            hits = await conn.execute_query_dict(
+                f'SELECT "{col}" AS v FROM "{table}" '
+                f'WHERE "{col}"::text = ANY($1::text[]) LIMIT 1',
+                [values],
+            )
+            if hits:
+                sample = sorted({str(r.get("v", "")) for r in hits if r.get("v")})[:3]
+                raise ValueError(
+                    f"备份表 {table} 的唯一列 {col} 与目标库已有数据冲突"
+                    f"（如 {sample}），跨租户恢复无法自动重写该列，"
+                    "请先在目标库清理冲突行或联系管理员处理"
+                )
+    if not uuid_candidate:
         return import_plan
 
-    # 子表外键引用父表 uuid 列时同步改写
-    fk_uuid_refs: dict[str, dict[str, tuple[str, str]]] = {}
-    for row in fk_rows or []:
-        child = row.get("child_table")
-        parent = row.get("parent_table")
-        child_col = row.get("child_column")
-        parent_col = row.get("parent_column")
-        if not child or not parent or not child_col or not parent_col:
-            continue
-        if parent not in value_maps:
-            continue
-        parent_uuid_col = candidate.get(parent)
-        if parent_col != parent_uuid_col:
-            continue
-        if child not in import_plan or child_col not in import_plan[child][0]:
-            continue
-        fk_uuid_refs.setdefault(child, {})[str(child_col)] = (parent, parent_uuid_col)
+    remapped: dict[str, tuple[list[str], str]] = dict(import_plan)
+    total_remapped = 0
+    for _attempt in range(max(1, int(max_attempts))):
+        # 收集备份中的 uuid 值并探测与库内其它行的冲突（全局唯一，不分租户；
+        # 目标租户旧行会在事务内 DELETE，仍按全库探测，误删风险为零）
+        value_maps: dict[str, dict[str, str]] = {}
+        for table, col in uuid_candidate.items():
+            _columns, csv_text = remapped[table]
+            values = [v for v in _extract_csv_column_values(csv_text, col) if v]
+            if not values:
+                continue
+            # 仅重写真正冲突的值：未冲突行保持原 UUID，减少无谓重排
+            lowers = [value.lower() for value in values]
+            hits = await conn.execute_query_dict(
+                f'SELECT "{col}" AS v FROM "{table}" '
+                f'WHERE LOWER("{col}"::text) = ANY($1::text[])',
+                [lowers],
+            )
+            colliding = {str(r.get("v", "")).lower() for r in (hits or []) if r.get("v") is not None}
+            if not colliding:
+                continue
+            value_maps[table] = {
+                v: str(_uuid.uuid4()) for v in values if v.lower() in colliding
+            }
 
-    remapped: dict[str, tuple[list[str], str]] = {}
-    for table, (columns, csv_text) in import_plan.items():
-        if table in value_maps:
-            col = candidate[table]
-            csv_text = _remap_csv_single_column_values(csv_text, col, value_maps[table])
-            logger.warning(
-                "租户恢复全局唯一列避让: table={} column={} remapped={}",
-                table,
-                col,
-                len(value_maps[table]),
-            )
-        for child_col, (parent, _pcol) in fk_uuid_refs.get(table, {}).items():
-            csv_text = _remap_csv_single_column_values(
-                csv_text, child_col, value_maps[parent]
-            )
-        remapped[table] = (columns, csv_text)
+        if not value_maps:
+            break
+
+        # 子表外键引用父表 uuid 列时同步改写
+        fk_uuid_refs: dict[str, dict[str, tuple[str, str]]] = {}
+        for row in fk_rows or []:
+            child = row.get("child_table")
+            parent = row.get("parent_table")
+            child_col = row.get("child_column")
+            parent_col = row.get("parent_column")
+            if not child or not parent or not child_col or not parent_col:
+                continue
+            if parent not in value_maps:
+                continue
+            parent_uuid_col = uuid_candidate.get(parent)
+            if parent_col != parent_uuid_col:
+                continue
+            if child not in remapped or child_col not in remapped[child][0]:
+                continue
+            fk_uuid_refs.setdefault(child, {})[str(child_col)] = (parent, parent_uuid_col)
+
+        # 仅改写 DB 外键元数据确认的引用；无 FK 约束的字符串列不猜测，避免误改业务文本
+        # （duplicate 自检 + 明确报错已覆盖无法自动处理的最坏情况）。
+        next_plan: dict[str, tuple[list[str], str]] = {}
+        for table, (columns, csv_text) in remapped.items():
+            if table in value_maps:
+                col = uuid_candidate[table]
+                csv_text = _remap_csv_single_column_values(csv_text, col, value_maps[table])
+                total_remapped += len(value_maps[table])
+                logger.warning(
+                    "租户恢复全局唯一列避让: table={} column={} remapped={}",
+                    table,
+                    col,
+                    len(value_maps[table]),
+                )
+            for child_col, (parent, _pcol) in fk_uuid_refs.get(table, {}).items():
+                csv_text = _remap_csv_single_column_values(
+                    csv_text, child_col, value_maps[parent]
+                )
+            next_plan[table] = (columns, csv_text)
+        remapped = next_plan
+    else:
+        logger.warning("UUID 避让多次探测仍有冲突，已按最新库内数据重算")
+
+    if total_remapped:
+        logger.warning(
+            "跨租户恢复后源 UUID 已重排 {} 个（目标租户内为新值），请勿用源系统单号直接对账",
+            total_remapped,
+        )
     return remapped
 
 
@@ -1776,13 +1829,16 @@ def _append_fk_orphan_cleanup(
     import_tables: set[str],
     tenant_ids: set[int],
     table_column_map: dict[str, list[str]],
-    passes: int = 3,
+    passes: int = 0,
 ) -> None:
     """删除租户范围内引用已不存在父表行的孤儿数据（源库可能存在的历史脏数据）。
 
     多轮执行：上一轮删除父行后，下一轮才能清掉仍指向它们的子行。
+    轮次按 FK 链深度自动推导（至少 5 轮、至多 15 轮），深链重建约束前残留更少。
     自引用外键不在此删除整行（见 `_append_self_referential_fk_nullify`）。
     """
+    if passes <= 0:
+        passes = min(15, max(5, len(fk_rows) + 1))
     tenant_sql = ", ".join(str(t) for t in sorted(tenant_ids))
     for _ in range(max(1, int(passes))):
         for row in fk_rows:
@@ -2414,6 +2470,54 @@ def run_pg_restore(dump_path: str, backup_scope: str) -> None:
         raise RuntimeError(f"pg_restore 失败 (exit={result.returncode}): {err_msg[:2000]}")
 
 
+# zip 恢复安全上限：防 ZipSlip + 防解压炸弹拖垮磁盘
+_RESTORE_ZIP_MAX_ENTRIES = 200_000
+_RESTORE_ZIP_MAX_TOTAL_BYTES = 20 * 1024 * 1024 * 1024
+
+
+def _safe_extract_zip_member(
+    zf: zipfile.ZipFile,
+    member: str,
+    extract_dir: str,
+    *,
+    allowed_prefixes: tuple[str, ...] = (),
+) -> str:
+    """校验 zip 条目后解压单个文件，返回落盘绝对路径。
+
+    拦截绝对路径、`..` 跳目录、Windows 盘符与允许前缀之外的条目；目录条目直接建目录返回。
+    """
+    if not member or member.endswith("/"):
+        target = os.path.abspath(os.path.join(extract_dir, member))
+        base = os.path.abspath(extract_dir) + os.sep
+        if not target.startswith(base):
+            raise ValueError(f"备份 zip 含非法目录条目，已拒绝恢复: {member!r}")
+        os.makedirs(target, exist_ok=True)
+        return target
+    if member.startswith(("/", "\\")) or ".." in member.split("/") or ":" in member.split("/")[0]:
+        raise ValueError(f"备份 zip 含非法路径条目，已拒绝恢复: {member!r}")
+    if allowed_prefixes and not member.startswith(allowed_prefixes):
+        raise ValueError(f"备份 zip 条目超出允许范围，已拒绝恢复: {member!r}")
+    target = os.path.abspath(os.path.join(extract_dir, member))
+    base = os.path.abspath(extract_dir) + os.sep
+    if not target.startswith(base):
+        raise ValueError(f"备份 zip 含非法路径条目，已拒绝恢复: {member!r}")
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    with zf.open(member) as src, open(target, "wb") as dst:
+        shutil.copyfileobj(src, dst)
+    return target
+
+
+def _check_zip_restore_budget(zf: zipfile.ZipFile, names: list[str]) -> None:
+    if len(names) > _RESTORE_ZIP_MAX_ENTRIES:
+        raise ValueError(f"备份 zip 条目过多（{len(names)}），已拒绝恢复以保护磁盘")
+    total = 0
+    for info in zf.infolist():
+        if info.filename in set(names):
+            total += info.file_size
+            if total > _RESTORE_ZIP_MAX_TOTAL_BYTES:
+                raise ValueError("备份 zip 解压后体积超过 20GB 上限，已拒绝恢复")
+
+
 def restore_uploads_from_zip(zip_path: str, extract_dir: str) -> None:
     """从备份 zip 恢复 uploads 目录到配置的上传目录（全量备份）"""
     upload_dir = infra_settings.FILE_UPLOAD_DIR
@@ -2427,8 +2531,9 @@ def restore_uploads_from_zip(zip_path: str, extract_dir: str) -> None:
             if not names:
                 logger.info("备份中无 uploads 目录，跳过")
                 return
+            _check_zip_restore_budget(zf, names)
             for name in names:
-                zf.extract(name, extract_dir)
+                _safe_extract_zip_member(zf, name, extract_dir, allowed_prefixes=(uploads_in_zip,))
             src = os.path.join(extract_dir, "uploads")
             if os.path.exists(src):
                 os.makedirs(upload_dir, exist_ok=True)
@@ -2471,8 +2576,9 @@ def restore_tenant_uploads_from_zip(
             if not names:
                 logger.info("备份中无租户 uploads/{}，跳过", upload_source_id)
                 return
+            _check_zip_restore_budget(zf, names)
             for name in names:
-                zf.extract(name, extract_dir)
+                _safe_extract_zip_member(zf, name, extract_dir, allowed_prefixes=(tenant_prefix,))
 
         src = os.path.join(extract_dir, "uploads", str(upload_source_id))
         if not os.path.isdir(src):

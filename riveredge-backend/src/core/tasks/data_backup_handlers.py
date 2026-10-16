@@ -24,6 +24,8 @@ from core.services.system.backup_storage import (
 )
 from core.services.system.data_backup_jobs import (
     BackupProgressReporter,
+    _check_zip_restore_budget,
+    _safe_extract_zip_member,
     is_backup_advisory_lock_held,
     release_backup_lock,
     read_backup_metadata,
@@ -372,7 +374,13 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
         os.makedirs(restore_extract_dir, exist_ok=True)
 
         with zipfile.ZipFile(zip_path, "r") as zf:
-            zf.extractall(restore_extract_dir)
+            names = zf.namelist()
+            _check_zip_restore_budget(zf, names)
+            for name in names:
+                _safe_extract_zip_member(
+                    zf, name, restore_extract_dir,
+                    allowed_prefixes=("database.dump", "backup_metadata.json", "uploads/"),
+                )
         db_dump_path = os.path.join(restore_extract_dir, "database.dump")
         if not os.path.exists(db_dump_path):
             raise FileNotFoundError(
