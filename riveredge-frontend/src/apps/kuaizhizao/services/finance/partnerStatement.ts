@@ -5,6 +5,8 @@ export interface PartnerStatementLine {
   doc_type: string;
   doc_code: string;
   summary?: string;
+  /** 关联进项/销项发票开票日期 */
+  invoice_date?: string | null;
   debit: number;
   credit: number;
   balance: number;

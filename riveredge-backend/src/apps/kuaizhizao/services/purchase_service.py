@@ -72,6 +72,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
     def __init__(self):
         super().__init__(PurchaseOrder)
+        self.business_config_service = BusinessConfigService()
 
     @staticmethod
     def _format_user_display_name(user: Any) -> str:

@@ -44,6 +44,104 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'finance-payment-source-print-r01',
+    date: '2026-10-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-payment-source-print-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-payment-source-print-r01.description',
+  },
+  {
+    id: 'quality-complaint-detail-descriptions-r01',
+    date: '2026-10-16',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.quality-complaint-detail-descriptions-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-complaint-detail-descriptions-r01.description',
+  },
+  {
+    id: 'payment-application-print-amount-precision-r01',
+    date: '2026-10-16',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payment-application-print-amount-precision-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-print-amount-precision-r01.description',
+  },
+  {
+    id: 'payment-application-print-export-r01',
+    date: '2026-10-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-print-export-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-print-export-r01.description',
+  },
+  {
+    id: 'payment-application-push-payment-bank-r01',
+    date: '2026-10-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-push-payment-bank-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-push-payment-bank-r01.description',
+  },
+  {
+    id: 'payment-application-form-fields-attach-r01',
+    date: '2026-10-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-form-fields-attach-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-form-fields-attach-r01.description',
+  },
+  {
+    id: 'payment-application-pull-sources-r01',
+    date: '2026-10-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-pull-sources-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-pull-sources-r01.description',
+  },
+  {
+    id: 'purchase-order-withdraw-submit-r01',
+    date: '2026-10-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-withdraw-submit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-withdraw-submit-r01.description',
+  },
+  {
+    id: 'finance-invoice-face-date-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-invoice-face-date-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-invoice-face-date-r01.description',
+  },
+  {
+    id: 'purchase-order-default-buyer-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-default-buyer-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-default-buyer-r01.description',
+  },
+  {
+    id: 'approval-multi-level-manager-skip-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-multi-level-manager-skip-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-multi-level-manager-skip-r01.description',
+  },
+  {
+    id: 'partner-statement-push-invoice-date-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-statement-push-invoice-date-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-statement-push-invoice-date-r01.description',
+  },
+  {
     id: 'kuaioa-hr-employee-display-r01',
     date: '2026-10-15',
     type: 'fix',

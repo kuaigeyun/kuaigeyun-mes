@@ -11,7 +11,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
-import { App, Button, Col, Input, Modal, Result, Row, Typography } from 'antd';
+import { App, Button, Col, Descriptions, Input, Modal, Result, Row, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -21,6 +21,7 @@ import {
   FormModalTemplate,
   ListPageTemplate,
   MODAL_CONFIG,
+  detailDrawerBasicColumn,
   useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -718,7 +719,11 @@ const QualityComplaintsPage: React.FC = () => {
               }
             />
           ) : detail ? (
-            detailItems
+            <Descriptions
+              column={detailDrawerBasicColumn(false)}
+              size="small"
+              items={detailItems}
+            />
           ) : undefined
         }
       />

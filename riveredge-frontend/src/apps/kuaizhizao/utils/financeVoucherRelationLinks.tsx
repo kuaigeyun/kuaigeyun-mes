@@ -62,6 +62,32 @@ export function FinanceVoucherRelationLinks({
     }
   }
 
+  if (!isRefund && kind === 'payment' && (record.linked_source_documents?.length ?? 0) > 0) {
+    blocks.push(
+      <div key="pull-sources">
+        <Typography.Text type="secondary">{t(`${prefix}.linkedSourceDocuments`)}</Typography.Text>
+        <Space size={[8, 4]} wrap>
+          {record.linked_source_documents!.map((doc) => {
+            const typeLabel =
+              doc.source_type === 'payable'
+                ? t(`${prefix}.sourceType.payable`)
+                : doc.source_type === 'payment_application'
+                  ? t(`${prefix}.sourceType.paymentApplication`)
+                  : doc.source_type;
+            return (
+              <Typography.Link
+                key={`${doc.source_type}-${doc.id}`}
+                onClick={() => linkHandlers.openSourceDocument?.(doc)}
+              >
+                {typeLabel} {doc.code || `#${doc.id}`}
+              </Typography.Link>
+            );
+          })}
+        </Space>
+      </div>,
+    );
+  }
+
   if (!isRefund && (record.linked_refund_vouchers?.length ?? 0) > 0) {
     blocks.push(
       <div key="refunds">

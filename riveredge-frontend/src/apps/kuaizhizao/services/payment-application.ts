@@ -37,6 +37,10 @@ export interface PaymentApplication {
   supplierAccountName?: string;
   supplierBankName?: string;
   supplierBankAccount?: string;
+  paymentReason?: string;
+  paymentMethod?: string;
+  invoiceStatus?: string;
+  paymentTerms?: string;
   notes?: string;
   /** 勾选后，由该申请下推/取单生成的付款单必须上传付款凭证 */
   requirePaymentVoucher?: boolean;

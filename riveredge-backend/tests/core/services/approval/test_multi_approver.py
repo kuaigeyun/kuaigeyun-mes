@@ -284,6 +284,28 @@ class TestResolveNodeApproversFailClosed:
         mock_level.assert_awaited_once_with(1, 10, 2)
         assert ids == [42]
 
+    @pytest.mark.asyncio
+    async def test_multi_level_manager_missing_level_returns_empty(self):
+        """组织树不足 N 级时返回空列表，由创建任务侧跳过，不阻断提交。"""
+        instance = MagicMock()
+        instance.tenant_id = 1
+        instance.submitter_id = 10
+        instance.data = {}
+        node = {
+            "id": "n2",
+            "data": {"approverType": "multi_level_manager", "managerLevel": 2},
+        }
+
+        with patch.object(
+            ApprovalInstanceService,
+            "_resolve_submitter_department_manager_at_level",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_level:
+            ids = await ApprovalInstanceService._resolve_node_approvers(node, instance)
+        mock_level.assert_awaited_once_with(1, 10, 2)
+        assert ids == []
+
 
 class TestEvaluateConditionsNumeric:
     def test_gt_with_string_actual_and_numeric_threshold(self):

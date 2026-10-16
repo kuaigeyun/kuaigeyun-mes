@@ -74,7 +74,11 @@ class PaymentApplicationPushService:
         from apps.kuaicaiwu.services.finance_voucher_codes import allocate_payment_code
         from apps.kuaicaiwu.services.bank_account_service import BankAccountService
 
-        payment_method = data.payment_method or "银行转账"
+        payment_method = (
+            data.payment_method
+            or getattr(app, "payment_method", None)
+            or "银行转账"
+        )
         await BankAccountService().validate_voucher_account(
             tenant_id,
             payment_method=payment_method,

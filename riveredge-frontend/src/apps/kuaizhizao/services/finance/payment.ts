@@ -46,9 +46,15 @@ export interface PaymentVoucher {
   updated_at?: string;
   created_by_name?: string;
   updated_by_name?: string;
+  linked_source_documents?: Array<{
+    source_type: 'payable' | 'payment_application' | string;
+    id: number;
+    code: string;
+  }>;
   capabilities?: {
     pull_payment_refund?: { allowed?: boolean; reason?: string };
     repair_bank_flow?: { allowed?: boolean; reason?: string };
+    print?: { allowed?: boolean; reason?: string };
   };
 }
 

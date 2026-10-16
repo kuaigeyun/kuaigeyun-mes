@@ -68,7 +68,7 @@ export const purchaseInvoiceService = {
 
   update: (
     id: number,
-    data: { invoice_number?: string; attachments?: unknown[] },
+    data: { invoice_number?: string; invoice_date?: string; attachments?: unknown[] },
   ) => {
     return apiRequest<PurchaseInvoice>(`${PURCHASE_INVOICE_API}/${id}`, {
       method: 'PUT',

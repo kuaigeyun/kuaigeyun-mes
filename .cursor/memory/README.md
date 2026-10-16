@@ -88,10 +88,12 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 取单 403、pull-lines 要不要开查看、来源筛选项直调 list | `features/pull-source-display-echo.md` |
 | 采购合计取舍、单价 0.195 合计 0.20、DocumentAmountSummary | `features/document-amount-summary-precision.md` |
 | 数值精度、数量/单价/金额小数位、0–6、configTree max | `features/numeric-precision-decimal-places-6.md` |
+| 往来对账单下推付款申请/采购收票、开票日期 | `features/partner-statement-push-invoice-date.md` |
 | 选物料 403、仅回显加载物料列表失败、UniMaterialSelect | `features/uni-material-select-reference-display.md` |
 | 建议供应商无搜索、SupplierSelectDropdown、UniDropdown 可搜 | `features/supplier-select-dropdown.md` |
 | 客户供应商多收付款账户、settlementAccounts、付款账户 | `features/partner-settlement-accounts.md` |
 | 付款申请、采购请款、push_payment_application、可请款占用 | `features/payment-application-procurement.md` |
+| 付款单来源单据、打印导出、FINANCE_PAYMENT_PRINT | `features/finance-payment-source-print.md` |
 | 付款凭证必传、requirePaymentVoucher、付款申请要求上传凭证 | `features/payment-require-voucher.md` |
 | 其他费用收入、其他费用支出、收支类别、other_income | `features/finance-other-misc-vouchers.md` |
 | 其他费用应收应付、misc_voucher_finance_bridge、确认收款付款 | `features/finance-other-misc-ar-ap-chain.md` |
@@ -168,6 +170,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/pull-source-display-echo.md` | 取单来源回显（不必开查看） | rbac | 已交付 |
 | `features/document-amount-summary-precision.md` | 单据合计金额精度（先乘后舍） | finance-ui | 已交付 |
 | `features/numeric-precision-decimal-places-6.md` | 配置中心数值精度 0–6 与库表 scale | platform-config | 已交付 |
+| `features/partner-statement-push-invoice-date.md` | 对账单下推请款/收票与开票日期列 | finance-ui | 已交付 |
 | `features/uni-material-select-reference-display.md` | 物料选择器走 reference-display | rbac | 已交付 |
 | `features/supplier-select-dropdown.md` | 供应商可搜索下拉 SupplierSelectDropdown | master-data | 已交付 |
 | `features/partner-settlement-accounts.md` | 客户/供应商多收付款账户 JSON | master-data | 已交付 |
