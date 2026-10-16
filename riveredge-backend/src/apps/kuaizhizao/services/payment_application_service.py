@@ -52,6 +52,12 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
     async def _generate_code(self, tenant_id: int) -> str:
         return await self.generate_code(tenant_id, "PAYMENT_APPLICATION_CODE", prefix="FKSQ")
 
+    @staticmethod
+    def _line_value(item: Any, key: str) -> Any:
+        if isinstance(item, dict):
+            return item.get(key)
+        return getattr(item, key, None)
+
     async def _validate_lines(
         self,
         tenant_id: int,
@@ -62,11 +68,11 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
     ) -> Decimal:
         total = Decimal("0")
         for idx, item in enumerate(items, start=1):
-            req = Decimal(str(item.request_amount))
+            req = Decimal(str(self._line_value(item, "request_amount") or 0))
             if req <= 0:
                 raise ValidationError(f"第 {idx} 行申请金额须大于 0")
-            line_kind = str(getattr(item, "line_kind", None) or "goods")
-            payable_id = getattr(item, "payable_id", None)
+            line_kind = str(self._line_value(item, "line_kind") or "goods")
+            payable_id = self._line_value(item, "payable_id")
             if line_kind != "prepayment":
                 if not payable_id:
                     raise ValidationError(f"第 {idx} 行须关联应付单")
@@ -152,6 +158,10 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                 supplier_account_name=data.supplier_account_name,
                 supplier_bank_name=data.supplier_bank_name,
                 supplier_bank_account=data.supplier_bank_account,
+                payment_reason=data.payment_reason,
+                payment_method=data.payment_method,
+                invoice_status=data.invoice_status,
+                payment_terms=data.payment_terms,
                 notes=data.notes,
                 require_payment_voucher=bool(data.require_payment_voucher),
                 attachments=data.attachments,

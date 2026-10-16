@@ -18,6 +18,8 @@ export type KuaizhizaoPrintDocumentType =
   | 'delivery_notice'
   | 'purchase_order'
   | 'purchase_requisition'
+  | 'payment_application'
+  | 'finance_payment'
   | 'purchase_receipt'
   | 'work_order'
   | 'production_picking'
@@ -46,6 +48,8 @@ const PRINT_API_PATH_BUILDERS: Record<KuaizhizaoPrintDocumentType, (id: number) 
   delivery_notice: (id) => `/apps/kuaizhizao/delivery-notices/${id}/print`,
   purchase_order: (id) => `/apps/kuaizhizao/purchase-orders/${id}/print`,
   purchase_requisition: (id) => `/apps/kuaizhizao/purchase-requisitions/${id}/print`,
+  payment_application: (id) => `/apps/kuaizhizao/payment-applications/${id}/print`,
+  finance_payment: (id) => `/apps/kuaicaiwu/payments/${id}/print`,
   purchase_receipt: (id) => `/apps/kuaizhizao/purchase-receipts/${id}/print`,
   work_order: (id) => `/apps/kuaizhizao/work-orders/${id}/print`,
   production_picking: (id) => `/apps/kuaizhizao/production-pickings/${id}/print`,

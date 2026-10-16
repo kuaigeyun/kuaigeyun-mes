@@ -61,6 +61,65 @@ PRINT_STYLE_A4 = """
 </style>
 """
 
+# 朴素黑白（付款申请等财务单据）；无品牌色、无底纹、无左侧装饰条
+PRINT_STYLE_A4_PLAIN = """
+<style>
+  @page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11pt; line-height: 1.55; color: #000;
+  }
+  .report { max-width: 186mm; margin: 0 auto; }
+  .report-header {
+    border-bottom: 2px solid #000;
+    padding-bottom: 10px; margin-bottom: 14px;
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 12px;
+  }
+  .report-title { margin: 0; font-size: 20pt; font-weight: 700; color: #000; letter-spacing: 0.5px; }
+  .doc-meta { text-align: right; font-size: 9.5pt; color: #000; }
+  .doc-meta strong { display: block; font-size: 11pt; color: #000; margin-bottom: 2px; }
+  .section { margin-bottom: 14px; }
+  .section-title {
+    font-size: 10.5pt; font-weight: 700; color: #000;
+    border-bottom: 1px solid #000; padding-bottom: 4px; margin: 0 0 8px;
+  }
+  .info-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px;
+    border: 1px solid #000; padding: 10px 12px; background: #fff;
+  }
+  .info-item { display: flex; gap: 6px; font-size: 10pt; }
+  .info-label { flex: 0 0 96px; color: #000; }
+  .info-value { flex: 1; color: #000; font-weight: 500; word-break: break-word; }
+  .info-item.full { grid-column: 1 / -1; }
+  .text-block {
+    border: 1px solid #000; padding: 10px 12px;
+    background: #fff; white-space: pre-wrap; word-break: break-word; min-height: 48px;
+  }
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  table.data-table th {
+    background: #fff; color: #000; font-weight: 700;
+    padding: 7px 8px; text-align: left; border: 1px solid #000;
+  }
+  table.data-table td {
+    padding: 6px 8px; border: 1px solid #000; vertical-align: top; color: #000;
+  }
+  .totals { margin-top: 8px; text-align: right; font-size: 10.5pt; color: #000; }
+  .totals strong { color: #000; }
+  .sign-row {
+    margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
+    font-size: 10pt; color: #000;
+  }
+  .sign-row.cols-2 { grid-template-columns: 1fr 1fr; }
+  .sign-box { border-top: 1px solid #000; padding-top: 6px; min-height: 36px; }
+  .report-footer {
+    margin-top: 18px; padding-top: 8px; border-top: 1px dashed #000;
+    font-size: 8.5pt; color: #000; text-align: center;
+  }
+</style>
+"""
+
 PRINT_STYLE_A5 = """
 <style>
   @page { size: A5 portrait; margin: 10mm 8mm 12mm 8mm; }
@@ -97,7 +156,7 @@ PRINT_STYLE_A5 = """
 def _info_items_html(items: list[tuple[str, str]]) -> str:
     rows = []
     for label, expr in items:
-        full = ' full' if label in ("备注", "合同条款", "收货地址") else ""
+        full = ' full' if label in ("备注", "合同条款", "收货地址", "付款事由") else ""
         rows.append(
             f'      <div class="info-item{full}"><span class="info-label">{label}</span>'
             f'<span class="info-value">{{{{ {expr} or "—" }}}}</span></div>'
@@ -115,6 +174,7 @@ def build_a4_document(
     extra_sections: str = "",
     sign_labels: tuple[str, ...] = ("制单人", "审核人", "签收人"),
     notes_expr: str = "notes",
+    style_css: str | None = None,
 ) -> str:
     signs = "".join(f'<div class="sign-box">{label}：</div>' for label in sign_labels)
     cols_class = " cols-2" if len(sign_labels) == 2 else ""
@@ -126,7 +186,7 @@ def build_a4_document(
     <div class="text-block">{{{{ {notes_expr} or "—" }}}}</div>
   </div>"""
     return (
-        PRINT_STYLE_A4
+        (style_css or PRINT_STYLE_A4)
         + f"""
 <div class="report">
   <div class="report-header">

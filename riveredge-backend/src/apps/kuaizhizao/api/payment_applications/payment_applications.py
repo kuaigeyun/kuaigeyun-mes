@@ -254,3 +254,52 @@ async def push_payment_application_to_payment(
         raise _http(404, str(e), f"/payment-applications/{application_id}/push-payment", tenant_id) from e
     except (ValidationError, BusinessLogicError) as e:
         raise _http(400, str(e), f"/payment-applications/{application_id}/push-payment", tenant_id) from e
+
+
+@router.get("/payment-applications/{application_id}/print", summary="Print payment application")
+async def print_payment_application(
+    application_id: int = Path(..., ge=1),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:print")),
+):
+    """打印付款申请"""
+    import base64
+
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    from fastapi.responses import HTMLResponse, JSONResponse, Response
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="payment_application",
+            document_id=application_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise _http(404, str(e), f"/payment-applications/{application_id}/print", tenant_id) from e
+    except ValidationError as e:
+        raise _http(400, str(e), f"/payment-applications/{application_id}/print", tenant_id) from e
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="payment-application-{application_id}.pdf"'
+            },
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)

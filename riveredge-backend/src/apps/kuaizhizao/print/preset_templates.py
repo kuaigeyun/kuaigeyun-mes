@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from apps.kuaizhizao.print.equipment_card import build_equipment_card_preset
 from apps.kuaizhizao.print.mold_card import build_mold_card_preset
-from apps.kuaizhizao.print.styles import build_a4_document, make_preset
+from apps.kuaizhizao.print.styles import PRINT_STYLE_A4_PLAIN, build_a4_document, make_preset
 
 _DELIVERY_PROJECT_PRINT_STUB = {
     "name": "交付项目",
@@ -137,6 +137,110 @@ _EIGHT_D_REPORT_PRINT_STUB = {
     },
 }
 
+_FINANCE_PAYMENT_PRINT_STUB = {
+    "name": "付款单",
+    "code": "FINANCE_PAYMENT_PRINT",
+    "type": "html",
+    "description": "快财务预置打印模板：付款单（朴素黑白）",
+    "content": build_a4_document(
+        title="付款单",
+        info_items=[
+            ("供应商", "supplier_name"),
+            ("付款日期", "payment_date"),
+            ("付款金额", "total_amount"),
+            ("已核销", "settled_amount"),
+            ("待核销", "unsettled_amount"),
+            ("状态", "status"),
+            ("付款方式", "payment_method"),
+            ("结算类型", "settlement_type"),
+            ("出账账户", "bank_account_label"),
+            ("出款备注", "bank_account"),
+            ("来源单据", "source_documents_text"),
+        ],
+        table_head=(
+            "<th style=\"width:90px\">来源类型</th>"
+            "<th>来源单号</th>"
+        ),
+        table_row=(
+            "<td>{{ item.source_type_label or item.source_type or \"—\" }}</td>"
+            "<td>{{ item.code or \"—\" }}</td>"
+        ),
+        totals_html=(
+            '<div class="totals">付款金额：'
+            "<strong>{{ total_amount or \"—\" }}</strong></div>"
+        ),
+        sign_labels=("制单人", "审核人", "付款人"),
+        notes_expr="notes",
+        style_css=PRINT_STYLE_A4_PLAIN,
+    ),
+    "config": {
+        "document_type": "finance_payment",
+        "engine": "jinja2",
+        "strict_variables": False,
+        "theme": "plain_bw",
+    },
+    "is_active": True,
+    "is_default": True,
+}
+
+_PAYMENT_APPLICATION_PRINT_STUB = {
+    "name": "付款申请",
+    "code": "PAYMENT_APPLICATION_PRINT",
+    "type": "html",
+    "description": "快制造预置打印模板：付款申请（朴素黑白）",
+    "content": build_a4_document(
+        title="付款申请",
+        info_items=[
+            ("供应商", "supplier_name"),
+            ("申请人", "applicant_name"),
+            ("申请日期", "application_date"),
+            ("期望付款日", "expected_payment_date"),
+            ("申请金额", "total_request_amount"),
+            ("待付金额", "remaining_amount"),
+            ("已付金额", "paid_amount"),
+            ("状态", "status"),
+            ("付款方式", "payment_method"),
+            ("发票情况", "invoice_status"),
+            ("付款条件", "payment_terms"),
+            ("收款户名", "supplier_account_name"),
+            ("开户行", "supplier_bank_name"),
+            ("收款账号", "supplier_bank_account"),
+            ("付款事由", "payment_reason"),
+        ],
+        table_head=(
+            "<th style=\"width:40px\">行号</th>"
+            "<th style=\"width:90px\">来源类型</th>"
+            "<th>来源单号</th>"
+            "<th>应付单号</th>"
+            "<th style=\"width:100px\">申请金额</th>"
+            "<th>备注</th>"
+        ),
+        table_row=(
+            "<td>{{ item.line_no }}</td>"
+            "<td>{{ item.source_type or \"—\" }}</td>"
+            "<td>{{ item.source_code or \"—\" }}</td>"
+            "<td>{{ item.payable_code or \"—\" }}</td>"
+            "<td>{{ item.request_amount or \"—\" }}</td>"
+            "<td>{{ item.notes or \"—\" }}</td>"
+        ),
+        totals_html=(
+            '<div class="totals">合计申请金额：'
+            "<strong>{{ total_request_amount or \"—\" }}</strong></div>"
+        ),
+        sign_labels=("申请人", "审核人", "付款人"),
+        notes_expr="notes",
+        style_css=PRINT_STYLE_A4_PLAIN,
+    ),
+    "config": {
+        "document_type": "payment_application",
+        "engine": "jinja2",
+        "strict_variables": False,
+        "theme": "plain_bw",
+    },
+    "is_active": True,
+    "is_default": True,
+}
+
 KUAIZHIZAO_PRESET_PRINT_TEMPLATES = [
     make_preset(name="报价单", code="QUOTATION_PRINT", document_type="quotation"),
     make_preset(name="销售合同", code="SALES_CONTRACT_PRINT", document_type="sales_contract"),
@@ -173,4 +277,6 @@ KUAIZHIZAO_PRESET_PRINT_TEMPLATES = [
     _DELIVERY_NODE_REPORT_PRINT_STUB,
     _DELIVERY_ISSUE_PRINT_STUB,
     _EIGHT_D_REPORT_PRINT_STUB,
+    _PAYMENT_APPLICATION_PRINT_STUB,
+    _FINANCE_PAYMENT_PRINT_STUB,
 ]

@@ -4,7 +4,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionFillInvoiceNumber } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Col, Modal, Typography, Alert, Spin, Table, Empty, Form } from 'antd';
+import { App, Button, Modal, Typography, Alert, Spin, Table, Empty, Form } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
@@ -182,12 +182,17 @@ const PurchaseInvoiceList: React.FC = () => {
     setEditVisible(true);
   };
 
-  const handleEditSubmit = async (values: { invoice_number?: string; attachments?: unknown }) => {
+  const handleEditSubmit = async (values: {
+    invoice_number?: string;
+    invoice_date?: unknown;
+    attachments?: unknown;
+  }) => {
     if (!editingRecord?.id) return false;
     setEditSubmitting(true);
     try {
       await purchaseInvoiceService.update(Number(editingRecord.id), {
         invoice_number: String(values.invoice_number ?? '').trim(),
+        invoice_date: formatDateTime(values.invoice_date || editingRecord.invoice_date || dayjs(), 'YYYY-MM-DD'),
         attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success(t(`${P}.editNumberSuccess`));
@@ -1197,8 +1202,9 @@ const PurchaseInvoiceList: React.FC = () => {
                 <ProFormDatePicker
                   name="invoice_date"
                   label={t('app.kuaicaiwu.common.invoiceDate')}
+                  tooltip={t('app.kuaicaiwu.common.invoiceDateTip')}
                   rules={[{ required: true, message: t(`${P}.form.invoiceDateRequired`) }]}
-                  fieldProps={{ style: { width: '100%' } }}
+                  fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
                   colProps={financeColHalf}
                 />
                 <ProFormSelect
@@ -1338,6 +1344,7 @@ const PurchaseInvoiceList: React.FC = () => {
         submitter={{ submitButtonProps: { loading: editSubmitting } }}
         initialValues={{
           invoice_number: faceInvoiceNumberForEdit(editingRecord?.invoice_number),
+          invoice_date: editingRecord?.invoice_date ? dayjs(editingRecord.invoice_date) : dayjs(),
           attachments: mapAttachmentsToUploadList((editingRecord as { attachments?: unknown })?.attachments),
         }}
       >
@@ -1346,6 +1353,13 @@ const PurchaseInvoiceList: React.FC = () => {
           label={t(`${P}.col.invoiceNumber`)}
           rules={[{ required: true, message: t(`${P}.form.invoiceNumberRequired`) }]}
           placeholder={t(`${P}.form.invoiceNumberPlaceholder`)}
+        />
+        <ProFormDatePicker
+          name="invoice_date"
+          label={t('app.kuaicaiwu.common.invoiceDate')}
+          tooltip={t('app.kuaicaiwu.common.invoiceDateTip')}
+          rules={[{ required: true, message: t(`${P}.form.invoiceDateRequired`) }]}
+          fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
         />
         <DocumentAttachmentsField category="purchase_invoice_attachments" />
       </ModalForm>
@@ -1356,11 +1370,12 @@ const PurchaseInvoiceList: React.FC = () => {
         onOpenChange={setCreateModalVisible}
         onFinish={handleRegister}
         width={MODAL_CONFIG.STANDARD_WIDTH}
+        modalProps={{ destroyOnHidden: true }}
         {...financeFormGridProps}
       >
-        <Col span={24}>
-          <p style={{ color: '#8c8c8c', fontSize: 13, marginBottom: 8 }}>{t(`${P}.createHint`)}</p>
-        </Col>
+        <FormModalGridBlock>
+          <p style={{ color: '#8c8c8c', fontSize: 13, marginBottom: 0 }}>{t(`${P}.createHint`)}</p>
+        </FormModalGridBlock>
         <ProFormSelect
           name="supplier_id"
           label={t('app.kuaicaiwu.common.supplier')}
@@ -1382,15 +1397,16 @@ const PurchaseInvoiceList: React.FC = () => {
           label={t(`${P}.col.invoiceType`)}
           options={invoiceTypeOptions}
           initialValue="增值税专用发票"
-          rules={[{ required: true }]}
+          rules={[{ required: true, message: t(`${P}.form.invoiceTypeRequired`) }]}
           colProps={financeColHalf}
         />
         <ProFormDatePicker
           name="invoice_date"
           label={t('app.kuaicaiwu.common.invoiceDate')}
-          rules={[{ required: true }]}
+          tooltip={t('app.kuaicaiwu.common.invoiceDateTip')}
+          rules={[{ required: true, message: t(`${P}.form.invoiceDateRequired`) }]}
           initialValue={dayjs()}
-          fieldProps={{ style: { width: '100%' } }}
+          fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
           colProps={financeColHalf}
         />
         <ProFormDigit
@@ -1399,7 +1415,7 @@ const PurchaseInvoiceList: React.FC = () => {
           initialValue={13}
           min={0}
           max={100}
-          rules={[{ required: true }]}
+          rules={[{ required: true, message: t(`${P}.form.taxRateRequired`) }]}
           fieldProps={{ style: { width: '100%' } }}
           colProps={financeColHalf}
         />

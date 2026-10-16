@@ -60,7 +60,10 @@ export type KuaizhizaoDocumentActionKey =
   | 'inbound.pull_from_outsource_work_order'
   | 'inbound.pull_from_work_order_for_production_return'
   | 'payment_application.pull_from_payable'
-  | 'payment_application.pull_from_purchase_order';
+  | 'payment_application.pull_from_purchase_order'
+  | 'payment_application.pull_from_purchase_receipt'
+  | 'payment_application.pull_from_partner_statement'
+  | 'payment_application.pull_from_other_expense';
 
 export interface KuaizhizaoDocumentActionDefinition {
   key: KuaizhizaoDocumentActionKey;
@@ -584,6 +587,30 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('payment_application.pull_from_purchase_order', 'label'),
     sourceLabelKey: documentActionI18n('payment_application.pull_from_purchase_order', 'source'),
     targetLabelKey: documentActionI18n('payment_application.pull_from_purchase_order', 'target'),
+  },
+  'payment_application.pull_from_purchase_receipt': {
+    key: 'payment_application.pull_from_purchase_receipt',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('payment_application.pull_from_purchase_receipt', 'label'),
+    sourceLabelKey: documentActionI18n('payment_application.pull_from_purchase_receipt', 'source'),
+    targetLabelKey: documentActionI18n('payment_application.pull_from_purchase_receipt', 'target'),
+  },
+  'payment_application.pull_from_partner_statement': {
+    key: 'payment_application.pull_from_partner_statement',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('payment_application.pull_from_partner_statement', 'label'),
+    sourceLabelKey: documentActionI18n('payment_application.pull_from_partner_statement', 'source'),
+    targetLabelKey: documentActionI18n('payment_application.pull_from_partner_statement', 'target'),
+  },
+  'payment_application.pull_from_other_expense': {
+    key: 'payment_application.pull_from_other_expense',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('payment_application.pull_from_other_expense', 'label'),
+    sourceLabelKey: documentActionI18n('payment_application.pull_from_other_expense', 'source'),
+    targetLabelKey: documentActionI18n('payment_application.pull_from_other_expense', 'target'),
   },
 };
 

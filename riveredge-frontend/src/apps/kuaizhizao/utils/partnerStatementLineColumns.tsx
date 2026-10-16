@@ -3,6 +3,7 @@ import { InputNumber, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { TFunction } from 'i18next';
 import { useNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
+import { formatBusinessDateOnly } from '../../../utils/format';
 import type { PartnerStatementLine } from '../services/finance/partnerStatement';
 import { renderFinanceHierarchyDocType } from './partnerStatementLineDisplay';
 import { partnerStatementMoney } from './partnerStatementAmountUtils';
@@ -47,6 +48,12 @@ export function usePartnerStatementLineColumns(
         },
       },
       { title: t(`${PS}.col.summary`), dataIndex: 'summary', ellipsis: true },
+      {
+        title: t(`${PS}.col.invoiceDate`),
+        dataIndex: 'invoice_date',
+        width: 110,
+        render: (v: string | null | undefined) => formatBusinessDateOnly(v, '—'),
+      },
       {
         title: t(`${PS}.col.docAmount`),
         dataIndex: 'doc_amount',

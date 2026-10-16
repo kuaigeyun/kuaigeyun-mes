@@ -29,6 +29,11 @@ export type OtherExpenseVoucher = {
   attachments?: unknown[];
   lines: OtherVoucherLine[];
   capabilities?: Record<string, { allowed: boolean; reason?: string }>;
+  /** 审核后 MiscVoucherFinanceBridge 回写 */
+  payable_id?: number;
+  payable_code?: string;
+  payment_id?: number;
+  payment_code?: string;
 };
 
 export const otherExpenseService = {

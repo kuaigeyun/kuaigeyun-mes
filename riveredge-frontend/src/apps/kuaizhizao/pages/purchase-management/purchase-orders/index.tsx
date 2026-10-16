@@ -359,6 +359,20 @@ const defaultOrderItem = {
   required_date: undefined,
 };
 
+/** 新建采购订单未填采购员时，默认当前登录用户（对齐销售订单业务员） */
+function resolveDefaultPurchaseOrderBuyer(): {
+  buyer_id?: number;
+  buyer_name?: string;
+} {
+  const u = useGlobalStore.getState().currentUser;
+  const id = Number(u?.id);
+  if (!Number.isFinite(id) || id <= 0) return {};
+  const name = normalizeUserDisplayName(
+    u?.full_name || u?.fullName || u?.username || u?.name,
+  );
+  return { buyer_id: id, buyer_name: name };
+}
+
 /** 采购订单头表 tax_rate 存小数（0.13），表单与详情展示用百分比 */
 function purchaseOrderTaxRateToPercent(raw: unknown): number {
   const n = Number(raw);
@@ -2476,7 +2490,12 @@ const PurchaseOrdersPage: React.FC = () => {
     resetPurchaseOrderFormFieldValues();
     formRef.current?.resetFields();
     window.setTimeout(() => {
-      formRef.current?.setFieldsValue({ items: [defaultOrderItem], price_type: 'tax_exclusive' });
+      const defaultBuyer = resolveDefaultPurchaseOrderBuyer();
+      formRef.current?.setFieldsValue({
+        items: [defaultOrderItem],
+        price_type: 'tax_exclusive',
+        ...defaultBuyer,
+      });
     }, 0);
   }
 
@@ -3228,6 +3247,14 @@ const PurchaseOrdersPage: React.FC = () => {
                           (s as any).buyerName ??
                           (s as any).buyer_name ??
                           (buyer ? normalizeUserDisplayName(buyer.full_name || buyer.username) : '');
+                        // 供应商无归属采购员时保留表单已选（含新建默认的当前用户）
+                        const buyerPatch =
+                          bId != null
+                            ? {
+                                buyer_id: bId,
+                                buyer_name: normalizeUserDisplayName(bName),
+                              }
+                            : {};
                         formRef.current?.setFieldsValue({
                           supplier_name: s.name ?? (s as any).supplier_name,
                           supplier_contact:
@@ -3244,16 +3271,13 @@ const PurchaseOrdersPage: React.FC = () => {
                             (Array.isArray((s as any).contacts) && (s as any).contacts[0]
                               ? (s as any).contacts[0].phone
                               : undefined),
-                          buyer_id: bId,
-                          buyer_name: normalizeUserDisplayName(bName),
+                          ...buyerPatch,
                         });
                       } else {
                         formRef.current?.setFieldsValue({
                           supplier_name: undefined,
                           supplier_contact: undefined,
                           supplier_phone: undefined,
-                          buyer_id: undefined,
-                          buyer_name: undefined,
                         });
                       }
                     }}
@@ -3782,7 +3806,11 @@ const PurchaseOrdersPage: React.FC = () => {
                 }}
                 initialValues={
                   isCreatePage
-                    ? { items: [defaultOrderItem], price_type: 'tax_exclusive' }
+                    ? {
+                        items: [defaultOrderItem],
+                        price_type: 'tax_exclusive',
+                        ...resolveDefaultPurchaseOrderBuyer(),
+                      }
                     : undefined
                 }
               >

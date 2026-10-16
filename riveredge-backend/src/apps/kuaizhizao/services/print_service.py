@@ -50,6 +50,7 @@ from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderIt
 from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition, PurchaseRequisitionItem
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+from apps.kuaizhizao.models.payment_application import PaymentApplication, PaymentApplicationLine
 from apps.kuaizhizao.models.sales_forecast import SalesForecast
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
@@ -735,6 +736,8 @@ class DocumentPrintService:
         "sales_delivery": "SALES_DELIVERY_PRINT",
         "purchase_order": "PURCHASE_ORDER_PRINT",
         "purchase_requisition": "PURCHASE_REQUISITION_PRINT",
+        "payment_application": "PAYMENT_APPLICATION_PRINT",
+        "finance_payment": "FINANCE_PAYMENT_PRINT",
         "purchase_receipt": "PURCHASE_RECEIPT_PRINT",
         "sales_forecast": "SALES_FORECAST_PRINT",
         "sales_order": "SALES_ORDER_PRINT",
@@ -1173,6 +1176,37 @@ class DocumentPrintService:
             if not document:
                 raise NotFoundError(f"采购申请不存在: {document_id}")
             return await self._format_purchase_requisition_data(document, loc)
+
+        elif document_type == "payment_application":
+            from apps.kuaizhizao.services.document_action_policy.payment_application import (
+                assert_payment_application_capability,
+            )
+
+            document = await PaymentApplication.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not document:
+                raise NotFoundError(f"付款申请不存在: {document_id}")
+            assert_payment_application_capability(document, "print")
+            return self._finalize_print_context(
+                document_type,
+                document,
+                await self._format_payment_application_data(document, loc),
+            )
+
+        elif document_type == "finance_payment":
+            from apps.kuaicaiwu.models.payment import Payment as FinancePayment
+
+            document = await FinancePayment.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not document:
+                raise NotFoundError(f"付款单不存在: {document_id}")
+            return self._finalize_print_context(
+                document_type,
+                document,
+                await self._format_finance_payment_data(document, loc),
+            )
         
         elif document_type == "purchase_receipt":
             document = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=document_id)
@@ -1752,6 +1786,206 @@ class DocumentPrintService:
             "notes": requisition.notes or "",
             "created_at": to_api_isoformat(requisition.created_at)
             if requisition.created_at
+            else None,
+            "items": items_data,
+        }
+
+    _PAYMENT_APPLICATION_SOURCE_TYPE_LABELS = {
+        "payable": "应付单",
+        "purchase_order": "采购订单",
+        "purchase_receipt": "采购入库",
+        "other_expense": "其他费用支出",
+        "document_reconciliation": "往来对账",
+    }
+
+    _PAYMENT_APPLICATION_KIND_LABELS = {
+        "prepayment": "预付款",
+        "goods": "货款",
+        "invoice": "发票请款",
+        "mixed": "混合",
+    }
+
+    @classmethod
+    def _resolve_payment_application_source_type_label(cls, source_type: Any) -> str:
+        raw = str(source_type or "").strip()
+        if not raw:
+            return ""
+        return cls._PAYMENT_APPLICATION_SOURCE_TYPE_LABELS.get(raw, raw)
+
+    @classmethod
+    def _resolve_payment_application_kind_label(cls, kind: Any) -> str:
+        raw = str(kind or "").strip()
+        if not raw:
+            return ""
+        return cls._PAYMENT_APPLICATION_KIND_LABELS.get(raw, raw)
+
+    async def _format_payment_application_data(
+        self, application: PaymentApplication, i18n: PrintLocalization
+    ) -> Dict[str, Any]:
+        """格式化付款申请打印数据（朴素黑白模板变量）"""
+        from core.utils.amount_precision import format_business_amount
+        from infra.services.business_config_service import BusinessConfigService
+
+        amount_places = await BusinessConfigService().get_amount_decimal_places(
+            application.tenant_id
+        )
+
+        def _amount(value: Any) -> str:
+            return format_business_amount(value, amount_places)
+
+        lines = (
+            await PaymentApplicationLine.filter(
+                tenant_id=application.tenant_id, application_id=application.id
+            )
+            .order_by("line_no")
+            .all()
+        )
+        items_data = [
+            {
+                "line_no": line.line_no,
+                "source_type": self._resolve_payment_application_source_type_label(line.source_type),
+                "source_code": line.source_code or "",
+                "payable_code": line.payable_code or "",
+                "line_kind": self._resolve_payment_application_kind_label(line.line_kind),
+                "request_amount": _amount(line.request_amount),
+                "paid_amount": _amount(line.paid_amount),
+                "notes": line.notes or "",
+            }
+            for line in lines
+        ]
+        return {
+            "document_type": "payment_application",
+            "code": application.application_code,
+            "application_code": application.application_code,
+            "supplier_name": application.supplier_name or "",
+            "applicant_name": application.applicant_name or "",
+            "application_kind": self._resolve_payment_application_kind_label(
+                application.application_kind
+            ),
+            "application_date": to_api_isoformat(application.application_date)
+            if application.application_date
+            else None,
+            "expected_payment_date": to_api_isoformat(application.expected_payment_date)
+            if application.expected_payment_date
+            else None,
+            "total_request_amount": _amount(application.total_request_amount),
+            "paid_amount": _amount(application.paid_amount),
+            "remaining_amount": _amount(application.remaining_amount),
+            "amount_decimal_places": amount_places,
+            "status": i18n.document_status(application.status),
+            "status_code": application.status,
+            "payment_method": application.payment_method or "",
+            "invoice_status": application.invoice_status or "",
+            "payment_terms": application.payment_terms or "",
+            "supplier_account_name": application.supplier_account_name or "",
+            "supplier_bank_name": application.supplier_bank_name or "",
+            "supplier_bank_account": application.supplier_bank_account or "",
+            "payment_reason": application.payment_reason or "",
+            "reviewer_name": application.reviewer_name or "",
+            "review_time": to_api_isoformat(application.review_time)
+            if application.review_time
+            else None,
+            "notes": application.notes or "",
+            "created_at": to_api_isoformat(application.created_at)
+            if application.created_at
+            else None,
+            "items": items_data,
+        }
+
+    _FINANCE_PAYMENT_SOURCE_TYPE_LABELS = {
+        "payable": "应付单",
+        "payment_application": "付款申请",
+    }
+
+    _FINANCE_PAYMENT_STATUS_LABELS = {
+        "Draft": "草稿",
+        "Confirmed": "已确认",
+        "Cancelled": "已作废",
+    }
+
+    _FINANCE_PAYMENT_SETTLEMENT_LABELS = {
+        "normal": "普通付款",
+        "prepayment": "预付款",
+        "refund": "退款",
+    }
+
+    async def _format_finance_payment_data(
+        self, payment: Any, i18n: PrintLocalization
+    ) -> Dict[str, Any]:
+        """格式化快财务付款单打印数据（朴素黑白）"""
+        from core.utils.amount_precision import format_business_amount
+        from apps.kuaicaiwu.services.finance_voucher_enrichment import (
+            _list_payment_pull_source_docs,
+        )
+        from infra.services.business_config_service import BusinessConfigService
+
+        amount_places = await BusinessConfigService().get_amount_decimal_places(
+            payment.tenant_id
+        )
+
+        def _amount(value: Any) -> str:
+            return format_business_amount(value, amount_places)
+
+        source_docs = await _list_payment_pull_source_docs(
+            int(payment.tenant_id), int(payment.id)
+        )
+        items_data = [
+            {
+                "source_type": doc.get("source_type") or "",
+                "source_type_label": self._FINANCE_PAYMENT_SOURCE_TYPE_LABELS.get(
+                    str(doc.get("source_type") or ""), str(doc.get("source_type") or "")
+                ),
+                "code": doc.get("code") or "",
+                "id": doc.get("id"),
+            }
+            for doc in source_docs
+        ]
+        source_text = "、".join(
+            f"{row['source_type_label']} {row['code']}".strip()
+            for row in items_data
+            if row.get("code")
+        )
+
+        bank_label = ""
+        if getattr(payment, "bank_account_id", None):
+            from apps.kuaicaiwu.models.bank_account import BankAccount
+
+            acct = await BankAccount.get_or_none(
+                tenant_id=payment.tenant_id,
+                id=int(payment.bank_account_id),
+                deleted_at__isnull=True,
+            )
+            if acct:
+                name = str(getattr(acct, "account_name", None) or "").strip()
+                code = str(getattr(acct, "account_code", None) or "").strip()
+                bank_label = " / ".join(p for p in (code, name) if p) or str(acct.id)
+
+        status_raw = str(payment.status or "")
+        settlement_raw = str(payment.settlement_type or "normal")
+        return {
+            "document_type": "finance_payment",
+            "code": payment.payment_code,
+            "payment_code": payment.payment_code,
+            "supplier_name": payment.supplier_name or "",
+            "payment_date": to_api_isoformat(payment.payment_date)
+            if payment.payment_date
+            else None,
+            "total_amount": _amount(payment.total_amount),
+            "settled_amount": _amount(payment.settled_amount),
+            "unsettled_amount": _amount(payment.unsettled_amount),
+            "amount_decimal_places": amount_places,
+            "status": self._FINANCE_PAYMENT_STATUS_LABELS.get(status_raw, status_raw),
+            "status_code": status_raw,
+            "payment_method": payment.payment_method or "",
+            "settlement_type": self._FINANCE_PAYMENT_SETTLEMENT_LABELS.get(
+                settlement_raw, settlement_raw
+            ),
+            "bank_account": payment.bank_account or "",
+            "bank_account_label": bank_label,
+            "source_documents_text": source_text,
+            "notes": payment.notes or "",
+            "created_at": to_api_isoformat(payment.created_at)
+            if payment.created_at
             else None,
             "items": items_data,
         }

@@ -247,6 +247,9 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
     && Boolean(linkHandlers)
     && ((isRefundVoucher && (Boolean(effective.source_voucher_id) || (effective.source_vouchers?.length ?? 0) > 0))
       || (!isRefundVoucher && (effective.linked_refund_vouchers?.length ?? 0) > 0)
+      || (!isRefundVoucher
+        && !isReceipt
+        && (effective.linked_source_documents?.length ?? 0) > 0)
       || (effective.linked_partner_statements?.length ?? 0) > 0);
   const code = isReceipt
     ? String((effective as ReceiptVoucher).receipt_code ?? '').trim()

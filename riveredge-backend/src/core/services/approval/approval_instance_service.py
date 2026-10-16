@@ -1935,11 +1935,20 @@ class ApprovalInstanceService:
             return await ApprovalInstanceService._create_node_tasks(tenant_id, instance, next_node)
 
         node_data = node.get("data") if isinstance(node.get("data"), dict) else {}
+        approver_type = str(
+            (node_data or {}).get("approverType")
+            or (node_data or {}).get("approver_type")
+            or "user"
+        ).strip().lower()
         empty_policy = str(
             (node_data or {}).get("emptyApproverPolicy")
             or (node_data or {}).get("empty_approver_policy")
             or "block"
         ).strip().lower()
+        # 多级上级：组织树不足 N 级时默认跳过（有第 N 级则正常审批）；
+        # 仍尊重显式「升级管理员 / 兜底审批人」。
+        if approver_type == "multi_level_manager" and empty_policy == "block":
+            empty_policy = "auto_pass"
 
         try:
             approvers = await ApprovalInstanceService._resolve_node_approvers(node, instance)
@@ -1954,6 +1963,7 @@ class ApprovalInstanceService:
                     "缺少",
                     "直属部门",
                     "部门未配置",
+                    "向上第",
                 )
             )
             if not is_empty_approver:
@@ -2488,8 +2498,9 @@ class ApprovalInstanceService:
         """
         解析节点审批人。兼容前端 camelCase（approverType, approverIds）与后端 snake_case。
         支持：user（指定用户）、role（角色）、department（部门负责人）、manager（直属上级）、
+        multi_level_manager（沿部门树第 N 级负责人；不足 N 级返回空列表由创建任务侧跳过）、
         initiator_select / form / form_select / selected（发起时勾选快照）。
-        找不到有效审批人时抛 ValidationError，禁止回落到提交人。
+        找不到有效审批人时抛 ValidationError（multi_level_manager 不足级数除外），禁止回落到提交人。
         """
         node_data = node.get("data", {})
         node_id = str(node.get("id") or "")
@@ -2652,11 +2663,8 @@ class ApprovalInstanceService:
                 managers = await ApprovalInstanceService._resolve_submitter_department_manager_at_level(
                     tenant_id, submitter_id, level
                 )
-                if managers:
-                    return managers
-                raise ValidationError(
-                    f"提交人向上第 {level} 级部门未配置可用负责人，无法提交审核"
-                )
+                # 有第 N 级负责人则返回；不足 N 级返回空，由创建任务侧按 auto_pass 跳过
+                return managers
             except ValidationError:
                 raise
             except Exception as e:

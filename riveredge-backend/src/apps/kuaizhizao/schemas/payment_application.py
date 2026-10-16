@@ -49,6 +49,10 @@ class PaymentApplicationCreate(BaseModel):
     supplier_account_name: Optional[str] = Field(None, alias="supplierAccountName")
     supplier_bank_name: Optional[str] = Field(None, alias="supplierBankName")
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
+    payment_reason: Optional[str] = Field(None, alias="paymentReason")
+    payment_method: Optional[str] = Field(None, alias="paymentMethod")
+    invoice_status: Optional[str] = Field(None, alias="invoiceStatus")
+    payment_terms: Optional[str] = Field(None, alias="paymentTerms")
     notes: Optional[str] = None
     require_payment_voucher: bool = Field(
         False,
@@ -70,6 +74,10 @@ class PaymentApplicationUpdate(BaseModel):
     supplier_account_name: Optional[str] = Field(None, alias="supplierAccountName")
     supplier_bank_name: Optional[str] = Field(None, alias="supplierBankName")
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
+    payment_reason: Optional[str] = Field(None, alias="paymentReason")
+    payment_method: Optional[str] = Field(None, alias="paymentMethod")
+    invoice_status: Optional[str] = Field(None, alias="invoiceStatus")
+    payment_terms: Optional[str] = Field(None, alias="paymentTerms")
     notes: Optional[str] = None
     require_payment_voucher: Optional[bool] = Field(
         None,
@@ -106,6 +114,10 @@ class PaymentApplicationResponse(UuidStrCoerceMixin, BaseSchema):
     supplier_account_name: Optional[str] = Field(None, alias="supplierAccountName")
     supplier_bank_name: Optional[str] = Field(None, alias="supplierBankName")
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
+    payment_reason: Optional[str] = Field(None, alias="paymentReason")
+    payment_method: Optional[str] = Field(None, alias="paymentMethod")
+    invoice_status: Optional[str] = Field(None, alias="invoiceStatus")
+    payment_terms: Optional[str] = Field(None, alias="paymentTerms")
     notes: Optional[str] = None
     require_payment_voucher: bool = Field(
         False,

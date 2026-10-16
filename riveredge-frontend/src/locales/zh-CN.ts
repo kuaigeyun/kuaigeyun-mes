@@ -9122,12 +9122,31 @@ export default {
   'app.kuaizhizao.paymentApplication.remainingAmount': '待付金额',
   'app.kuaizhizao.paymentApplication.status': '状态',
   'app.kuaizhizao.paymentApplication.applicationDate': '申请日期',
-  'app.kuaizhizao.paymentApplication.notes': '备注',
+  'app.kuaizhizao.paymentApplication.expectedPaymentDate': '期望付款日',
+  'app.kuaizhizao.paymentApplication.paymentReason': '付款事由',
+  'app.kuaizhizao.paymentApplication.paymentMethod': '付款方式',
+  'app.kuaizhizao.paymentApplication.invoiceStatus': '发票情况',
+  'app.kuaizhizao.paymentApplication.invoiceStatus.hasInvoice': '有发票',
+  'app.kuaizhizao.paymentApplication.invoiceStatus.noInvoice': '无发票',
+  'app.kuaizhizao.paymentApplication.invoiceStatus.later': '发票后补',
+  'app.kuaizhizao.paymentApplication.paymentTerms': '付款条件',
+  'app.kuaizhizao.paymentApplication.supplierAccountName': '收款户名',
+  'app.kuaizhizao.paymentApplication.supplierBankName': '收款开户行',
+  'app.kuaizhizao.paymentApplication.supplierBankAccount': '收款账号',
+  'app.kuaizhizao.paymentApplication.notes': '备注说明',
+  'app.kuaizhizao.paymentApplication.attachments': '附件',
   'app.kuaizhizao.paymentApplication.requirePaymentVoucher': '是否需要上传付款凭证',
   'app.kuaizhizao.paymentApplication.requirePaymentVoucherHint':
     '开启后，由该申请生成的付款单在确认前必须上传付款凭证',
   'app.kuaizhizao.paymentApplication.lines': '申请明细',
   'app.kuaizhizao.paymentApplication.payableCode': '应付单号',
+  'app.kuaizhizao.paymentApplication.sourceType': '来源类型',
+  'app.kuaizhizao.paymentApplication.sourceCode': '来源单号',
+  'app.kuaizhizao.paymentApplication.sourceType.payable': '应付单',
+  'app.kuaizhizao.paymentApplication.sourceType.purchase_order': '采购订单',
+  'app.kuaizhizao.paymentApplication.sourceType.purchase_receipt': '采购入库单',
+  'app.kuaizhizao.paymentApplication.sourceType.other_expense': '其他费用支出',
+  'app.kuaizhizao.paymentApplication.sourceType.document_reconciliation': '往来对账',
   'app.kuaizhizao.paymentApplication.selectSupplierFirst': '请先选择供应商',
   'app.kuaizhizao.paymentApplication.selectPayable': '请选择应付单',
   'app.kuaizhizao.paymentApplication.noPayablesForSupplier':
@@ -9138,11 +9157,18 @@ export default {
   'app.kuaizhizao.paymentApplication.sourceDocuments': '来源单据',
   'app.kuaizhizao.paymentApplication.pushPayment': '下推付款单',
   'app.kuaizhizao.paymentApplication.pushPaymentSuccess': '已生成付款单 {{code}}',
+  'app.kuaizhizao.paymentApplication.pushPaymentFailed': '下推付款单失败',
+  'app.kuaizhizao.paymentApplication.pushPaymentDefaultNotes': '由付款申请 {{code}} 下推',
+  'app.kuaizhizao.paymentApplication.paymentDate': '付款日期',
   'app.kuaizhizao.paymentApplication.pushFromPurchaseOrder': '下推付款申请',
   'app.kuaizhizao.paymentApplication.pushFromPurchaseReceipt': '下推付款申请',
   'app.kuaizhizao.paymentApplication.createFromOrderSuccess': '已生成付款申请 {{code}}',
   'app.kuaizhizao.paymentApplication.createFromReceiptSuccess': '已生成付款申请 {{code}}',
+  'app.kuaizhizao.paymentApplication.createFromSourceSuccess': '已从{{source}}生成付款申请 {{code}}',
   'app.kuaizhizao.paymentApplication.createFailed': '生成付款申请失败',
+  'app.kuaizhizao.paymentApplication.noPrepayAmount': '采购订单无可预付请款额度',
+  'app.kuaizhizao.paymentApplication.otherExpenseNoPayable': '该其他费用支出尚未生成应付单，请先审核',
+  'app.kuaizhizao.paymentApplication.otherExpenseNoOpenAmount': '关联应付单无可请款余额',
   'app.kuaizhizao.paymentApplication.amountInvalid': '申请金额须大于 0',
   'app.kuaizhizao.purchaseOrder.capability.purchase_order.push_prepayment.require_application':
     '组织已启用预付款须走付款申请，请使用下推付款申请',
@@ -15687,6 +15713,15 @@ export default {
   'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_order.label': '从采购订单预付创建付款申请单',
   'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_order.source': '采购订单',
   'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_order.target': '付款申请单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_receipt.label': '从采购入库单创建付款申请单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_receipt.source': '采购入库单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_receipt.target': '付款申请单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_partner_statement.label': '从往来对账单创建付款申请单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_partner_statement.source': '往来对账单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_partner_statement.target': '付款申请单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_other_expense.label': '从其他费用支出创建付款申请单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_other_expense.source': '其他费用支出',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_other_expense.target': '付款申请单',
   'app.kuaizhizao.documentAction.payment.pull_from_purchase_order.label': '从采购订单创建预付付款单',
   'app.kuaizhizao.documentAction.payment.pull_from_purchase_order.source': '采购订单',
   'app.kuaizhizao.documentAction.payment.pull_from_purchase_order.target': '预付付款单',
@@ -20155,7 +20190,8 @@ export default {
   'app.kuaicaiwu.common.businessStatus': '业务状态',
   'app.kuaicaiwu.common.dueDate': '到期日期',
   'app.kuaicaiwu.common.businessDate': '业务日期',
-  'app.kuaicaiwu.common.invoiceDate': '开票日期',
+  'app.kuaicaiwu.common.invoiceDate': '发票日期',
+  'app.kuaicaiwu.common.invoiceDateTip': '填写发票票面上的开票日期',
   'app.kuaicaiwu.common.batchApprove': '批量审核',
   'app.kuaicaiwu.common.batchConfirm': '批量确认',
   'app.kuaicaiwu.common.batchVoid': '批量作废',
@@ -21127,6 +21163,7 @@ export default {
   'app.kuaicaiwu.partnerStatement.col.docType': '单据类型',
   'app.kuaicaiwu.partnerStatement.col.docCode': '单号',
   'app.kuaicaiwu.partnerStatement.col.summary': '摘要',
+  'app.kuaicaiwu.partnerStatement.col.invoiceDate': '开票日期',
   'app.kuaicaiwu.partnerStatement.col.debit': '借方',
   'app.kuaicaiwu.partnerStatement.col.credit': '贷方',
   'app.kuaicaiwu.partnerStatement.col.docAmount': '单据金额',
@@ -21156,6 +21193,15 @@ export default {
   'app.kuaicaiwu.partnerStatement.detail.exportPdf': '导出 PDF',
   'app.kuaicaiwu.partnerStatement.detail.exportSuccess': '导出成功',
   'app.kuaicaiwu.partnerStatement.detail.recordDispute': '记录异议',
+  'app.kuaicaiwu.partnerStatement.detail.pushPaymentApplication': '生成付款申请单',
+  'app.kuaicaiwu.partnerStatement.detail.pushPurchaseInvoice': '生成采购收票',
+  'app.kuaicaiwu.partnerStatement.detail.pushSupplierOnly': '仅供应商对账单可下推付款申请与采购收票',
+  'app.kuaicaiwu.partnerStatement.detail.pushNeedConfirmed': '请先确认对账单后再下推',
+  'app.kuaicaiwu.partnerStatement.detail.pushSelectPayable': '对账单中无可用的应付单行',
+  'app.kuaicaiwu.partnerStatement.detail.paymentApplicationCreated': '已生成付款申请 {{code}}',
+  'app.kuaicaiwu.partnerStatement.detail.paymentApplicationFailed': '生成付款申请失败',
+  'app.kuaicaiwu.partnerStatement.detail.purchaseInvoiceNoEligible': '所选应付单当前不可收票',
+  'app.kuaicaiwu.partnerStatement.detail.purchaseInvoiceFailed': '生成采购收票失败',
   'app.kuaicaiwu.partnerStatement.detail.disputeTitle': '记录异议',
   'app.kuaicaiwu.partnerStatement.detail.disputePlaceholder': '请填写对方反馈的异议说明',
   'app.kuaicaiwu.partnerStatement.detail.disputeMissing': '请填写异议说明',
@@ -21443,6 +21489,9 @@ export default {
   'app.kuaicaiwu.financeUi.refundExecution.full': '全部退款',
   'app.kuaicaiwu.financeUi.voucher.loadDetailFailed': '加载收付款凭证详情失败',
   'app.kuaicaiwu.financeUi.voucher.sourceVoucher': '源收付款单',
+  'app.kuaicaiwu.financeUi.voucher.linkedSourceDocuments': '来源单据',
+  'app.kuaicaiwu.financeUi.voucher.sourceType.payable': '应付单',
+  'app.kuaicaiwu.financeUi.voucher.sourceType.paymentApplication': '付款申请',
   'app.kuaicaiwu.financeUi.voucher.linkedRefunds': '关联退款单',
   'app.kuaicaiwu.financeUi.voucher.linkedPartnerStatements': '关联往来对账',
   'app.kuaicaiwu.financeUi.voucher.relationsSection': '关联单据',
@@ -31106,6 +31155,54 @@ export default {
     '导出追溯报告失败时显示可操作原因',
   'pages.dashboard.updateLog.entries.trace-report-pdf-error-tail-r01.description':
     '打印 PDF 子进程失败时直接展示 Traceback 末行根因（如未安装 Chromium），导出追溯报告的前端提示也优先保留错误尾部，避免只看到 runpy 堆栈开头。',
+  'pages.dashboard.updateLog.entries.purchase-order-withdraw-submit-r01.title':
+    '修复采购订单撤回提交报错',
+  'pages.dashboard.updateLog.entries.purchase-order-withdraw-submit-r01.description':
+    '待审核采购订单撤回提交时因服务未挂业务配置依赖而失败；现已修复，提交人可正常撤回到草稿后重新提交。',
+  'pages.dashboard.updateLog.entries.quality-complaint-detail-descriptions-r01.title':
+    '修复质量投诉详情抽屉打开报错',
+  'pages.dashboard.updateLog.entries.quality-complaint-detail-descriptions-r01.description':
+    '打开质量投诉详情时误把字段配置对象直接渲染为页面内容导致应用加载失败；现改为标准 Descriptions 展示，可正常查看详情。',
+  'pages.dashboard.updateLog.entries.finance-payment-source-print-r01.title':
+    '付款单详情展示来源单据并支持打印导出',
+  'pages.dashboard.updateLog.entries.finance-payment-source-print-r01.description':
+    '付款单详情关联区展示加载来源（应付单/付款申请）并可点开；列表与详情支持打印、导出，预置朴素黑白付款单打印模板。',
+  'pages.dashboard.updateLog.entries.payment-application-print-amount-precision-r01.title':
+    '付款申请打印金额按系统小数位显示',
+  'pages.dashboard.updateLog.entries.payment-application-print-amount-precision-r01.description':
+    '打印预览中的申请金额、待付金额与明细金额改为读取配置中心「金额小数位」，不再按库表最高精度展示多余零。',
+  'pages.dashboard.updateLog.entries.payment-application-print-export-r01.title':
+    '付款申请支持打印与导出并预置黑白模板',
+  'pages.dashboard.updateLog.entries.payment-application-print-export-r01.description':
+    '采购付款申请列表增加打印、导出；系统预置朴素黑白付款申请打印模板，展示供应商、金额、收款账户与来源明细。',
+  'pages.dashboard.updateLog.entries.payment-application-push-payment-bank-r01.title':
+    '修复付款申请下推付款单须选择出账账户',
+  'pages.dashboard.updateLog.entries.payment-application-push-payment-bank-r01.description':
+    '详情「下推付款单」改为弹窗确认：选择付款方式、出账账户与付款日期后再生成付款单，避免银行转账因未选账户而失败且无提示。',
+  'pages.dashboard.updateLog.entries.payment-application-form-fields-attach-r01.title':
+    '付款申请补齐事由/付款信息栏位、来源单据与附件上传',
+  'pages.dashboard.updateLog.entries.payment-application-form-fields-attach-r01.description':
+    '新建编辑可填付款事由、付款方式、发票情况、付款条件与收款账户，明细展示采购订单/入库单/其他费用等来源类型与单号，并支持上传附件；详情同步展示。',
+  'pages.dashboard.updateLog.entries.payment-application-pull-sources-r01.title':
+    '付款申请新建下拉支持多来源取单',
+  'pages.dashboard.updateLog.entries.payment-application-pull-sources-r01.description':
+    '付款申请「新建」旁下拉除从应付单创建外，还可从采购订单预付、采购入库单、往来对账单、其他费用支出取单生成，复用既有下推/取单接口。',
+  'pages.dashboard.updateLog.entries.finance-invoice-face-date-r01.title':
+    '采购/销售发票补齐票面发票日期',
+  'pages.dashboard.updateLog.entries.finance-invoice-face-date-r01.description':
+    '手动登记与取单创建、以及填写票面号码时均可录入发票票面上的日期；采购发票创建弹窗提示改走栅格块，避免日期栏位被挤掉。',
+  'pages.dashboard.updateLog.entries.partner-statement-push-invoice-date-r01.title':
+    '往来对账单支持下推付款申请/采购收票，并显示开票日期',
+  'pages.dashboard.updateLog.entries.partner-statement-push-invoice-date-r01.description':
+    '供应商对账单在已确认/已发送后可下推生成付款申请单与采购收票；明细在摘要与单据金额之间展示关联发票的开票日期。',
+  'pages.dashboard.updateLog.entries.purchase-order-default-buyer-r01.title':
+    '新建采购订单默认带出当前登录用户为采购员',
+  'pages.dashboard.updateLog.entries.purchase-order-default-buyer-r01.description':
+    '打开新建采购订单时采购员自动填入当前登录用户；若所选供应商已维护归属采购员则仍以供应商为准，未维护时保留当前默认。',
+  'pages.dashboard.updateLog.entries.approval-multi-level-manager-skip-r01.title':
+    '多级上级审批节点在组织层级不足时自动跳过',
+  'pages.dashboard.updateLog.entries.approval-multi-level-manager-skip-r01.description':
+    '审批流配置「二级上级」等沿部门树向上第 N 级负责人时：能解析到第 N 级则正常审批；部门层级较浅找不到该级时自动跳过本节点，不再提示未设置审核人员而卡住。',
   'pages.dashboard.updateLog.entries.kuaioa-hr-employee-display-r01.title':
     '人事单据选人支持员工档案回显权限',
   'pages.dashboard.updateLog.entries.kuaioa-hr-employee-display-r01.description':
@@ -40556,6 +40653,8 @@ export default {
   'pages.approval.designer.approverTypeMultiLevelManager': '多级上级 (沿部门树向上第 N 级负责人)',
   'pages.approval.designer.managerLevel': '上级级数',
   'pages.approval.designer.managerLevelRequired': '请填写上级级数（至少 2）',
+  'pages.approval.designer.managerLevelTip':
+    '沿部门树向上数第 N 个有负责人的部门。有第 N 级则由其审批；组织层级不足时自动跳过本节点，不阻断流程。',
   'pages.approval.submitInitiatorOptionalHint': '标记为可选的节点可不选人，流程将按空审批人策略跳过该节点。',
   'pages.approval.submitInitiatorOptional': '可选',
   'pages.approval.submitInitiatorRequired': '请为「{{node}}」选择审批人',

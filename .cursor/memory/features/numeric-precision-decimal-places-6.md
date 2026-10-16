@@ -52,6 +52,7 @@ standard: 配置 max=6 + DECIMAL(20,6) + 迁移 888 扩 scale；禁止只改 UI 
 1. 新数量/单价/金额列：建表即 `NUMERIC(..., 6)`，并走 `assert_quantity` / `assert_price` / `assert_amount`
 2. 展示/录入：`formatQuantity` / `formatPrice` / `formatAmount` + `getCachedNumericPrecisionPlaces`
 3. 单据合计：见 `document-amount-summary-precision.md`（先乘后按金额位舍入）
+4. 打印金额：BE `format_business_amount` + `get_amount_decimal_places`（`core/utils/amount_precision.py`）；禁止裸 `str(Decimal)` 带出库表 scale
 
 ## 踩坑
 

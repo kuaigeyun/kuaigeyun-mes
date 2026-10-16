@@ -94,6 +94,7 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
               <ProFormDigit
                 name="managerLevel"
                 label={t('pages.approval.designer.managerLevel')}
+                tooltip={t('pages.approval.designer.managerLevelTip')}
                 min={2}
                 initialValue={2}
                 fieldProps={{ precision: 0, style: { width: '100%' } }}
