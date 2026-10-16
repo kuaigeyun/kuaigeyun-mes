@@ -509,8 +509,7 @@ def _pack_backup_zip(
                                     os.path.relpath(file_path, upload_dir),
                                 )
                                 zipf.write(file_path, arcname)
-
-                    logger.info("租户隔离备份仅打包 uploads 子目录: {}", tenant_upload_dir)
+                        logger.info("租户隔离备份仅打包 uploads 子目录: {}", tenant_upload_dir)
                     else:
                         logger.info("租户隔离备份未发现 uploads 子目录，跳过: {}", tenant_upload_dir)
                 elif backup_scope == "tenant":
