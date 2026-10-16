@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'menu-sync-root-parent-align-r01',
+    date: '2026-10-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.menu-sync-root-parent-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.menu-sync-root-parent-align-r01.description',
+  },
+  {
+    id: 'kuaioa-expense-reimbursement-r01',
+    date: '2026-10-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-expense-reimbursement-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-expense-reimbursement-r01.description',
+  },
+  {
     id: 'finance-payment-source-print-r01',
     date: '2026-10-16',
     type: 'feature',

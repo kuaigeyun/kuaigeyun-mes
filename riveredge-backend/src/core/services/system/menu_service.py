@@ -140,6 +140,12 @@ class MenuService:
         if not expected:
             return 0
 
+        root_title = ""
+        root_path = ""
+        if isinstance(menu_config, dict):
+            root_title = str(menu_config.get("title") or "").strip()
+            root_path = str(menu_config.get("path") or "").strip()
+
         rows = await Menu.filter(
             tenant_id=tenant_id,
             application_uuid=str(application_uuid),
@@ -163,10 +169,21 @@ class MenuService:
             if (leaf.meta or {}).get(META_TENANT_PARENT_OVERRIDE):
                 continue
             current_parent = next((m for m in rows if m.id == leaf.parent_id), None)
-            if current_parent and current_parent.name == expected_parent_name:
+            # 根菜单同步时可能把 name 写成应用显示名，与 manifest title（i18n key）不一致；
+            # 只要挂在根 path 上即视为已对齐。
+            if current_parent and (
+                current_parent.name == expected_parent_name
+                or (
+                    root_path
+                    and expected_parent_name == root_title
+                    and str(current_parent.path or "").strip() == root_path
+                )
+            ):
                 continue
             candidates = folders_by_name.get(expected_parent_name, [])
             target = MenuService._pick_manifest_folder_parent(candidates, leaf)
+            if not target and root_path and expected_parent_name == root_title:
+                target = by_path.get(root_path)
             if not target:
                 raise ValidationError(
                     f"manifest 声明路由 {path} 的父级为 {expected_parent_name!r}，"
