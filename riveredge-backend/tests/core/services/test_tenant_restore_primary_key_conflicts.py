@@ -176,6 +176,54 @@ async def test_global_unique_non_uuid_conflict_raises_clear_error():
         )
 
 
+async def test_tenant_id_unique_table_dedupes_instead_of_failing():
+    """UNIQUE(tenant_id) 表（如 core_permission_versions）不误报，重复行去重保末行."""
+
+    class Connection:
+        async def execute_query_dict(self, sql, args=None):
+            if "FROM pg_index" in sql:
+                return [{"table_name": "core_permission_versions", "column_name": "tenant_id"}]
+            raise AssertionError(f"tenant_id 唯一表不应再查库: {sql}")
+
+    remapped = await jobs._remap_import_plan_global_unique_uuids_if_needed(
+        {
+            "core_permission_versions": (
+                ["tenant_id", "version"],
+                "tenant_id,version\n26,v1\n26,v2\n",
+            )
+        },
+        target_tenant_id=26,
+        table_column_map={"core_permission_versions": ["tenant_id", "version"]},
+        fk_rows=[],
+        conn=Connection(),
+    )
+    csv_text = remapped["core_permission_versions"][1]
+    assert csv_text.splitlines() == ["tenant_id,version", "26,v2"]
+
+
+async def test_non_uuid_conflict_ignores_target_tenant_own_rows():
+    """非 uuid 唯一列冲突探测排除目标租户旧行（事务内会 DELETE），只拦其它租户."""
+
+    seen = []
+
+    class Connection:
+        async def execute_query_dict(self, sql, args=None):
+            if "FROM pg_index" in sql:
+                return [{"table_name": "orders", "column_name": "order_no"}]
+            seen.append((sql, args))
+            return []
+
+    await jobs._remap_import_plan_global_unique_uuids_if_needed(
+        {"orders": (["tenant_id", "order_no"], "tenant_id,order_no\n3,NO-001\n")},
+        target_tenant_id=3,
+        table_column_map={"orders": ["tenant_id", "order_no"]},
+        fk_rows=[],
+        conn=Connection(),
+    )
+    assert seen and "IS DISTINCT FROM" in seen[0][0]
+    assert seen[0][1][1] == 3
+
+
 def test_safe_extract_rejects_zip_slip(tmp_path):
     import zipfile as zip_module
 

@@ -1519,6 +1519,44 @@ async def _load_single_col_unique_columns_async(conn, table_names: list[str]) ->
     return out
 
 
+def _dedupe_csv_on_column_keep_last(csv_text: str, column: str) -> tuple[str, int]:
+    """按列去重保留最后一行（空值行保留）。返回 (新 CSV, 去掉的行数)。"""
+    _ensure_csv_field_limit()
+    lines = csv_text.splitlines()
+    if len(lines) <= 1:
+        return csv_text, 0
+    reader = csv.reader(lines)
+    header = next(reader, [])
+    if column not in header:
+        return csv_text, 0
+    idx = header.index(column)
+    rows = list(reader)
+    last_pos: dict[str, int] = {}
+    for pos, row in enumerate(rows):
+        padded = row + [""] * max(0, len(header) - len(row))
+        cell = padded[idx].strip() if idx < len(padded) else ""
+        if cell:
+            last_pos[cell] = pos
+    keep = set(last_pos.values())
+    out_rows: list[list[str]] = [header]
+    dropped = 0
+    for pos, row in enumerate(rows):
+        padded = (row + [""] * max(0, len(header) - len(row)))[: len(header)]
+        cell = padded[idx].strip()
+        if cell and pos not in keep:
+            dropped += 1
+            continue
+        out_rows.append(padded)
+    if not dropped:
+        return csv_text, 0
+    from io import StringIO
+
+    buffer = StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerows(out_rows)
+    return buffer.getvalue(), dropped
+
+
 def _remap_csv_single_column_values(
     csv_text: str,
     column: str,
@@ -1577,15 +1615,36 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
     )
     uuid_candidate: dict[str, str] = {}
     other_unique: dict[str, list[str]] = {}
+    tenant_unique_tables: list[str] = []
     for table, cols in unique_map.items():
         columns = import_plan.get(table, ([], ""))[0]
         for col in cols:
             if col not in columns:
                 continue
+            if col == "tenant_id":
+                # tenant_id 由恢复流程重写为目标租户并在事务内 DELETE 旧行，
+                # 不参与通用唯一冲突判定（否则“一租户一行”表必误报）。
+                if table not in tenant_unique_tables:
+                    tenant_unique_tables.append(table)
+                continue
             if col.lower() == "uuid" or col.lower().endswith("_uuid"):
                 uuid_candidate.setdefault(table, col)
             else:
                 other_unique.setdefault(table, []).append(col)
+    # tenant_id 唯一表：重写后同值多行只保留最后一行（如跨平台版本快照表行数不一致），
+    # 目标租户旧行会在事务内 DELETE，故只留一行即可安全 COPY。
+    for table in tenant_unique_tables:
+        columns, csv_text = import_plan[table]
+        if "tenant_id" not in columns:
+            continue
+        new_csv, dropped = _dedupe_csv_on_column_keep_last(csv_text, "tenant_id")
+        if dropped:
+            logger.warning(
+                "租户恢复 tenant_id 唯一表去重: table={} dropped={}（保留最后一行）",
+                table,
+                dropped,
+            )
+            import_plan[table] = (columns, new_csv)
     # 备份内部自重复：导入必败，提前报人话错误
     for table, cols in {**{t: [c] for t, c in uuid_candidate.items()}, **other_unique}.items():
         _columns, csv_text = import_plan[table]
@@ -1599,17 +1658,27 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
                     f"{sorted(duplicate_values)[:3]}"
                 )
     # 非 uuid 唯一列：与库内全量冲突时提前报人话错误
+    # （目标租户旧行会在事务内 DELETE，探测时排除，避免把自己误判为冲突）
     for table, cols in other_unique.items():
         _columns, csv_text = import_plan[table]
+        has_tenant_col = "tenant_id" in (table_column_map.get(table) or [])
         for col in cols:
             values = [v for v in _extract_csv_column_values(csv_text, col) if v]
             if not values:
                 continue
-            hits = await conn.execute_query_dict(
-                f'SELECT "{col}" AS v FROM "{table}" '
-                f'WHERE "{col}"::text = ANY($1::text[]) LIMIT 1',
-                [values],
-            )
+            if has_tenant_col:
+                hits = await conn.execute_query_dict(
+                    f'SELECT "{col}" AS v FROM "{table}" '
+                    f'WHERE "{col}"::text = ANY($1::text[]) '
+                    f"AND tenant_id IS DISTINCT FROM $2 LIMIT 1",
+                    [values, int(target_tenant_id)],
+                )
+            else:
+                hits = await conn.execute_query_dict(
+                    f'SELECT "{col}" AS v FROM "{table}" '
+                    f'WHERE "{col}"::text = ANY($1::text[]) LIMIT 1',
+                    [values],
+                )
             if hits:
                 sample = sorted({str(r.get("v", "")) for r in hits if r.get("v")})[:3]
                 raise ValueError(
