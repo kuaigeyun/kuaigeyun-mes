@@ -9,6 +9,16 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-eight-d-workbench-route-r01',
+    date: '2026-10-16',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-eight-d-workbench-route-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-eight-d-workbench-route-r01.description',
+  },
+  {
     id: 'funide-oa-rd-deliverable-no-preset-r01',
     date: '2026-10-15',
     type: 'improvement',

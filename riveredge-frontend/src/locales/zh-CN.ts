@@ -31184,6 +31184,14 @@ export default {
     '修复采购订单撤回提交报错',
   'pages.dashboard.updateLog.entries.purchase-order-withdraw-submit-r01.description':
     '待审核采购订单撤回提交时因服务未挂业务配置依赖而失败；现已修复，提交人可正常撤回到草稿后重新提交。',
+  'pages.dashboard.updateLog.entries.funide-oa-eight-d-workbench-route-r01.title':
+    '修复客诉8D点工作台跳到系统首页',
+  'pages.dashboard.updateLog.entries.funide-oa-eight-d-workbench-route-r01.description':
+    '定制应用客诉8D列表点「工作台」因未注册详情路由被重定向到应用首页；现已挂上8D工作台路由，可按报告进入阶段办理页。',
+  'pages.dashboard.updateLog.entries.eight-d-workbench-nav-bounce-r01.title':
+    '修复8D报告工作台点击后回到列表',
+  'pages.dashboard.updateLog.entries.eight-d-workbench-nav-bounce-r01.description':
+    '列表旧深链清理查询参数时会抢掉工作台跳转，点「工作台」后又落回列表；现仅按报告 id 进入工作台路由，并与交付项目一样优先注册详情路由。',
   'pages.dashboard.updateLog.entries.menu-sync-root-parent-align-r01.title':
     '修复定制应用菜单同步后仍提示待同步',
   'pages.dashboard.updateLog.entries.menu-sync-root-parent-align-r01.description':

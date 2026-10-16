@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'eight-d-workbench-nav-bounce-r01',
+    date: '2026-10-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.eight-d-workbench-nav-bounce-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.eight-d-workbench-nav-bounce-r01.description',
+  },
+  {
     id: 'menu-sync-root-parent-align-r01',
     date: '2026-10-16',
     type: 'fix',
