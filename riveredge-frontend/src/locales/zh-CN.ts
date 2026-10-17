@@ -25648,12 +25648,15 @@ export default {
     '若您需要贴合业务的专属功能或行业化方案，我们可提供软件定制与集成服务。欢迎联系我方商务或客户经理，沟通需求并探讨合作机会。',
   'pages.system.applications.customAppsEmptyQrAlt': '商务咨询二维码',
   'pages.system.applications.customAppsEmptyQrHint': '微信扫码，咨询软件定制与合作',
-  'pages.system.applications.platformAdminOnlyLifecycle': '仅平台管理员可安装、卸载、启用或禁用应用。',
-  'pages.system.applications.lifecyclePermissionDenied': '当前组织未开放该分类应用的自主启停权限，请联系平台管理员。',
+  'pages.system.applications.platformAdminOnlyLifecycle':
+    '当前账号无权启停应用。请使用组织管理员、平台管理员，或具备「应用更新」权限的账号。',
+  'pages.system.applications.lifecyclePermissionDenied':
+    '当前组织未开放该分类应用的自主启停权限，请联系平台管理员在组织应用中心权限中开启对应分类。',
   'pages.system.applications.lifecycleBlockedByPackagePro': '当前套餐不支持 PRO 应用，无法启用专业版或付费行业应用。',
   'pages.infra.tenantApplicationCenterPermissions.title': '应用中心权限',
   'pages.infra.tenantApplicationCenterPermissions.drawerTitle': '{{name}} 应用中心权限',
-  'pages.infra.tenantApplicationCenterPermissions.hint': '默认全部关闭。开启后，组织管理员可在应用中心自主安装、启用或禁用对应分类的应用；专业版与付费行业仍受套餐 PRO 能力限制。',
+  'pages.infra.tenantApplicationCenterPermissions.hint':
+    '默认全部关闭。开启后，组织管理员（或具备应用更新权限的账号）可在应用中心自主安装、启用或禁用对应分类的应用。专业版与付费行业仍受套餐 PRO 能力限制；首次启用专业版应用仍须输入有效 License Key。',
   'pages.infra.tenantApplicationCenterPermissions.packageHintTitle': '当前套餐能力（只读）',
   'pages.infra.tenantApplicationCenterPermissions.categorySectionTitle': '分类自主启停',
   'pages.infra.tenantApplicationCenterPermissions.allowProApps': '允许 PRO 应用',
@@ -31378,6 +31381,10 @@ export default {
     '报工弹窗累计料损不再出现多余小数',
   'pages.dashboard.updateLog.entries.work-order-report-material-loss-precision-r01.description':
     '新建报工时累计料损按数量小数位收口后再展示，避免工序数量相加出现长串尾数。',
+  'pages.dashboard.updateLog.entries.app-center-self-service-lifecycle-r01.title':
+    '应用中心分类自主启停对组织侧生效',
+  'pages.dashboard.updateLog.entries.app-center-self-service-lifecycle-r01.description':
+    '开启分类自主启停后，组织管理员与具备应用更新权限的账号可按分类启停；修正能力接口与分类判定，并明确专业版首次启用仍须 License Key。',
   'pages.dashboard.updateLog.entries.kuaivision-menu-group-detection-ops-r01.title':
     '快视觉菜单组与快数采区分命名',
   'pages.dashboard.updateLog.entries.kuaivision-menu-group-detection-ops-r01.description':

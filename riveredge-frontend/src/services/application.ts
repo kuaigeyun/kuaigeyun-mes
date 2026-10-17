@@ -445,6 +445,8 @@ export interface ApplicationCenterEffectiveCategory {
 export interface ApplicationCenterCapabilities {
   is_infra_admin: boolean;
   is_tenant_admin: boolean;
+  /** 组织管理员 / 平台管理员 / 具备 system:application:update 时为 true */
+  can_manage_lifecycle?: boolean;
   category_permissions: Record<AppCenterCategory, ApplicationCenterCategoryPermission>;
   package: {
     allow_pro_apps: boolean;

@@ -71,6 +71,7 @@ import {
 } from '../../../../utils/appSolarIcons';
 import { useGlobalStore } from '../../../../stores';
 import { getPlatformSettingsPublic } from '../../../../services/platformSettings';
+import { resolveSessionTenantScope } from '../../../../config/sessionQueries';
 import {
   getApplicationList,
   getApplicationByUuid,
@@ -341,8 +342,9 @@ const ApplicationListPage: React.FC = () => {
   const currentUser = useCurrentUser();
   const isInfraAdmin = Boolean(currentUser?.is_infra_admin);
 
+  const sessionTenantScope = resolveSessionTenantScope();
   const { data: centerCapabilities } = useQuery({
-    queryKey: ['application-center-capabilities'],
+    queryKey: ['application-center-capabilities', sessionTenantScope ?? null],
     queryFn: getApplicationCenterCapabilities,
     staleTime: 30_000,
   });
@@ -354,32 +356,42 @@ const ApplicationListPage: React.FC = () => {
   });
   const showCustomAppsContactQr = platformSettingsPublic?.custom_apps_contact_qr_enabled === true;
 
+  const canActAsLifecycleManager = useCallback(
+    (caps: ApplicationCenterCapabilities | undefined): boolean => {
+      if (isInfraAdmin || caps?.is_infra_admin) return true;
+      if (caps?.is_tenant_admin || caps?.can_manage_lifecycle) return true;
+      return false;
+    },
+    [isInfraAdmin],
+  );
+
   const canToggleAppLifecycle = useCallback(
     (app: Application | Record<string, unknown>): boolean => {
-      if (isInfraAdmin) return true;
       const caps = centerCapabilities as ApplicationCenterCapabilities | undefined;
-      if (!caps?.is_tenant_admin) return false;
+      if (!canActAsLifecycleManager(caps)) return false;
+      if (isInfraAdmin || caps?.is_infra_admin) return true;
       const edition = resolveAppEdition(app as Application);
-      const effective = caps.effective?.[edition];
+      const effective = caps?.effective?.[edition];
       if (!effective?.can_self_service_toggle) return false;
-      if (requiresProLicense(app as Application) && !caps.package?.allow_pro_apps) return false;
+      if (requiresProLicense(app as Application) && !caps?.package?.allow_pro_apps) return false;
       return true;
     },
-    [centerCapabilities, isInfraAdmin],
+    [canActAsLifecycleManager, centerCapabilities, isInfraAdmin],
   );
 
   const lifecycleDisabledTooltip = useCallback(
     (app?: Application | Record<string, unknown>) => {
-      if (isInfraAdmin) return undefined;
-      if (!centerCapabilities?.is_tenant_admin) {
+      const caps = centerCapabilities as ApplicationCenterCapabilities | undefined;
+      if (isInfraAdmin || caps?.is_infra_admin) return undefined;
+      if (!canActAsLifecycleManager(caps)) {
         return t('pages.system.applications.platformAdminOnlyLifecycle');
       }
-      if (app && requiresProLicense(app as Application) && !centerCapabilities.package?.allow_pro_apps) {
+      if (app && requiresProLicense(app as Application) && !caps?.package?.allow_pro_apps) {
         return t('pages.system.applications.lifecycleBlockedByPackagePro');
       }
       return t('pages.system.applications.lifecyclePermissionDenied');
     },
-    [centerCapabilities, isInfraAdmin, t],
+    [canActAsLifecycleManager, centerCapabilities, isInfraAdmin, t],
   );
 
   /** static 目录通过 Vite publicDir 挂载到站点根路径，见 vite.config `publicDir` */

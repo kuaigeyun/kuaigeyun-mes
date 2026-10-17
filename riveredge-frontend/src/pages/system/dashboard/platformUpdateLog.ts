@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'app-center-self-service-lifecycle-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.app-center-self-service-lifecycle-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-center-self-service-lifecycle-r01.description',
+  },
+  {
     id: 'kuaivision-menu-group-detection-ops-r01',
     date: '2026-10-17',
     type: 'improvement',
