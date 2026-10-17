@@ -210,46 +210,34 @@ export function applyVerticalLayout(nodes: Node[], edges: Edge[]): Node[] {
 }
 
 /**
- * 贝塞尔曲线（React Flow `default`）：分叉斜连更顺，仍从手柄中心进出。
- * 条件多出口：按出边原始顺序挂 branch-N，与 conditions[N] 一致。
+ * 贝塞尔曲线（React Flow `default`）。
+ * 条件多分支共用底边同一 source 点，不挂 branch-N，避免多圆点。
  */
 export function enrichApprovalFlowEdges(nodes: Node[], edges: Edge[]): Edge[] {
-  const typeById = new Map(nodes.map((n) => [n.id, n.type]));
-  const outsBySource = new Map<string, Edge[]>();
-  edges.forEach((e) => {
-    const list = outsBySource.get(e.source) ?? [];
-    list.push(e);
-    outsBySource.set(e.source, list);
-  });
-
-  const handleIndexByEdgeId = new Map<string, number>();
-  outsBySource.forEach((outs, sourceId) => {
-    if (typeById.get(sourceId) !== 'condition' || outs.length <= 1) return;
-    outs.forEach((e, idx) => handleIndexByEdgeId.set(e.id, idx));
-  });
-
   return edges.map((e, i) => {
     const id = e.id || `e-${e.source}-${e.target}-${i}`;
-    const branchIdx = handleIndexByEdgeId.get(id);
+    const { sourceHandle: _dropSourceHandle, ...rest } = e as Edge & {
+      sourceHandle?: string | null;
+    };
     return {
-      ...e,
+      ...rest,
       id,
       type: 'default',
-      ...(branchIdx != null ? { sourceHandle: `branch-${branchIdx}` } : {}),
+      sourceHandle: undefined,
     };
   });
 }
 
+/** 保留出边数供节点文案；渲染始终单点出口。 */
 export function attachConditionBranchHandles(nodes: Node[], edges: Edge[]): Node[] {
   return nodes.map((node) => {
     if (node.type !== 'condition') return node;
     const n = edges.filter((e) => e.source === node.id).length;
-    const branchSourceCount = n <= 1 ? 1 : Math.min(8, n);
     return {
       ...node,
       data: {
         ...(node.data || {}),
-        branchSourceCount,
+        branchSourceCount: Math.max(1, Math.min(8, n || 1)),
       },
     };
   });

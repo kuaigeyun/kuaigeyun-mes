@@ -179,68 +179,24 @@ const UniFlowNode: React.FC<UniFlowNodeProps> = ({ type, data, selected }) => {
       </div>
 
       {/*
-        手柄贴在节点边上（覆盖库默认 bottom/top: -4px），连线从圆点中心进出。
-        条件节点多出口：底边按分支数均分 sourceHandle（branch-0…）。
+        手柄贴在节点边上（覆盖库默认 bottom/top: -4px）。
+        条件节点多分支共用底边一个 source 点，由贝塞尔分叉到各目标。
       */}
-      {type === 'condition' ? (() => {
-        const outCount = Math.min(8, Math.max(1, Number(data.branchSourceCount) || 1));
-        if (outCount <= 1) {
-          return (
-            <Handle
-              type="source"
-              position={Position.Bottom}
-              style={{
-                background: color,
-                border: `2px solid ${token.colorBgContainer}`,
-                width: 10,
-                height: 10,
-                bottom: 0,
-                top: 'auto',
-                zIndex: 10,
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              }}
-            />
-          );
-        }
-        return Array.from({ length: outCount }, (_, i) => {
-          const leftPct = ((i + 1) / (outCount + 1)) * 100;
-          return (
-            <Handle
-              key={`branch-${i}`}
-              id={`branch-${i}`}
-              type="source"
-              position={Position.Bottom}
-              style={{
-                left: `${leftPct}%`,
-                background: color,
-                border: `2px solid ${token.colorBgContainer}`,
-                width: 10,
-                height: 10,
-                bottom: 0,
-                top: 'auto',
-                zIndex: 10,
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              }}
-            />
-          );
-        });
-      })() : (
-        type !== 'end' && (
-          <Handle
-            type="source"
-            position={Position.Bottom}
-            style={{
-              background: color,
-              border: `2px solid ${token.colorBgContainer}`,
-              width: 10,
-              height: 10,
-              bottom: 0,
-              top: 'auto',
-              zIndex: 10,
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            }}
-          />
-        )
+      {type !== 'end' && (
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          style={{
+            background: color,
+            border: `2px solid ${token.colorBgContainer}`,
+            width: 10,
+            height: 10,
+            bottom: 0,
+            top: 'auto',
+            zIndex: 10,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          }}
+        />
       )}
       {type !== 'start' && (
         <Handle
