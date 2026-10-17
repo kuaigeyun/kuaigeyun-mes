@@ -22,17 +22,19 @@ PRO_APP_CODES: FrozenSet[str] = frozenset(
         "kuaiiot",
         "kuaiai",
         "kuaiconnect",
+        "kuaivision",
     }
 )
 
 # 与 manifest / 前端 proAppCatalog.ts PRO_APP_SORT_ORDER 一致（3xx 段，位于行业包 290 之后）
-# 展示序：快研发 → 快交付 → 轻办公 → 轻财务 → 快数采 → 快报表 → 快连接 → KU-AI
+# 展示序：快研发 → 快交付 → 轻办公 → 轻财务 → 快数采 → 快视觉 → 快报表 → 快连接 → KU-AI
 PRO_APP_SORT_ORDER: dict[str, int] = {
     "kuaiplm": 300,
     "kuaipd": 305,
     "kuaioa": 310,
     "kuaicaiwu": 315,
     "kuaiiot": 320,
+    "kuaivision": 322,
     "kuaireport": 325,
     "kuaiconnect": 330,
     "kuaiai": 350,

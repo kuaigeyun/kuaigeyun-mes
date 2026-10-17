@@ -18,6 +18,7 @@ export const APP_SOLAR_ICONS: Record<string, string> = {
   'master-data': 'solar:database-bold-duotone',
   kuaiai: 'solar:magic-stick-3-bold-duotone',
   kuaiiot: 'solar:cpu-bolt-bold-duotone',
+  kuaivision: 'solar:target-bold-duotone',
   kuaiplm: 'solar:layers-bold-duotone',
   kuaioa: 'solar:document-text-bold-duotone',
   kuaicrm: 'solar:hand-shake-bold-duotone',
