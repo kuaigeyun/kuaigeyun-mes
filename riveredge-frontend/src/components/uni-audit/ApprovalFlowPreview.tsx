@@ -137,10 +137,22 @@ function ApprovalFlowPreviewCanvas({
         ...style,
       }}
     >
-      {/* 与设计器同一套节点/连线；只读预览禁止拖动手柄 */}
+      {/* 与设计器同一套节点/连线；禁止出现画布滚动条 */}
       <style>{`
+        .uni-audit-flow-preview,
+        .uni-audit-flow-preview .react-flow,
+        .uni-audit-flow-preview .react-flow__viewport,
+        .uni-audit-flow-preview .react-flow__renderer {
+          overflow: hidden !important;
+        }
         .uni-audit-flow-preview .react-flow__handle {
           pointer-events: none;
+        }
+        .uni-audit-flow-preview::-webkit-scrollbar,
+        .uni-audit-flow-preview .react-flow::-webkit-scrollbar {
+          width: 0;
+          height: 0;
+          display: none;
         }
       `}</style>
       <ReactFlow
@@ -149,14 +161,17 @@ function ApprovalFlowPreviewCanvas({
         nodeTypes={NODE_TYPES}
         defaultEdgeOptions={{ type: 'default', style: { ...APPROVAL_FLOW_EDGE_STYLE } }}
         fitView
-        fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
+        fitViewOptions={{ padding: 0.18, maxZoom: 1, minZoom: 0.35 }}
+        minZoom={0.35}
+        maxZoom={1}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
         panOnDrag
         zoomOnScroll
+        preventScrolling
         proOptions={{ hideAttribution: true }}
-        style={{ width: '100%', height: '100%' }}
+        style={{ width: '100%', height: '100%', overflow: 'hidden' }}
       >
         <PreviewFitView
           hostRef={hostRef}

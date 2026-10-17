@@ -359,16 +359,37 @@ function AuditHubDetailPanel({
 
 
   return (
-
-    <Row gutter={16} wrap={false} align="stretch" style={{ minHeight: 480 }}>
+    <>
+      <style>{`
+        .uni-audit-hub-panel,
+        .uni-audit-hub-scroll {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .uni-audit-hub-panel::-webkit-scrollbar,
+        .uni-audit-hub-scroll::-webkit-scrollbar {
+          width: 0;
+          height: 0;
+          display: none;
+        }
+      `}</style>
+    <Row
+      className="uni-audit-hub-panel"
+      gutter={16}
+      wrap={false}
+      align="stretch"
+      style={{ height: '100%', minHeight: 0, overflow: 'hidden' }}
+    >
 
       <Col
         flex="0 0 44%"
         style={{
           minWidth: 0,
+          minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
           alignSelf: 'stretch',
+          overflow: 'hidden',
         }}
       >
 
@@ -377,8 +398,9 @@ function AuditHubDetailPanel({
             display: 'flex',
             flexDirection: 'column',
             flex: 1,
-            minHeight: 420,
+            minHeight: 0,
             gap: 12,
+            overflow: 'hidden',
           }}
         >
 
@@ -398,9 +420,9 @@ function AuditHubDetailPanel({
 
           </div>
 
-          <div style={{ flex: 1, minHeight: 420, position: 'relative' }}>
+          <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
 
-            <div style={{ position: 'absolute', inset: 0 }}>
+            <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
 
               <ApprovalFlowPreview
 
@@ -428,9 +450,20 @@ function AuditHubDetailPanel({
 
 
 
-      <Col flex="1" style={{ minWidth: 0, borderLeft: `1px solid ${token.colorBorderSecondary}`, paddingLeft: 16 }}>
+      <Col
+        flex="1"
+        style={{
+          minWidth: 0,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          borderLeft: `1px solid ${token.colorBorderSecondary}`,
+          paddingLeft: 16,
+          overflow: 'hidden',
+        }}
+      >
 
-        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+        <div style={{ flex: '0 0 auto' }}>
 
           <div>
 
@@ -500,12 +533,24 @@ function AuditHubDetailPanel({
 
 
           <Text strong>节点执行记录</Text>
+        </div>
 
           {nodesOverview.length === 0 ? (
 
             <Text type="secondary">暂无审批节点</Text>
 
           ) : (
+
+            <div
+              className="uni-audit-hub-scroll"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflow: 'auto',
+                marginTop: 12,
+                paddingRight: 2,
+              }}
+            >
 
             <Space orientation="vertical" size={12} style={{ width: '100%' }}>
 
@@ -675,13 +720,14 @@ function AuditHubDetailPanel({
 
             </Space>
 
-          )}
+            </div>
 
-        </Space>
+          )}
 
       </Col>
 
     </Row>
+    </>
 
   );
 
@@ -1071,7 +1117,9 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
       >
 
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingRight: 4 }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
           <AuditHubDetailPanel
 
@@ -1083,9 +1131,11 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
           />
 
+          </div>
+
           {simpleFlowHint && (
 
-            <Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 12 }}>
+            <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12, flex: '0 0 auto' }}>
 
               {simpleFlowHint}
 
