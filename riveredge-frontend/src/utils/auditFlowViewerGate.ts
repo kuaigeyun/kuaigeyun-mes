@@ -51,6 +51,7 @@ export function resolveAuditFlowExecutePermission(
   }
 
   const viewerActions = opts.liveViewerActions ?? readAuditViewerActions(opts.audit);
+  // 列表态可能尚未带回 viewer_actions：保持可点以便打开弹窗；弹窗 live 门控再裁
   if (!viewerActions) {
     return { canExecute: true };
   }

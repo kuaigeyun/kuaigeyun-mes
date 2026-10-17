@@ -44,6 +44,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'audit-modal-preview-fit-gate-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-modal-preview-fit-gate-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.audit-modal-preview-fit-gate-r01.description',
+  },
+  {
     id: 'audit-modal-no-scrollbars-r01',
     date: '2026-10-17',
     type: 'improvement',

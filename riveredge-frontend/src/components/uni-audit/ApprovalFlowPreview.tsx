@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { theme } from 'antd';
 import {
   ReactFlow,
@@ -41,7 +41,10 @@ function nodeTypesFactory() {
 
 const NODE_TYPES = nodeTypesFactory();
 
-/** 弹窗打开后容器才有尺寸；节点测量完成且容器变化时再 fitView。 */
+/**
+ * 弹窗打开后容器才有尺寸；节点测量完成且容器变化时再 fitView。
+ * 预览只读：缩放到完整图，禁止内部 overflow 改写导致连线坐标系错乱。
+ */
 function PreviewFitView({
   hostRef,
   layoutKey,
@@ -52,12 +55,22 @@ function PreviewFitView({
   const { fitView } = useReactFlow();
   const ready = useNodesInitialized();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const host = hostRef.current;
     if (!ready || !host) return;
+
     const run = () => {
-      fitView({ padding: 0.2, maxZoom: 1, duration: 0 });
+      const { width, height } = host.getBoundingClientRect();
+      if (width < 48 || height < 48) return;
+      fitView({
+        padding: 0.14,
+        minZoom: 0.05,
+        maxZoom: 1,
+        duration: 0,
+        includeHiddenNodes: true,
+      });
     };
+
     run();
     const observer = new ResizeObserver(run);
     observer.observe(host);
@@ -87,6 +100,7 @@ function ApprovalFlowPreviewCanvas({
   const { nodes, edges } = useMemo(() => {
     const rawNodes = graph?.nodes ?? [];
     const rawEdges = graph?.edges ?? [];
+    const nodeIdSet = new Set(rawNodes.map((n) => String(n.id)));
     const baseNodes: Node[] = rawNodes.map((n) => {
       const overview = statusByNodeId.get(String(n.id));
       const isCurrent = overview?.is_current;
@@ -102,21 +116,32 @@ function ApprovalFlowPreviewCanvas({
         selected: isCurrent,
       };
     });
-    const baseEdges: Edge[] = rawEdges.map((e, idx) => ({
-      id: e.id || `e-${e.source}-${e.target}-${idx}`,
-      source: String(e.source),
-      target: String(e.target),
-    }));
+    // 丢掉悬空边，避免贝塞尔甩向 (0,0) 造成「飞线」
+    const baseEdges: Edge[] = rawEdges
+      .filter((e) => nodeIdSet.has(String(e.source)) && nodeIdSet.has(String(e.target)))
+      .map((e, idx) => ({
+        id: e.id || `e-${e.source}-${e.target}-${idx}`,
+        source: String(e.source),
+        target: String(e.target),
+      }));
     const laidOut = enrichApprovalFlowGraph(baseNodes, baseEdges, { relayout: true });
     return {
       nodes: laidOut.nodes,
       edges: laidOut.edges.map((e) => ({
         ...e,
-        type: 'default',
-        style: { ...APPROVAL_FLOW_EDGE_STYLE, ...(e.style || {}) },
+        type: 'default' as const,
+        style: { ...APPROVAL_FLOW_EDGE_STYLE },
+        // 明确落到默认单点，避免残留 branch handle
+        sourceHandle: null,
+        targetHandle: null,
       })),
     };
   }, [graph, statusByNodeId]);
+
+  const layoutKey = useMemo(
+    () => nodes.map((n) => `${n.id}:${n.position?.x}:${n.position?.y}`).join('|'),
+    [nodes],
+  );
 
   if (!nodes.length) {
     return null;
@@ -137,22 +162,19 @@ function ApprovalFlowPreviewCanvas({
         ...style,
       }}
     >
-      {/* 与设计器同一套节点/连线；禁止出现画布滚动条 */}
+      {/* 只藏宿主滚动条；禁止改 .react-flow__viewport，否则连线与节点错位 */}
       <style>{`
-        .uni-audit-flow-preview,
-        .uni-audit-flow-preview .react-flow,
-        .uni-audit-flow-preview .react-flow__viewport,
-        .uni-audit-flow-preview .react-flow__renderer {
-          overflow: hidden !important;
+        .uni-audit-flow-preview {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
         }
-        .uni-audit-flow-preview .react-flow__handle {
-          pointer-events: none;
-        }
-        .uni-audit-flow-preview::-webkit-scrollbar,
-        .uni-audit-flow-preview .react-flow::-webkit-scrollbar {
+        .uni-audit-flow-preview::-webkit-scrollbar {
           width: 0;
           height: 0;
           display: none;
+        }
+        .uni-audit-flow-preview .react-flow__handle {
+          pointer-events: none;
         }
       `}</style>
       <ReactFlow
@@ -160,23 +182,20 @@ function ApprovalFlowPreviewCanvas({
         edges={edges}
         nodeTypes={NODE_TYPES}
         defaultEdgeOptions={{ type: 'default', style: { ...APPROVAL_FLOW_EDGE_STYLE } }}
-        fitView
-        fitViewOptions={{ padding: 0.18, maxZoom: 1, minZoom: 0.35 }}
-        minZoom={0.35}
+        minZoom={0.05}
         maxZoom={1}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
-        panOnDrag
-        zoomOnScroll
+        panOnDrag={false}
+        zoomOnScroll={false}
+        zoomOnPinch={false}
+        zoomOnDoubleClick={false}
         preventScrolling
         proOptions={{ hideAttribution: true }}
-        style={{ width: '100%', height: '100%', overflow: 'hidden' }}
+        style={{ width: '100%', height: '100%' }}
       >
-        <PreviewFitView
-          hostRef={hostRef}
-          layoutKey={nodes.map((n) => `${n.id}:${n.position?.x}:${n.position?.y}`).join('|')}
-        />
+        <PreviewFitView hostRef={hostRef} layoutKey={layoutKey} />
         <Background
           variant={CANVAS_GRID_REACTFLOW.variant as BackgroundVariant}
           color={CANVAS_GRID_REACTFLOW.color}

@@ -32142,6 +32142,10 @@ export default {
     '运营看板支持参观模式手填指标',
   'pages.dashboard.updateLog.entries.business-board-visit-mode-r01.description':
     '看板设置中新增参观模式，开启后可对手填指标覆盖展示，未填项仍用实时数据；该配置仅系统管理员可见并可保存。',
+  'pages.dashboard.updateLog.entries.audit-modal-preview-fit-gate-r01.title':
+    '审核弹窗流程图自适应与不可审按钮收口',
+  'pages.dashboard.updateLog.entries.audit-modal-preview-fit-gate-r01.description':
+    '修复预览区裁切导致的流程变形与飞线；弹窗定高避免底栏被裁；非当前待办人不再显示审核/驳回与驳回原因框。',
   'pages.dashboard.updateLog.entries.audit-modal-no-scrollbars-r01.title':
     '审核弹窗流程图与执行记录不再露出滚动条',
   'pages.dashboard.updateLog.entries.audit-modal-no-scrollbars-r01.description':

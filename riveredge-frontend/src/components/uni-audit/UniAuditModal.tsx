@@ -654,7 +654,10 @@ function AuditHubDetailPanel({
 
                               </Text>
 
-                              <MarkerTag color={getExecutionActionTagColor(ex.action)}>
+                              <MarkerTag
+                                color={getExecutionActionTagColor(ex.action)}
+                                style={{ cursor: 'default', pointerEvents: 'none' }}
+                              >
 
                                 {formatExecutionAction(ex.action, ex.action_label)}
 
@@ -812,8 +815,47 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
       return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
     }
 
+    // 流程实例已结束：禁止再展示审核/驳回
+    if (flowStatus?.has_instance && flowStatus.status !== 'pending') {
+      items = items.map((item) => {
+        if (item.action !== 'approve' && item.action !== 'reject') {
+          return item;
+        }
+        return {
+          ...item,
+          canExecute: false,
+          disabledReason: t('components.uniAudit.noPermission'),
+        };
+      });
+      return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
+    }
+
     if (flowPending) {
       const caps = flowStatus.node_capabilities ?? {};
+      const moduleRbac =
+        rbacAllowedProp
+        ?? items.find((item) => item.action === 'approve' || item.action === 'reject')?.rbacAllowed
+        ?? adminOpen;
+
+      // live 已返回但无 viewer_actions：默认不可审（禁止 fail-open）
+      if (!viewerActions && !adminOpen) {
+        const blockReason = t('components.uniAudit.notNodeAssignee');
+        assigneeBlockHint = blockReason;
+        items = items.map((item) => {
+          if (item.action !== 'approve' && item.action !== 'reject') {
+            return item;
+          }
+          return {
+            ...item,
+            canExecute: false,
+            disabledReason: !moduleRbac
+              ? t('components.uniAudit.missingReviewPermission')
+              : blockReason,
+          };
+        });
+        return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
+      }
+
       items = items.map((item) => {
         if (item.action !== 'approve' && item.action !== 'reject') {
           return item;
@@ -852,15 +894,13 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
             : (flowPerm.canExecute ? undefined : liveBlockReason),
         };
       });
-      // 列表若曾裁掉 approve/reject，弹窗在待办补齐后仍须给出审核按钮
-      const moduleRbac =
-        rbacAllowedProp
-        ?? items.find((item) => item.action === 'approve' || item.action === 'reject')?.rbacAllowed
-        ?? adminOpen;
-      const liveAssigneeOk = adminOpen || Boolean(viewerActions?.approve) || hasMyPendingTask;
-      const liveCanApprove = liveAssigneeOk && Boolean(moduleRbac);
+      // 仅当 live viewer 明确放行（或管理员）时补齐/抬升按钮；禁止用空 viewer 误开
+      const liveCanApprove =
+        Boolean(moduleRbac)
+        && (adminOpen || Boolean(viewerActions?.approve));
       const liveCanReject =
-        (adminOpen || Boolean(viewerActions?.reject) || hasMyPendingTask) && Boolean(moduleRbac);
+        Boolean(moduleRbac)
+        && (adminOpen || Boolean(viewerActions?.reject));
       if (liveCanApprove && !items.some((item) => item.action === 'approve')) {
         items.push({
           action: 'approve',
@@ -879,7 +919,6 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
           danger: true,
         });
       }
-      // 列表态 canExecute 可能仍为 false（batch 未补齐待办）；live 确认后抬升可点
       if (liveCanApprove || liveCanReject) {
         items = items.map((item) => {
           if (item.action === 'approve' && liveCanApprove) {
@@ -1079,10 +1118,10 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
 
   if (mode === 'hub') {
-    // 不可审核/驳回时不展示对应按钮（加载中仍显示为禁用，避免闪一下可点）
+    // 不可审核/驳回时直接不展示（含加载中），避免非待办人仍看到可点入口
     const visibleHubActions = effectiveHubActions.filter((item) => {
       if (item.action !== 'approve' && item.action !== 'reject') return true;
-      if (flowLoading) return true;
+      if (flowLoading) return false;
       return Boolean(item.canExecute);
     });
     const hasReject = visibleHubActions.some((a) => a.action === 'reject' && a.canExecute);
@@ -1108,6 +1147,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
           body: {
             paddingTop: 12,
             paddingBottom: 0,
+            // 定高才能让 flex 子项收缩；仅 maxHeight 时内容会撑开并把底栏按钮裁掉
+            height: 'min(720px, calc(100vh - 120px))',
             maxHeight: 'calc(100vh - 120px)',
             display: 'flex',
             flexDirection: 'column',
