@@ -1,6 +1,7 @@
 /**
- * 审批流 / 审核预览：自上而下分层布局 + 正交连线。
- * 节点宽度须与 UniFlowNode（宽节点 220、起止 120）一致，否则连线会斜。
+ * 审批流 / 审核预览：自上而下分层布局 + 直线连线。
+ * 条件分支在汇合前左右错开；汇合节点回主干，避免双线叠在同一竖轴上。
+ * 节点宽度须与 UniFlowNode（宽节点 220、起止 120）一致。
  */
 import type { Edge, Node } from 'reactflow';
 
@@ -11,17 +12,35 @@ export const APPROVAL_FLOW_NODE_WIDTH = {
 } as const;
 
 export const APPROVAL_FLOW_LAYOUT = {
-  centerX: 280,
+  centerX: 320,
   baseY: 60,
-  layerGap: 132,
+  layerGap: 140,
   layerGapSame: 56,
-  sameLayerGap: 200,
+  branchGap: 48,
+  branchColumnWidth: 240,
 } as const;
 
 function getNodeLayoutWidth(node: Node): number {
   const t = String(node.type);
   if (t === 'start' || t === 'end') return APPROVAL_FLOW_NODE_WIDTH.compact;
   return APPROVAL_FLOW_NODE_WIDTH.wide;
+}
+
+function getSubtreeFrom(nodeId: string, edges: Edge[]): Set<string> {
+  const out = new Set<string>();
+  const queue = [nodeId];
+  while (queue.length > 0) {
+    const curr = queue.shift()!;
+    edges
+      .filter((e) => e.source === curr)
+      .forEach((e) => {
+        if (!out.has(e.target)) {
+          out.add(e.target);
+          queue.push(e.target);
+        }
+      });
+  }
+  return out;
 }
 
 export function getConditionIds(edges: Edge[]): Set<string> {
@@ -68,7 +87,7 @@ function computeLayerDepth(nodes: Node[], edges: Edge[]): Map<string, number> {
   return depth;
 }
 
-/** 条件分叉出边序号 → 子树继承，用于同层从左到右排序。 */
+/** 条件分叉出边序号 → 子树继承（BFS 首次到达）。 */
 function buildBranchIndex(edges: Edge[], conditionIds: Set<string>): Map<string, number> {
   const branchIndex = new Map<string, number>();
   branchIndex.set('start', 0);
@@ -90,6 +109,14 @@ function buildBranchIndex(edges: Edge[], conditionIds: Set<string>): Map<string,
   return branchIndex;
 }
 
+function getMergeIds(edges: Edge[]): Set<string> {
+  const inCount: Record<string, number> = {};
+  edges.forEach((e) => {
+    inCount[e.target] = (inCount[e.target] || 0) + 1;
+  });
+  return new Set(Object.keys(inCount).filter((id) => (inCount[id] || 0) > 1));
+}
+
 function sortLayerNodes(layerNodes: Node[], branchIndex: Map<string, number>): Node[] {
   return [...layerNodes].sort((a, b) => {
     const ba = branchIndex.get(a.id) ?? 0;
@@ -103,11 +130,21 @@ function sortLayerNodes(layerNodes: Node[], branchIndex: Map<string, number>): N
   });
 }
 
-/** 自上而下重算坐标：单层单节点一律主干居中；同层多个则整行居中排开。 */
+/**
+ * 自上而下重算坐标。
+ * - 主干 / 条件节点 / 汇合节点：居中
+ * - 条件分叉后、汇合前的纯分支节点：按分支序号左右错开（即使该层只有一个节点）
+ */
 export function applyVerticalLayout(nodes: Node[], edges: Edge[]): Node[] {
   const conditionIds = getConditionIds(edges);
   const layerDepth = computeLayerDepth(nodes, edges);
   const branchIndex = buildBranchIndex(edges, conditionIds);
+  const mergeIds = getMergeIds(edges);
+
+  const inConditionSubtree = new Set<string>();
+  conditionIds.forEach((cid) => {
+    getSubtreeFrom(cid, edges).forEach((id) => inConditionSubtree.add(id));
+  });
 
   const byLayer = new Map<number, Node[]>();
   nodes.forEach((node) => {
@@ -117,21 +154,43 @@ export function applyVerticalLayout(nodes: Node[], edges: Edge[]): Node[] {
     byLayer.set(L, list);
   });
 
-  const { centerX, baseY, layerGap, layerGapSame, sameLayerGap } = APPROVAL_FLOW_LAYOUT;
+  const branchValues = [...branchIndex.entries()]
+    .filter(([id]) => inConditionSubtree.has(id) && !mergeIds.has(id) && !conditionIds.has(id))
+    .map(([, b]) => b);
+  const maxBranch = branchValues.length > 0 ? Math.max(...branchValues) : 0;
+  const numBranches = Math.max(1, maxBranch + 1);
+
+  const { centerX, baseY, layerGap, layerGapSame, branchGap, branchColumnWidth } =
+    APPROVAL_FLOW_LAYOUT;
+  const totalBranchWidth = numBranches * branchColumnWidth + (numBranches - 1) * branchGap;
+  const branchCenterX = (b: number) =>
+    centerX - totalBranchWidth / 2 + b * (branchColumnWidth + branchGap) + branchColumnWidth / 2;
+
+  const onSpine = (node: Node): boolean => {
+    if (node.id === 'start' || node.id === 'end') return true;
+    if (conditionIds.has(node.id)) return true;
+    if (mergeIds.has(node.id)) return true;
+    if (!inConditionSubtree.has(node.id)) return true;
+    return false;
+  };
+
   const positionById = new Map<string, { x: number; y: number }>();
 
   const sortedLayers = [...byLayer.keys()].sort((a, b) => a - b);
   for (const L of sortedLayers) {
     const layerNodes = sortLayerNodes(byLayer.get(L) ?? [], branchIndex);
     const y = baseY + L * layerGap;
+    if (layerNodes.length === 0) continue;
 
     if (layerNodes.length === 1) {
       const node = layerNodes[0];
       const w = getNodeLayoutWidth(node);
-      positionById.set(node.id, { x: centerX - w / 2, y });
+      const cx = onSpine(node) ? centerX : branchCenterX(branchIndex.get(node.id) ?? 0);
+      positionById.set(node.id, { x: cx - w / 2, y });
       continue;
     }
 
+    // 同层多个：按分支序号排开；主干节点仍尽量居中夹在中间
     const gap = layerGapSame;
     const totalWidth =
       layerNodes.reduce((sum, n) => sum + getNodeLayoutWidth(n), 0) +
@@ -150,9 +209,11 @@ export function applyVerticalLayout(nodes: Node[], edges: Edge[]): Node[] {
   }));
 }
 
-/** 直线贴手柄中心。step 会在节点外再拐一刀，手柄被挡住时看起来像线断开。 */
+/**
+ * 直线贴手柄中心。
+ * 条件多出口：按「出边在图中的原始顺序」挂 branch-N，与 conditions[N] 标签一致（禁止按 x 重排打乱是/否）。
+ */
 export function enrichApprovalFlowEdges(nodes: Node[], edges: Edge[]): Edge[] {
-  const posById = new Map(nodes.map((n) => [n.id, n.position]));
   const typeById = new Map(nodes.map((n) => [n.id, n.type]));
   const outsBySource = new Map<string, Edge[]>();
   edges.forEach((e) => {
@@ -164,10 +225,7 @@ export function enrichApprovalFlowEdges(nodes: Node[], edges: Edge[]): Edge[] {
   const handleIndexByEdgeId = new Map<string, number>();
   outsBySource.forEach((outs, sourceId) => {
     if (typeById.get(sourceId) !== 'condition' || outs.length <= 1) return;
-    const sorted = [...outs].sort(
-      (a, b) => (posById.get(a.target)?.x ?? 0) - (posById.get(b.target)?.x ?? 0),
-    );
-    sorted.forEach((e, idx) => handleIndexByEdgeId.set(e.id, idx));
+    outs.forEach((e, idx) => handleIndexByEdgeId.set(e.id, idx));
   });
 
   return edges.map((e, i) => {

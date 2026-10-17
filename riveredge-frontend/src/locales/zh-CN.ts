@@ -111,7 +111,8 @@ export default {
   'dashboard.businessBoard.resetTitle': '恢复为默认标题',
   'dashboard.businessBoard.visitModeLabel': '参观模式',
   'dashboard.businessBoard.visitModeHint':
-    '开启后，中心球体周围的制造指标将展示下方手填数值，不再使用实时数据。适合接待参观或演示。仅系统管理员可配置。',
+    '开启后，已填写的指标用手填值展示，未填写的仍用实时数据。适合接待参观或演示。仅系统管理员可配置。',
+  'dashboard.businessBoard.visitMetricUseLive': '用实时数据',
   'dashboard.businessBoard.section.salesPanel': '销售态势',
   'dashboard.businessBoard.section.purchasePanel': '采购到货态势',
   'dashboard.businessBoard.section.processProgress': '工序执行进展',
@@ -32140,7 +32141,11 @@ export default {
   'pages.dashboard.updateLog.entries.business-board-visit-mode-r01.title':
     '运营看板支持参观模式手填指标',
   'pages.dashboard.updateLog.entries.business-board-visit-mode-r01.description':
-    '看板设置中新增参观模式，开启后中心制造指标可手填展示；该配置仅系统管理员可见并可保存。',
+    '看板设置中新增参观模式，开启后可对手填指标覆盖展示，未填项仍用实时数据；该配置仅系统管理员可见并可保存。',
+  'pages.dashboard.updateLog.entries.approval-flow-branch-fanout-r01.title':
+    '条件分支流程图左右分叉不再叠线',
+  'pages.dashboard.updateLog.entries.approval-flow-branch-fanout-r01.description':
+    '条件分支汇合前的节点按分支左右错开，汇合节点回主干；分支手柄按出边顺序对应是/否标签，避免双线叠在同一竖轴上。',
   'pages.dashboard.updateLog.entries.audit-modal-flow-preview-fit-r01.title':
     '审核弹窗流程图与设计器同一套排版',
   'pages.dashboard.updateLog.entries.audit-modal-flow-preview-fit-r01.description':
