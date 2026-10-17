@@ -32142,6 +32142,10 @@ export default {
     '运营看板支持参观模式手填指标',
   'pages.dashboard.updateLog.entries.business-board-visit-mode-r01.description':
     '看板设置中新增参观模式，开启后可对手填指标覆盖展示，未填项仍用实时数据；该配置仅系统管理员可见并可保存。',
+  'pages.dashboard.updateLog.entries.audit-modal-preview-match-designer-r01.title':
+    '审核弹窗流程图与设计器同款样式',
+  'pages.dashboard.updateLog.entries.audit-modal-preview-match-designer-r01.description':
+    '审核预览与设计器共用贝塞尔连线与布局；不可审核时不再显示审核/驳回按钮，仅保留关闭与原因说明。',
   'pages.dashboard.updateLog.entries.approval-flow-shared-branch-handle-r01.title':
     '条件分支多出口共用一个连接点',
   'pages.dashboard.updateLog.entries.approval-flow-shared-branch-handle-r01.description':

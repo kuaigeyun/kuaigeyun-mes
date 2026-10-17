@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { theme } from 'antd';
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   BackgroundVariant,
   useReactFlow,
@@ -13,7 +14,10 @@ import 'reactflow/dist/style.css';
 import UniFlowNode from '../common/uni-flow-node';
 import { CANVAS_GRID_REACTFLOW } from '../layout-templates/constants';
 import type { ApprovalProcessGraph, ApprovalNodeOverview } from '../../services/approvalInstance';
-import { enrichApprovalFlowGraph } from '../../utils/approvalFlowLayout';
+import {
+  APPROVAL_FLOW_EDGE_STYLE,
+  enrichApprovalFlowGraph,
+} from '../../utils/approvalFlowLayout';
 
 const { useToken } = theme;
 
@@ -37,7 +41,7 @@ function nodeTypesFactory() {
 
 const NODE_TYPES = nodeTypesFactory();
 
-/** 弹窗打开后容器才有尺寸；节点测量完成且容器变化时再 fitView，避免停在默认视口。 */
+/** 弹窗打开后容器才有尺寸；节点测量完成且容器变化时再 fitView。 */
 function PreviewFitView({
   hostRef,
   layoutKey,
@@ -63,12 +67,12 @@ function PreviewFitView({
   return null;
 }
 
-export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
+function ApprovalFlowPreviewCanvas({
   graph,
   nodesOverview = [],
   height = 320,
   style,
-}) => {
+}: ApprovalFlowPreviewProps) {
   const { token } = useToken();
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -108,7 +112,8 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
       nodes: laidOut.nodes,
       edges: laidOut.edges.map((e) => ({
         ...e,
-        style: { stroke: '#475569', strokeWidth: 2, ...(e.style || {}) },
+        type: 'default',
+        style: { ...APPROVAL_FLOW_EDGE_STYLE, ...(e.style || {}) },
       })),
     };
   }, [graph, statusByNodeId]);
@@ -132,7 +137,7 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
         ...style,
       }}
     >
-      {/* 只读：手柄仍显示，否则连线锚点看不见，竖线会像断开 */}
+      {/* 与设计器同一套节点/连线；只读预览禁止拖动手柄 */}
       <style>{`
         .uni-audit-flow-preview .react-flow__handle {
           pointer-events: none;
@@ -142,9 +147,9 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
-        defaultEdgeOptions={{ type: 'default' }}
+        defaultEdgeOptions={{ type: 'default', style: { ...APPROVAL_FLOW_EDGE_STYLE } }}
         fitView
-        fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
+        fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
@@ -155,7 +160,7 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
       >
         <PreviewFitView
           hostRef={hostRef}
-          layoutKey={nodes.map((n) => n.id).join('|')}
+          layoutKey={nodes.map((n) => `${n.id}:${n.position?.x}:${n.position?.y}`).join('|')}
         />
         <Background
           variant={CANVAS_GRID_REACTFLOW.variant as BackgroundVariant}
@@ -166,6 +171,13 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
       </ReactFlow>
     </div>
   );
-};
+}
+
+/** 审核弹窗流程图预览：布局与连线与审批流设计器一致。 */
+export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = (props) => (
+  <ReactFlowProvider>
+    <ApprovalFlowPreviewCanvas {...props} />
+  </ReactFlowProvider>
+);
 
 export default ApprovalFlowPreview;

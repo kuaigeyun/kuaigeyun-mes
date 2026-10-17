@@ -45,7 +45,11 @@ import {
   nodeDataToFormValues,
   validateFlowGraph,
 } from '../../../../types/approvalFlowSchema';
-import { applyVerticalLayout, enrichApprovalFlowGraph } from '../../../../utils/approvalFlowLayout';
+import {
+  APPROVAL_FLOW_EDGE_STYLE,
+  applyVerticalLayout,
+  enrichApprovalFlowGraph,
+} from '../../../../utils/approvalFlowLayout';
 import {
   ApprovalNodeForm,
   CcNodeForm,
@@ -288,9 +292,11 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       flowNodes: laid,
       flowEdges: enriched.map((e) => ({
         ...e,
+        type: 'default',
         style: {
-          stroke: selectedEdge?.id === e.id ? token.colorPrimary : '#475569',
-          strokeWidth: selectedEdge?.id === e.id ? 3 : 2,
+          ...APPROVAL_FLOW_EDGE_STYLE,
+          stroke: selectedEdge?.id === e.id ? token.colorPrimary : APPROVAL_FLOW_EDGE_STYLE.stroke,
+          strokeWidth: selectedEdge?.id === e.id ? 3 : APPROVAL_FLOW_EDGE_STYLE.strokeWidth,
           ...(e.style || {}),
         },
       })),
@@ -406,7 +412,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       <ReactFlow
         nodes={flowNodes as any}
         edges={flowEdges}
-        defaultEdgeOptions={{ type: 'default' }}
+        defaultEdgeOptions={{ type: 'default', style: { ...APPROVAL_FLOW_EDGE_STYLE } }}
         nodesDraggable={false}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}

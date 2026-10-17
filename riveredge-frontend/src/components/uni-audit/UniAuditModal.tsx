@@ -1033,8 +1033,14 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
 
   if (mode === 'hub') {
-
-    const hasReject = effectiveHubActions.some((a) => a.action === 'reject');
+    // 不可审核/驳回时不展示对应按钮（加载中仍显示为禁用，避免闪一下可点）
+    const visibleHubActions = effectiveHubActions.filter((item) => {
+      if (item.action !== 'approve' && item.action !== 'reject') return true;
+      if (flowLoading) return true;
+      return Boolean(item.canExecute);
+    });
+    const hasReject = visibleHubActions.some((a) => a.action === 'reject' && a.canExecute);
+    const hasVisibleApprove = visibleHubActions.some((a) => a.action === 'approve');
 
     return (
 
@@ -1134,7 +1140,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
           ) : null}
 
-          {nodeDecision && effectiveHubActions.some((a) => a.action === 'approve') ? (
+          {nodeDecision && hasVisibleApprove ? (
             <div
               style={{
                 marginBottom: 12,
@@ -1170,13 +1176,13 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
             </div>
           ) : null}
 
-          {effectiveHubActions.length > 0 ? (
+          {visibleHubActions.length > 0 ? (
 
             <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
 
               <Space wrap>
 
-              {effectiveHubActions.map((item) => {
+              {visibleHubActions.map((item) => {
                 const approveNeedsBranch =
                   item.action === 'approve'
                   && Boolean(nodeDecision?.field)

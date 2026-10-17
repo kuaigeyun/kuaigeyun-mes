@@ -20,6 +20,12 @@ export const APPROVAL_FLOW_LAYOUT = {
   branchColumnWidth: 240,
 } as const;
 
+/** 设计器与审核预览共用的连线外观 */
+export const APPROVAL_FLOW_EDGE_STYLE = {
+  stroke: '#475569',
+  strokeWidth: 2,
+} as const;
+
 function getNodeLayoutWidth(node: Node): number {
   const t = String(node.type);
   if (t === 'start' || t === 'end') return APPROVAL_FLOW_NODE_WIDTH.compact;

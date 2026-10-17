@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'audit-modal-preview-match-designer-r01',
+    date: '2026-10-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-modal-preview-match-designer-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-modal-preview-match-designer-r01.description',
+  },
+  {
     id: 'approval-flow-shared-branch-handle-r01',
     date: '2026-10-17',
     type: 'improvement',
