@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaivision-menu-group-detection-ops-r01',
+    date: '2026-10-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaivision-menu-group-detection-ops-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaivision-menu-group-detection-ops-r01.description',
+  },
+  {
     id: 'eight-d-workbench-nav-bounce-r01',
     date: '2026-10-16',
     type: 'fix',

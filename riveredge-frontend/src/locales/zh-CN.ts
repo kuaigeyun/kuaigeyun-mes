@@ -2920,7 +2920,7 @@ export default {
   'app.kuaipd.short': '交付',
   'app.kuaipd.homeHint': '请从左侧菜单进入交付项目、物流与售后（页面仍由快制造承载）',
   'app.kuaivision.name': '快视觉',
-  'app.kuaivision.menu.group.monitorOps': '监控运维',
+  'app.kuaivision.menu.group.monitorOps': '检测运维',
   'app.kuaivision.menu.group.visionSetup': '视觉配置',
   'app.kuaivision.menu.dashboard': '视觉中心',
   'app.kuaivision.menu.inspections': '检测记录',
@@ -31378,6 +31378,10 @@ export default {
     '报工弹窗累计料损不再出现多余小数',
   'pages.dashboard.updateLog.entries.work-order-report-material-loss-precision-r01.description':
     '新建报工时累计料损按数量小数位收口后再展示，避免工序数量相加出现长串尾数。',
+  'pages.dashboard.updateLog.entries.kuaivision-menu-group-detection-ops-r01.title':
+    '快视觉菜单组与快数采区分命名',
+  'pages.dashboard.updateLog.entries.kuaivision-menu-group-detection-ops-r01.description':
+    '侧栏「监控运维」改为「检测运维」，避免与快数采同名菜单组不易分辨。',
   'pages.dashboard.updateLog.entries.kuaivision-list-norm-r01.title':
     '快视觉列表补齐删除确认与批量启停',
   'pages.dashboard.updateLog.entries.kuaivision-list-norm-r01.description':
