@@ -1168,6 +1168,77 @@ const PurchaseInvoiceList: React.FC = () => {
                 description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')}
               />
             )}
+            <Typography.Paragraph strong style={{ marginTop: 16, marginBottom: 8 }}>
+              {t(`${P}.pull.detailTitle`)}
+            </Typography.Paragraph>
+            {(pullPreviewData.detail_lines?.length ?? 0) > 0 ? (
+              <Table
+                size="small"
+                dataSource={pullPreviewData.detail_lines}
+                rowKey={(row) => String(row.line_no)}
+                pagination={false}
+                scroll={{ x: 880, y: 240 }}
+                columns={[
+                  {
+                    title: t(`${P}.pull.col.lineNo`),
+                    dataIndex: 'line_no',
+                    width: 56,
+                    align: 'center',
+                  },
+                  {
+                    title: t(`${P}.pull.col.materialCode`),
+                    dataIndex: 'material_code',
+                    width: 120,
+                    ellipsis: true,
+                  },
+                  {
+                    title: t(`${P}.pull.col.materialName`),
+                    dataIndex: 'material_name',
+                    width: 160,
+                    ellipsis: true,
+                  },
+                  {
+                    title: t(`${P}.pull.col.materialSpec`),
+                    dataIndex: 'material_spec',
+                    width: 120,
+                    ellipsis: true,
+                    render: (v: string | null | undefined) => v || '',
+                  },
+                  {
+                    title: t('common.unit'),
+                    dataIndex: 'unit',
+                    width: 64,
+                    ellipsis: true,
+                  },
+                  {
+                    title: t('common.quantity'),
+                    dataIndex: 'quantity',
+                    width: 100,
+                    align: 'right',
+                    render: (v: number) => formatAmount(v || 0),
+                  },
+                  {
+                    title: t(`${P}.pull.col.unitPrice`),
+                    dataIndex: 'unit_price',
+                    width: 110,
+                    align: 'right',
+                    render: (v: number) => formatPullMoney(v),
+                  },
+                  {
+                    title: t(`${P}.pull.col.lineAmount`),
+                    dataIndex: 'amount',
+                    width: 120,
+                    align: 'right',
+                    render: (v: number) => formatPullMoney(v),
+                  },
+                ]}
+              />
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t(`${P}.pull.detailEmpty`)}
+              />
+            )}
             {pullPreviewData.tip ? (
               <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 16 }}>
                 {pullPreviewData.tip}

@@ -1,0 +1,117 @@
+{
+  "code": "kuaivision",
+  "name": "快视觉",
+  "version": "0.3.1",
+  "description": "工业视觉检测：方案、入站结果、原图留痕、复核、样本与模型治理",
+  "icon": "eye",
+  "author": "RiverEdge Team",
+  "entry_point": "../apps/kuaivision/index.tsx",
+  "route_path": "/apps/kuaivision",
+  "sort_order": 322,
+  "is_pro": true,
+  "market_category": "pro",
+  "menu_config": {
+    "title": "app.kuaivision.name",
+    "icon": "eye",
+    "path": "/apps/kuaivision",
+    "permission": "kuaivision:entry:read",
+    "children": [
+      {
+        "title": "app.kuaivision.menu.group.monitorOps",
+        "icon": "layout",
+        "sort_order": 1,
+        "children": [
+          {
+            "title": "app.kuaivision.menu.dashboard",
+            "path": "/apps/kuaivision/dashboard",
+            "sort_order": 1,
+            "permission": "kuaivision:workspace:read"
+          },
+          {
+            "title": "app.kuaivision.menu.inspections",
+            "path": "/apps/kuaivision/inspections",
+            "sort_order": 2,
+            "permission": "kuaivision:inspection:read"
+          },
+          {
+            "title": "app.kuaivision.menu.reviews",
+            "path": "/apps/kuaivision/reviews",
+            "sort_order": 3,
+            "permission": "kuaivision:review:read"
+          }
+        ]
+      },
+      {
+        "title": "app.kuaivision.menu.group.visionSetup",
+        "icon": "hardDrive",
+        "sort_order": 2,
+        "children": [
+          {
+            "title": "app.kuaivision.menu.cameras",
+            "path": "/apps/kuaivision/cameras",
+            "sort_order": 1,
+            "permission": "kuaivision:camera:read"
+          },
+          {
+            "title": "app.kuaivision.menu.recipes",
+            "path": "/apps/kuaivision/recipes",
+            "sort_order": 2,
+            "permission": "kuaivision:recipe:read"
+          },
+          {
+            "title": "app.kuaivision.menu.samples",
+            "path": "/apps/kuaivision/samples",
+            "sort_order": 3,
+            "permission": "kuaivision:sample:read"
+          },
+          {
+            "title": "app.kuaivision.menu.models",
+            "path": "/apps/kuaivision/models",
+            "sort_order": 4,
+            "permission": "kuaivision:model:read"
+          },
+          {
+            "title": "app.kuaivision.menu.agents",
+            "path": "/apps/kuaivision/agents",
+            "sort_order": 5,
+            "permission": "kuaivision:agent:read"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": [
+    "kuaivision:entry:read",
+    "kuaivision:workspace:read",
+    "kuaivision:inspection:read",
+    "kuaivision:inspection:export",
+    "kuaivision:review:read",
+    "kuaivision:review:update",
+    "kuaivision:camera:read",
+    "kuaivision:camera:create",
+    "kuaivision:camera:update",
+    "kuaivision:camera:delete",
+    "kuaivision:recipe:read",
+    "kuaivision:recipe:create",
+    "kuaivision:recipe:update",
+    "kuaivision:recipe:delete",
+    "kuaivision:recipe:publish",
+    "kuaivision:sample:read",
+    "kuaivision:sample:create",
+    "kuaivision:sample:update",
+    "kuaivision:sample:delete",
+    "kuaivision:sample:export",
+    "kuaivision:model:read",
+    "kuaivision:model:create",
+    "kuaivision:model:update",
+    "kuaivision:model:delete",
+    "kuaivision:agent:read",
+    "kuaivision:agent:create",
+    "kuaivision:agent:update",
+    "kuaivision:agent:delete"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  }
+}

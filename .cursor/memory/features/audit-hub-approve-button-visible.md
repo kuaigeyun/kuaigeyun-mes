@@ -45,4 +45,6 @@ standard: allowed_actions 管可见；viewer_actions/capabilities 管可执行�
 
 流程图已到节点2、可审人是节点2，但审核按钮仍提示「当前节点待办人：节点1」：上一节点 pending 未取消，或 `block_reason` 未按 `current_node` 取待办。真源：`get_approval_status`/`bootstrap` 先取消非当前节点 pending，并清掉当前节点上不在可审名单的残留；`build_flow_viewer_actions` 的 `block_reason` 只认当前节点 pending（与可审无交集则跟可审名单）；弹窗 `disabledReason` 只用来自 live 的文案，禁止沿用列表旧 `block_reason`。
 
-条件节点「是否总经理特批」：节点2审核页必须出现「是→总经理 / 否→采购副总」显式选择，未选禁止通过。下一节点为双出边条件即推导 `current_node_decision`（不依赖条件是否配成布尔）；写入 `__branch_true_{条件节点id}` 选边；未带 patch 直接 ValidationError。禁止默认边 0 或 else 静默跳转。
+条件节点 `routeMode`（`previous_approver` / `initiator` / `formula` 三选一）：人工模式只配分支名称；选边真源 `__branch_index_{条件节点id}`（0 起），兼容读 `__branch_true_*`（true→0，false→最后一条）。`previous_approver` 时上一审批节点审核页 `current_node_decision` 多分支单选，未选禁止通过；`initiator` 时提交弹窗必选分支；`formula` 到达节点自动求值，支持最后一条「其余」，未命中且无其余则 ValidationError。禁止无选边默认走第一条。
+
+撤回提交后重提：`cancel_approval` 须 `_strip_branch_decision_keys`；`get_approval_status` 的 `nodes_overview` 只认当前活跃实例的 tasks/history（时间线仍可跨实例），禁止上一轮「条件分支已通过」污染本轮流程图，否则审核人看不见再选是/否。

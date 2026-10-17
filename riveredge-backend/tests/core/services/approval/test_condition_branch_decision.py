@@ -63,6 +63,28 @@ def test_route_key_false_goes_to_last_branch():
     assert nxt["id"] == "vp"
 
 
+def test_dual_branch_without_route_key_does_not_silent_else():
+    """双出边人工选边：缺 __branch_true_* 时禁止静默走否/else。"""
+    graph = _gm_branch_graph()
+    instance = SimpleNamespace(data={})
+    with pytest.raises(ValidationError, match="请先由前序审批人选择"):
+        ApprovalInstanceService._get_next_node(graph, "cond", instance=instance)
+
+
+def test_strip_branch_decision_keys_clears_route_and_decided_by():
+    data = {
+        "entity_id": 1,
+        "__branch_true_cond": False,
+        ApprovalInstanceService.BRANCH_DECIDED_BY_KEY: 9,
+        "total_amount": 12,
+    }
+    cleaned = ApprovalInstanceService._strip_branch_decision_keys(data)
+    assert "__branch_true_cond" not in cleaned
+    assert ApprovalInstanceService.BRANCH_DECIDED_BY_KEY not in cleaned
+    assert cleaned["entity_id"] == 1
+    assert cleaned["total_amount"] == 12
+
+
 @pytest.mark.asyncio
 async def test_apply_decision_requires_explicit_patch():
     graph = _gm_branch_graph()

@@ -29,8 +29,9 @@ PRO_CORE_APPS = [
     "kuaiplm",
     "kuaicaiwu",
     "kuaioa",
-    "kuaireport",
     "kuaiiot",
+    "kuaivision",
+    "kuaireport",
     "kuaiai",
     "kuaiconnect",
 ]

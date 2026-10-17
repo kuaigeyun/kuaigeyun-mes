@@ -2384,6 +2384,19 @@ class SalesOrderService:
         )
         resp.order_code_editable = code_editable
         resp.order_code_locked_reason = code_lock_reason
+        if current_user is not None and getattr(current_user, "id", None) is not None:
+            from core.services.approval.audit_record_enricher import (
+                apply_viewer_flow_gate_after_capabilities,
+            )
+
+            resp = (
+                await apply_viewer_flow_gate_after_capabilities(
+                    tenant_id,
+                    "sales_order",
+                    [resp],
+                    int(current_user.id),
+                )
+            )[0]
         return resp
 
     async def _sales_order_ids_matching_lifecycle(
@@ -3055,6 +3068,17 @@ class SalesOrderService:
                         has_prepayment_receipt=prepay_by_order.get(int(order.id), False),
                     ),
                 )
+            )
+        if current_user is not None and getattr(current_user, "id", None) is not None:
+            from core.services.approval.audit_record_enricher import (
+                apply_viewer_flow_gate_after_capabilities,
+            )
+
+            sales_orders = await apply_viewer_flow_gate_after_capabilities(
+                tenant_id,
+                "sales_order",
+                sales_orders,
+                int(current_user.id),
             )
         return SalesOrderListResponse(data=sales_orders, total=total, success=True)
 
@@ -3950,12 +3974,13 @@ class SalesOrderService:
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "sales_order"
         )
-        landing = resolve_sales_order_revoke_landing_phase(
-            manual_audit_enabled=audit_required
-        )
-        revoke_state = resolve_sales_order_revoke_state(landing=landing)
 
-        async def _do_revoke() -> SalesOrderResponse:
+        async def _do_revoke(*, reopened: bool = False) -> SalesOrderResponse:
+            landing = resolve_sales_order_revoke_landing_phase(
+                manual_audit_enabled=audit_required,
+                flow_reopened=reopened,
+            )
+            revoke_state = resolve_sales_order_revoke_state(landing=landing)
             # 撤回需求计算：未执行（含草稿）下游由 withdraw 级联删除；已执行则拦截。
             demand = await self._get_linked_demand(tenant_id, sales_order_id)
             if demand and demand.pushed_to_computation:

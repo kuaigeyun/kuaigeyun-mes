@@ -304,11 +304,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 'updated_by_name': user_info["name"],
             })
 
-            # 自动带出归属采购员
+            # 自动带出归属采购员：供应商归属 > 当前登录创建人
             if not order_dict.get("buyer_id") and order_dict.get("supplier_id"):
                 if supplier and supplier.buyer_id:
                     order_dict["buyer_id"] = supplier.buyer_id
                     order_dict["buyer_name"] = supplier.buyer_name
+            if not order_dict.get("buyer_id") and created_by:
+                order_dict["buyer_id"] = created_by
+                order_dict["buyer_name"] = user_info["name"]
 
             await self._resolve_buyer_fields(order_dict)
 

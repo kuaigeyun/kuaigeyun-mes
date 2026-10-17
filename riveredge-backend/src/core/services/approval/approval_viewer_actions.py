@@ -98,6 +98,22 @@ def _pending_assignee_display_names(
     return [name_map.get(uid) or str(uid) for uid in pending_ids]
 
 
+def viewer_has_approved_task_on_instance(
+    *,
+    viewer_id: int,
+    tasks: List[ApprovalTask],
+) -> bool:
+    """当前查看者是否已在本实例上通过过某一级（与是否仍持有当前待办无关）。"""
+    for task in tasks:
+        if task.status != "approved":
+            continue
+        if task.approver_id is None:
+            continue
+        if int(task.approver_id) == int(viewer_id):
+            return True
+    return False
+
+
 def viewer_has_pending_task_on_instance(
     *,
     viewer_id: int,
@@ -137,6 +153,7 @@ def build_flow_viewer_actions(
             "has_my_pending_task": False,
             "approve": False,
             "reject": False,
+            "my_acted": False,
             "block_reason": None,
         }
 
@@ -150,7 +167,18 @@ def build_flow_viewer_actions(
             "has_my_pending_task": True,
             "approve": True,
             "reject": True,
+            "my_acted": False,
             "block_reason": None,
+        }
+
+    # 本级已通过、流程仍在后续节点：对当前人明示「您已审核」，避免列表仍像待他处理
+    if viewer_has_approved_task_on_instance(viewer_id=int(viewer_id), tasks=tasks):
+        return {
+            "has_my_pending_task": False,
+            "approve": False,
+            "reject": False,
+            "my_acted": True,
+            "block_reason": "您已审核，等待后续节点",
         }
 
     pending_ids = current_node_pending_approver_ids(instance=instance, tasks=tasks)
@@ -178,5 +206,6 @@ def build_flow_viewer_actions(
         "has_my_pending_task": False,
         "approve": False,
         "reject": False,
+        "my_acted": False,
         "block_reason": block_reason,
     }

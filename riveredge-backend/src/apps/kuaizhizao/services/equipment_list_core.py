@@ -121,7 +121,8 @@ def apply_equipment_document_date_range(
     if start is not None:
         query = query.filter(**{f"{date_field}__gte": start})
     if end is not None:
-        query = query.filter(**{f"{date_field}__lte": end})
+        # 结束日含当天全部时刻。只比较日期零点会把当天已生成的盘点单等单据排除。
+        query = query.filter(**{f"{date_field}__lte": datetime.combine(end, dt_time.max)})
     return query
 
 

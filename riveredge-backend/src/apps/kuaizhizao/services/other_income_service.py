@@ -20,6 +20,9 @@ from apps.kuaizhizao.schemas.other_voucher import (
 from apps.kuaizhizao.services.document_action_policy.other_income import (
     assert_other_income_capability,
     derive_other_income_capabilities,
+    is_other_income_approved_status,
+    is_other_income_confirmed_status,
+    is_other_income_pending_status,
 )
 from apps.kuaizhizao.services.finance_misc_category_service import FinanceMiscCategoryService
 from apps.kuaizhizao.services.other_voucher_codes import allocate_other_income_code
@@ -314,7 +317,7 @@ class OtherIncomeService(AppBaseService[OtherIncome]):
         )
         if not head:
             raise NotFoundError(f"其他费用收入单不存在: {income_id}")
-        if head.status != "PendingReview":
+        if not is_other_income_pending_status(str(head.status or "")):
             raise BusinessLogicError("仅待审核的其他费用收入单可撤回")
         user = await self.get_user_info(user_id)
         head.status = "Draft"
@@ -331,7 +334,7 @@ class OtherIncomeService(AppBaseService[OtherIncome]):
         )
         if not head:
             raise NotFoundError(f"其他费用收入单不存在: {income_id}")
-        if head.status != "Approved":
+        if not is_other_income_approved_status(str(head.status or "")):
             raise BusinessLogicError("仅已审核的其他费用收入单可反审")
         from apps.kuaizhizao.services.misc_voucher_finance_bridge import MiscVoucherFinanceBridge
 
@@ -358,7 +361,7 @@ class OtherIncomeService(AppBaseService[OtherIncome]):
         if not head:
             raise NotFoundError(f"其他费用收入单不存在: {income_id}")
         assert_other_income_capability(head, "cancel")
-        if head.status == "Confirmed":
+        if is_other_income_confirmed_status(str(head.status or "")):
             from apps.kuaizhizao.services.misc_voucher_posting_service import (
                 MiscVoucherPostingService,
             )

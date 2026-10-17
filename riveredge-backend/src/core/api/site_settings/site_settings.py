@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 
 from core.schemas.site_setting import SiteSettingUpdate, SiteSettingResponse
+from core.services.security.password_policy_service import PasswordPolicyService
 from core.services.system.site_setting_service import SiteSettingService
 from core.utils.integration_settings import (
     build_deepseek_public_status_for_tenant,
@@ -176,6 +177,15 @@ async def create_deepseek_chat_completion(
         raise _deepseek_validation_http_exception(ValidationError("对话请求失败，请稍后重试")) from exc
 
 
+@router.get("/password-policy")
+async def get_password_policy(
+    tenant_id: int = Depends(get_current_tenant),
+    _user: User = Depends(get_current_user),
+):
+    """当前租户登录密码策略（改密/创建用户校验用）。"""
+    return {"success": True, "data": await PasswordPolicyService.get_public_policy(tenant_id)}
+
+
 @router.get("", response_model=SiteSettingResponse)
 async def get_settings(
     tenant_id: int = Depends(get_current_tenant),
@@ -273,6 +283,19 @@ async def update_settings(
             current_settings.get("integrations"),
             settings_payload.get("integrations"),
         )
+
+    current_site_settings = await SiteSettingService.get_settings(tenant_id)
+    current_settings = dict(current_site_settings.settings or {})
+    if "security" in settings_payload:
+        current_sec = dict(current_settings.get("security") or {})
+        try:
+            settings_payload["security"] = await PasswordPolicyService.merge_security_dict(
+                tenant_id,
+                current_sec,
+                dict(settings_payload.get("security") or {}),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     settings = await SiteSettingService.update_settings(
         tenant_id,

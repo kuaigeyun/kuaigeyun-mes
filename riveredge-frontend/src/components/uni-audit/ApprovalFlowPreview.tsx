@@ -1,9 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { theme } from 'antd';
 import {
   ReactFlow,
   Background,
   BackgroundVariant,
+  useReactFlow,
+  useNodesInitialized,
   type Node,
   type Edge,
 } from 'reactflow';
@@ -11,6 +13,7 @@ import 'reactflow/dist/style.css';
 import UniFlowNode from '../common/uni-flow-node';
 import { CANVAS_GRID_REACTFLOW } from '../layout-templates/constants';
 import type { ApprovalProcessGraph, ApprovalNodeOverview } from '../../services/approvalInstance';
+import { enrichApprovalFlowGraph } from '../../utils/approvalFlowLayout';
 
 const { useToken } = theme;
 
@@ -34,6 +37,32 @@ function nodeTypesFactory() {
 
 const NODE_TYPES = nodeTypesFactory();
 
+/** 弹窗打开后容器才有尺寸；节点测量完成且容器变化时再 fitView，避免停在默认视口。 */
+function PreviewFitView({
+  hostRef,
+  layoutKey,
+}: {
+  hostRef: React.RefObject<HTMLDivElement | null>;
+  layoutKey: string;
+}) {
+  const { fitView } = useReactFlow();
+  const ready = useNodesInitialized();
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!ready || !host) return;
+    const run = () => {
+      fitView({ padding: 0.2, maxZoom: 1, duration: 0 });
+    };
+    run();
+    const observer = new ResizeObserver(run);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [ready, fitView, hostRef, layoutKey]);
+
+  return null;
+}
+
 export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
   graph,
   nodesOverview = [],
@@ -41,6 +70,7 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
   style,
 }) => {
   const { token } = useToken();
+  const hostRef = useRef<HTMLDivElement>(null);
 
   const statusByNodeId = useMemo(() => {
     const map = new Map<string, ApprovalNodeOverview>();
@@ -53,7 +83,7 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
   const { nodes, edges } = useMemo(() => {
     const rawNodes = graph?.nodes ?? [];
     const rawEdges = graph?.edges ?? [];
-    const flowNodes: Node[] = rawNodes.map((n) => {
+    const baseNodes: Node[] = rawNodes.map((n) => {
       const overview = statusByNodeId.get(String(n.id));
       const isCurrent = overview?.is_current;
       const status = overview?.status;
@@ -68,15 +98,20 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
         selected: isCurrent,
       };
     });
-    const flowEdges: Edge[] = rawEdges.map((e, idx) => ({
+    const baseEdges: Edge[] = rawEdges.map((e, idx) => ({
       id: e.id || `e-${e.source}-${e.target}-${idx}`,
       source: String(e.source),
       target: String(e.target),
-      type: 'default',
-      style: { stroke: token.colorBorderSecondary, strokeWidth: 2 },
     }));
-    return { nodes: flowNodes, edges: flowEdges };
-  }, [graph, statusByNodeId, token.colorBorderSecondary]);
+    const laidOut = enrichApprovalFlowGraph(baseNodes, baseEdges, { relayout: true });
+    return {
+      nodes: laidOut.nodes,
+      edges: laidOut.edges.map((e) => ({
+        ...e,
+        style: { stroke: '#475569', strokeWidth: 2, ...(e.style || {}) },
+      })),
+    };
+  }, [graph, statusByNodeId]);
 
   if (!nodes.length) {
     return null;
@@ -84,6 +119,7 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
 
   return (
     <div
+      ref={hostRef}
       className="uni-audit-flow-preview"
       style={{
         width: '100%',
@@ -96,19 +132,17 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
         ...style,
       }}
     >
-      {/* 只读预览：隐藏手柄圆点，连线仍按 Handle 锚点贴边 */}
+      {/* 只读：手柄仍显示，否则连线锚点看不见，竖线会像断开 */}
       <style>{`
         .uni-audit-flow-preview .react-flow__handle {
-          opacity: 0;
           pointer-events: none;
-          border: none !important;
-          box-shadow: none !important;
         }
       `}</style>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
+        defaultEdgeOptions={{ type: 'straight' }}
         fitView
         fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
         nodesDraggable={false}
@@ -117,7 +151,12 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
         panOnDrag
         zoomOnScroll
         proOptions={{ hideAttribution: true }}
+        style={{ width: '100%', height: '100%' }}
       >
+        <PreviewFitView
+          hostRef={hostRef}
+          layoutKey={nodes.map((n) => n.id).join('|')}
+        />
         <Background
           variant={CANVAS_GRID_REACTFLOW.variant as BackgroundVariant}
           color={CANVAS_GRID_REACTFLOW.color}

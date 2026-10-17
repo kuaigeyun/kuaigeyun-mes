@@ -92,6 +92,8 @@ class ApprovalInstanceService:
             return "transfer"
         if raw in {"withdraw", "withdrawn"}:
             return "withdraw"
+        if raw in {"revoke", "revoked", "unapprove"}:
+            return "revoke"
         if raw in {"submit", "submitted"}:
             return "submit"
         if raw in {"document_edit", "edit_during_approval"}:
@@ -116,6 +118,7 @@ class ApprovalInstanceService:
             "reject": "驳回",
             "cancel": "已取消",
             "withdraw": "撤回",
+            "revoke": "撤销审核",
             "transfer": "转交",
             "submit": "提交",
             "document_edit": "审核中修改",
@@ -371,6 +374,10 @@ class ApprovalInstanceService:
         if not process:
             return None
 
+        from core.services.approval.audit_submit_requirements import (
+            list_initiator_branch_conditions_in_graph,
+        )
+
         payload: Dict[str, Any] = {
             "entity_type": entity_type,
             "entity_id": entity_id,
@@ -380,6 +387,23 @@ class ApprovalInstanceService:
             payload["business_type"] = str(business_type).strip()
         if extra_data:
             payload.update(extra_data)
+
+        from core.services.approval.audit_submit_context import get_submit_branch_by_node
+        from core.services.approval.audit_submit_selection import merge_branch_selection_into_instance_data
+
+        branch_ctx = get_submit_branch_by_node()
+        if branch_ctx:
+            payload = merge_branch_selection_into_instance_data(payload, branch_ctx)
+
+        required_branches = list_initiator_branch_conditions_in_graph(process.nodes or {})
+        for item in required_branches:
+            cond_id = str(item.get("condition_node_id") or "").strip()
+            if not cond_id:
+                continue
+            index_key = ApprovalInstanceService._condition_branch_index_key(cond_id)
+            if index_key not in payload:
+                label = str(item.get("label") or cond_id)
+                raise ValidationError(f"提交审批须选择「{label}」分支")
 
         snapshot_ids: List[int] = []
         if selected_approver_user_ids:
@@ -882,8 +906,18 @@ class ApprovalInstanceService:
         process_payload = None
         if process:
             graph = ApprovalInstanceService._normalize_process_graph(process.nodes)
+            # 流程图节点态只认「当前活跃实例」：撤回重提后不得把上一轮的条件分支「已通过」混进来
+            active_id = int(instance.id) if instance else None
+            overview_tasks = [
+                t for t in tasks
+                if active_id is not None and int(t.approval_instance_id) == active_id
+            ]
+            overview_history = [
+                h for h in history
+                if active_id is not None and int(h.approval_instance_id) == active_id
+            ]
             nodes_overview = await ApprovalInstanceService._build_nodes_overview(
-                tenant_id, process, instance, tasks, history
+                tenant_id, process, instance, overview_tasks, overview_history
             )
             process_payload = {
                 "uuid": str(process.uuid),
@@ -1016,6 +1050,8 @@ class ApprovalInstanceService:
                     current_node_decision = {
                         "field": str(spec.get("field")),
                         "label": str(spec.get("label") or spec.get("field")),
+                        "kind": str(spec.get("kind") or "branch_index"),
+                        "branches": spec.get("branches") or [],
                         "trueBranchLabel": str(spec.get("trueBranchLabel") or "是"),
                         "falseBranchLabel": str(spec.get("falseBranchLabel") or "否"),
                         "requireExplicit": bool(spec.get("requireExplicit", True)),
@@ -1215,16 +1251,31 @@ class ApprovalInstanceService:
         task = await _pending_task_for_approver()
 
         if not task:
-            await ApprovalInstanceService.bootstrap_instance_workflow(
-                tenant_id, instance
-            )
-            await instance.refresh_from_db()
-            if instance.current_node:
-                await ApprovalTask.filter(
-                    tenant_id=tenant_id,
-                    approval_instance_id=instance.id,
-                    status="pending",
-                ).exclude(node_id=str(instance.current_node)).update(status="cancelled")
+            # 仅补齐当前节点待办，禁止走 bootstrap+reconcile（会在投票前推进节点）
+            await instance.fetch_related("process")
+            process = instance.process
+            current = str(instance.current_node or "").strip()
+            if process and current:
+                graph = ApprovalInstanceService._normalize_process_graph(process.nodes)
+                current_node = next(
+                    (
+                        n
+                        for n in (graph.get("nodes") or [])
+                        if isinstance(n, dict) and str(n.get("id") or "").strip() == current
+                    ),
+                    None,
+                )
+                if current_node:
+                    node_type = current_node.get("type") or (current_node.get("data") or {}).get("type")
+                    if node_type not in ("start", "end", "condition", "cc", None):
+                        await ApprovalTask.filter(
+                            tenant_id=tenant_id,
+                            approval_instance_id=instance.id,
+                            status="pending",
+                        ).exclude(node_id=current).update(status="cancelled")
+                        await ApprovalInstanceService._sync_node_approver_tasks(
+                            tenant_id, instance, current_node
+                        )
             task = await _pending_task_for_approver()
 
         if not task:
@@ -1483,6 +1534,7 @@ class ApprovalInstanceService:
             status="pending",
         ).update(status="cancelled")
 
+        instance.data = ApprovalInstanceService._strip_branch_decision_keys(instance.data)
         instance.status = "cancelled"
         instance.completed_at = resolve_business_datetime()
         instance.current_node = None
@@ -1490,6 +1542,180 @@ class ApprovalInstanceService:
         await instance.save()
         logger.info(f"审批流程已取消: {entity_type}:{entity_id}")
         return True
+
+    @staticmethod
+    async def _find_last_completed_approval_node_id(
+        tenant_id: int,
+        instance: ApprovalInstance,
+    ) -> Optional[str]:
+        """已通过实例上，时间序最后完成的人工审批节点（终审节点）。"""
+        process = instance.process
+        if not process:
+            await instance.fetch_related("process")
+            process = instance.process
+        if not process:
+            return None
+        graph = ApprovalInstanceService._normalize_process_graph(process.nodes)
+        approval_node_ids: Set[str] = set()
+        for node in graph.get("nodes") or []:
+            if not isinstance(node, dict):
+                continue
+            node_type = str(node.get("type") or "")
+            if node_type != "approval":
+                continue
+            nid = str(node.get("id") or "").strip()
+            if nid:
+                approval_node_ids.add(nid)
+        if not approval_node_ids:
+            return None
+
+        tasks = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            status="approved",
+        ).order_by("-action_at", "-id").all()
+        for task in tasks:
+            nid = str(task.node_id or "").strip()
+            if nid in approval_node_ids:
+                return nid
+
+        history = await ApprovalHistory.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+        ).order_by("-action_at", "-id").all()
+        for h in history:
+            if ApprovalInstanceService._normalize_execution_action(h.action) != "approve":
+                continue
+            for candidate in (h.from_node, h.to_node):
+                nid = str(candidate or "").strip()
+                if nid in approval_node_ids:
+                    return nid
+        return None
+
+    @staticmethod
+    async def reopen_at_last_approval_node(
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int,
+        operator_id: int,
+    ) -> Optional[ApprovalInstance]:
+        """
+        反审核后重开终审节点：保留条件分支等前序决策，在最后人工审批节点重建待办。
+
+        有已通过实例时：取消残留 pending → 新建 pending 实例停在终审节点。
+        无已通过实例时返回 None（调用方回落到草稿/取消路径）。
+        """
+        entity_instances = await ApprovalInstanceService._list_instances_by_entity(
+            tenant_id, entity_type, entity_id
+        )
+        approved = next(
+            (inst for inst in entity_instances if inst.status == "approved"),
+            None,
+        )
+        if not approved:
+            return None
+
+        last_node_id = await ApprovalInstanceService._find_last_completed_approval_node_id(
+            tenant_id, approved
+        )
+        if not last_node_id:
+            logger.warning(
+                "反审核无法定位终审节点: {}:{} instance={}",
+                entity_type,
+                entity_id,
+                approved.id,
+            )
+            return None
+
+        process = approved.process
+        if not process:
+            await approved.fetch_related("process")
+            process = approved.process
+        if not process:
+            return None
+
+        graph = ApprovalInstanceService._normalize_process_graph(process.nodes)
+        last_node = next(
+            (
+                n
+                for n in (graph.get("nodes") or [])
+                if isinstance(n, dict) and str(n.get("id") or "") == last_node_id
+            ),
+            None,
+        )
+        if not last_node:
+            return None
+
+        # 残留 pending（异常态）先取消，避免双实例抢 active
+        await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            operator_id=operator_id,
+        )
+
+        from core.services.approval.approval_audit_scope import enrich_instance_data_audit_app
+
+        raw_data = dict(approved.data or {}) if isinstance(approved.data, dict) else {}
+        raw_data.pop("writeback_failure", None)
+        raw_data.pop("invalidated_by_config", None)
+        raw_data.pop("invalidated_node_key", None)
+        # 保留 __branch_true_* / 选人快照，禁止 strip 后回到上一级条件节点
+        instance_data = enrich_instance_data_audit_app(
+            raw_data,
+            process_code=process.code,
+        )
+
+        new_instance = ApprovalInstance(
+            tenant_id=tenant_id,
+            process=process,
+            title=approved.title,
+            content=approved.content,
+            data=instance_data,
+            status="pending",
+            current_node=last_node_id,
+            current_approver_id=None,
+            submitter_id=approved.submitter_id,
+            submitted_at=approved.submitted_at or resolve_business_datetime(),
+            process_version=getattr(approved, "process_version", None)
+            or getattr(process, "published_version", None)
+            or 1,
+        )
+        await new_instance.save()
+
+        await ApprovalInstanceService._create_approval_history(
+            tenant_id=tenant_id,
+            approval_instance_id=new_instance.id,
+            action="revoke",
+            action_by=operator_id,
+            comment="撤销审核，退回终审节点待重新审核",
+            from_node="end",
+            to_node=last_node_id,
+        )
+
+        await ApprovalInstanceService.bootstrap_instance_workflow(
+            tenant_id, new_instance
+        )
+        await new_instance.refresh_from_db()
+        if new_instance.status != "pending" or str(new_instance.current_node or "") != last_node_id:
+            logger.error(
+                "反审核重开终审节点后状态异常: {}:{} instance={} status={} node={}",
+                entity_type,
+                entity_id,
+                new_instance.id,
+                new_instance.status,
+                new_instance.current_node,
+            )
+            return None
+
+        logger.info(
+            "反审核已重开终审节点: {}:{} node={} instance={}",
+            entity_type,
+            entity_id,
+            last_node_id,
+            new_instance.id,
+        )
+        return new_instance
 
     @staticmethod
     async def cancel_pending_for_process(
@@ -1514,7 +1740,7 @@ class ApprovalInstanceService:
         cancelled = 0
         for instance in instances:
             withdraw_node = instance.current_node
-            data = dict(instance.data or {})
+            data = ApprovalInstanceService._strip_branch_decision_keys(instance.data)
             data["invalidated_by_config"] = True
             if node_key:
                 data["invalidated_node_key"] = node_key
@@ -2261,8 +2487,79 @@ class ApprovalInstanceService:
     BRANCH_DECIDED_BY_KEY = "__branch_decided_by"
 
     @staticmethod
+    def _condition_branch_index_key(condition_node_id: str) -> str:
+        return f"__branch_index_{condition_node_id}"
+
+    @staticmethod
     def _condition_branch_route_key(condition_node_id: str) -> str:
+        """旧图布尔选边键；读取时兼容，新写入优先 __branch_index_*。"""
         return f"__branch_true_{condition_node_id}"
+
+    @staticmethod
+    def _read_branch_edge_index(
+        inst_data: Dict[str, Any],
+        condition_node_id: str,
+        out_edge_count: int,
+    ) -> Optional[int]:
+        if out_edge_count <= 0:
+            return None
+        data = inst_data or {}
+        index_key = ApprovalInstanceService._condition_branch_index_key(condition_node_id)
+        if index_key in data:
+            raw = data.get(index_key)
+            try:
+                idx = int(raw)
+            except (TypeError, ValueError):
+                raise ValidationError(f"分支选择 {index_key!r} 须为 0 起整数下标")
+            if idx < 0 or idx >= out_edge_count:
+                raise ValidationError(f"分支选择下标 {idx} 超出范围（共 {out_edge_count} 条出边）")
+            return idx
+        legacy_key = ApprovalInstanceService._condition_branch_route_key(condition_node_id)
+        if legacy_key in data:
+            legacy_val = data.get(legacy_key)
+            if isinstance(legacy_val, str):
+                lowered = legacy_val.strip().lower()
+                if lowered in ("true", "1", "yes", "on"):
+                    legacy_val = True
+                elif lowered in ("false", "0", "no", "off"):
+                    legacy_val = False
+            if isinstance(legacy_val, bool):
+                return 0 if legacy_val else out_edge_count - 1
+        return None
+
+    @staticmethod
+    def _condition_node_route_mode(
+        condition_node: dict,
+        *,
+        out_edge_count: int,
+    ) -> str:
+        from core.schemas.approval_flow_schema import (
+            CONDITION_ROUTE_MODES,
+            _infer_condition_route_mode,
+            normalize_condition_node_data,
+        )
+
+        if not isinstance(condition_node, dict):
+            return "formula"
+        data = condition_node.get("data") if isinstance(condition_node.get("data"), dict) else {}
+        normalized = normalize_condition_node_data(data, out_edge_count=out_edge_count)
+        mode = str(normalized.get("routeMode") or "").strip()
+        if mode in CONDITION_ROUTE_MODES:
+            return mode
+        conditions = normalized.get("conditions") or []
+        inferred = _infer_condition_route_mode(conditions, out_edge_count=out_edge_count)
+        return inferred or "formula"
+
+    @staticmethod
+    def _strip_branch_decision_keys(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """撤回/取消时清掉显式选边，避免下一轮重提仍沿用旧分支。"""
+        out: Dict[str, Any] = dict(data or {})
+        out.pop(ApprovalInstanceService.BRANCH_DECIDED_BY_KEY, None)
+        for key in list(out.keys()):
+            sk = str(key)
+            if sk.startswith("__branch_true_") or sk.startswith("__branch_index_"):
+                out.pop(key, None)
+        return out
 
     @staticmethod
     async def _resolve_condition_route_action_by(
@@ -2327,10 +2624,7 @@ class ApprovalInstanceService:
         graph: Dict[str, Any],
         condition_node: dict,
     ) -> Optional[Dict[str, Any]]:
-        """
-        下一节点为多出边条件时，前序审批人必须在审核页显式选择分支。
-        不依赖条件规则是否配成布尔：用 __branch_true_{条件节点id} 选边。
-        """
+        """routeMode=previous_approver 时，前序审批人须在审核页按下标选边。"""
         if not isinstance(condition_node, dict) or condition_node.get("type") != "condition":
             return None
         condition_id = str(condition_node.get("id") or "").strip()
@@ -2343,32 +2637,38 @@ class ApprovalInstanceService:
         ]
         if len(out_edges) < 2:
             return None
+        route_mode = ApprovalInstanceService._condition_node_route_mode(
+            condition_node, out_edge_count=len(out_edges)
+        )
+        if route_mode != "previous_approver":
+            return None
         node_list = graph.get("nodes") or []
         by_id = {
             str(n.get("id")): n
             for n in node_list
             if isinstance(n, dict) and n.get("id") is not None
         }
-        first_target = by_id.get(str(out_edges[0].get("target") or ""))
-        last_target = by_id.get(str(out_edges[-1].get("target") or ""))
         data = condition_node.get("data") if isinstance(condition_node.get("data"), dict) else {}
         label = str(data.get("label") or "").strip() or "后续分支"
-        # 业务字段（若有）一并写入，兼容旧条件规则；路由真源是 __branch_true_*
         conditions = data.get("conditions") or data.get("condition_list") or []
-        business_field = ""
-        for cond in conditions:
-            if not isinstance(cond, dict):
-                continue
-            raw = str(cond.get("field") or "").strip()
-            if raw:
-                business_field = raw
-                break
-        field = business_field or ApprovalInstanceService._condition_branch_route_key(condition_id)
+        branches: List[Dict[str, Any]] = []
+        for i, edge in enumerate(out_edges):
+            cond = conditions[i] if i < len(conditions) and isinstance(conditions[i], dict) else {}
+            branch_label = str(cond.get("label") or "").strip()
+            if not branch_label:
+                target = by_id.get(str(edge.get("target") or ""))
+                branch_label = ApprovalInstanceService._node_display_label(target) or f"分支{i + 1}"
+            branches.append({"index": i, "label": branch_label})
+        index_field = ApprovalInstanceService._condition_branch_index_key(condition_id)
+        first_label = branches[0]["label"] if branches else "是"
+        last_label = branches[-1]["label"] if branches else "否"
         return {
-            "field": field,
+            "field": index_field,
             "label": label,
-            "trueBranchLabel": ApprovalInstanceService._node_display_label(first_target) or "是",
-            "falseBranchLabel": ApprovalInstanceService._node_display_label(last_target) or "否",
+            "kind": "branch_index",
+            "branches": branches,
+            "trueBranchLabel": first_label,
+            "falseBranchLabel": last_label,
             "conditionNodeId": condition_id,
             "requireExplicit": True,
             "defaultValue": None,
@@ -2379,26 +2679,25 @@ class ApprovalInstanceService:
         graph: Dict[str, Any],
         approval_node: dict,
     ) -> Optional[Dict[str, Any]]:
-        """优先节点显式 decisionOnApprove；否则下一节点为双分支条件时强制审核人选边。"""
-        data = approval_node.get("data") if isinstance(approval_node.get("data"), dict) else {}
-        explicit = data.get("decisionOnApprove")
-        if isinstance(explicit, dict) and str(explicit.get("field") or "").strip():
-            return {
-                "field": str(explicit.get("field")).strip(),
-                "label": str(explicit.get("label") or explicit.get("field")).strip(),
-                "trueBranchLabel": str(explicit.get("trueBranchLabel") or "是"),
-                "falseBranchLabel": str(explicit.get("falseBranchLabel") or "否"),
-                "conditionNodeId": str(explicit.get("conditionNodeId") or "").strip() or None,
-                "requireExplicit": True,
-                "defaultValue": explicit.get("defaultValue"),
-            }
+        """下一条件节点为 previous_approver 时强制审核人选边；旧 decisionOnApprove 仅在此场景兼容。"""
         node_id = str(approval_node.get("id") or "")
         if not node_id:
             return None
         next_node = ApprovalInstanceService._get_next_node(graph, node_id, instance=None)
-        if not next_node:
+        if not next_node or next_node.get("type") != "condition":
             return None
-        return ApprovalInstanceService._infer_decision_spec_from_condition_node(graph, next_node)
+        inferred = ApprovalInstanceService._infer_decision_spec_from_condition_node(graph, next_node)
+        if not inferred:
+            return None
+        data = approval_node.get("data") if isinstance(approval_node.get("data"), dict) else {}
+        explicit = data.get("decisionOnApprove")
+        if isinstance(explicit, dict) and str(explicit.get("label") or "").strip():
+            inferred = dict(inferred)
+            inferred["label"] = str(explicit.get("label")).strip()
+            default_raw = explicit.get("defaultValue")
+            if default_raw is not None:
+                inferred["defaultValue"] = 0 if bool(default_raw) else len(inferred.get("branches") or []) - 1
+        return inferred
 
     @staticmethod
     async def _apply_decision_on_approve(
@@ -2409,7 +2708,7 @@ class ApprovalInstanceService:
         *,
         decided_by: Optional[int] = None,
     ) -> None:
-        """审批通过时写入分支决策；双分支条件必须带显式选择，禁止默认跳边。"""
+        """审批通过时写入分支下标；previous_approver 条件必须带显式选择，禁止默认跳边。"""
         from core.schemas.approval_flow_schema import get_node_config, normalize_flow_graph
 
         if not node_id:
@@ -2429,25 +2728,43 @@ class ApprovalInstanceService:
         if field not in patch:
             raise ValidationError(f"请选择「{label}」后再审核通过")
         value = patch[field]
-        if isinstance(value, str):
+        branches = spec.get("branches") if isinstance(spec.get("branches"), list) else []
+        branch_count = len(branches) if branches else 2
+        edge_index: Optional[int] = None
+        if isinstance(value, bool):
+            edge_index = 0 if value else branch_count - 1
+        elif isinstance(value, str):
             lowered = value.strip().lower()
             if lowered in ("true", "1", "yes", "on"):
-                value = True
+                edge_index = 0
             elif lowered in ("false", "0", "no", "off"):
-                value = False
+                edge_index = branch_count - 1
             else:
-                raise ValidationError(f"审批分支决策 {field!r} 须为布尔值")
-        if not isinstance(value, bool):
-            raise ValidationError(f"请选择「{label}」后再审核通过")
+                try:
+                    edge_index = int(value.strip())
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError(f"审批分支决策 {field!r} 须为分支下标") from exc
+        else:
+            try:
+                edge_index = int(value)
+            except (TypeError, ValueError) as exc:
+                raise ValidationError(f"请选择「{label}」后再审核通过") from exc
+        if edge_index is None or edge_index < 0 or edge_index >= branch_count:
+            raise ValidationError(f"分支选择下标无效，须在 0～{branch_count - 1} 之间")
         data = dict(instance.data or {})
-        data[field] = value
         condition_node_id = str(spec.get("conditionNodeId") or "").strip()
         if not condition_node_id:
             next_node = ApprovalInstanceService._get_next_node(graph, str(node_id), instance=None)
             if next_node and next_node.get("type") == "condition":
                 condition_node_id = str(next_node.get("id") or "").strip()
         if condition_node_id:
-            data[ApprovalInstanceService._condition_branch_route_key(condition_node_id)] = value
+            index_key = ApprovalInstanceService._condition_branch_index_key(condition_node_id)
+            data[index_key] = edge_index
+            data[field] = edge_index
+            if branch_count == 2:
+                data[ApprovalInstanceService._condition_branch_route_key(condition_node_id)] = edge_index == 0
+        else:
+            data[field] = edge_index
         if decided_by and int(decided_by) > 0:
             data[ApprovalInstanceService.BRANCH_DECIDED_BY_KEY] = int(decided_by)
         instance.data = data
@@ -2690,16 +3007,25 @@ class ApprovalInstanceService:
         """
         del last_action  # 完成判定以任务状态为准，保留参数仅兼容旧调用
         node_id = instance.current_node
-        process_nodes = instance.process.nodes or {}
+        node_id_str = str(node_id or "").strip()
+        if not node_id_str:
+            return False, "pending"
+
+        process = instance.process
+        process_nodes = (process.nodes if process else None) or {}
+        graph = ApprovalInstanceService._normalize_process_graph(process_nodes)
 
         current_node_config = None
-        for node in process_nodes.get("nodes", []):
-            if node.get("id") == node_id:
+        for node in graph.get("nodes") or []:
+            if not isinstance(node, dict):
+                continue
+            if str(node.get("id") or "").strip() == node_id_str:
                 current_node_config = node
                 break
 
+        # 找不到节点配置时不得冒充已通过（否则 reconcile 会在投票前推进并取消待办）
         if not current_node_config:
-            return True, "approved"
+            return False, "pending"
 
         data = current_node_config.get("data", {}) or {}
         approval_type = str(
@@ -3224,14 +3550,22 @@ class ApprovalInstanceService:
     def _evaluate_conditions(instance: ApprovalInstance, conditions: List[Dict[str, Any]]) -> int:
         """
         按顺序评估条件，返回第一条满足条件的下标。
-        无命中返回 -1（由选边逻辑走最后一条出边 / else，禁止默认第一条误进特批支）。
-        条件项：{ "field": str, "operator": str, "value": any }，instance.data 提供字段值。
+        无命中且无「其余」分支返回 -1；有 else 则返回其下标。
+        条件项：{ "field": str, "operator": str, "value": any, "else": bool }。
         """
         if not conditions:
-            return 0
+            return -1
         data = instance.data or {}
+        else_index = -1
         for i, cond in enumerate(conditions):
             if not isinstance(cond, dict):
+                continue
+            if cond.get("else"):
+                else_index = i
+        for i, cond in enumerate(conditions):
+            if not isinstance(cond, dict):
+                continue
+            if cond.get("else"):
                 continue
             field = cond.get("field")
             operator = cond.get("operator")
@@ -3263,7 +3597,7 @@ class ApprovalInstanceService:
                         return i
             except (TypeError, ValueError):
                 continue
-        return -1
+        return else_index
 
     @staticmethod
     def _get_start_node(nodes: dict) -> Optional[dict]:
@@ -3302,18 +3636,45 @@ class ApprovalInstanceService:
         current_node = next((n for n in node_list if isinstance(n, dict) and n.get("id") == current_node_id), None)
         node_type = (current_node or {}).get("type") if isinstance(current_node, dict) else None
 
-        # 条件节点：前序审批显式选边优先；否则按条件规则；无命中走最后一条（else）
+        # 条件节点：人工选边读 __branch_index_*；公式模式按规则求值。
         if node_type == "condition" and instance and current_node:
-            inst_data = instance.data or {}
-            route_key = ApprovalInstanceService._condition_branch_route_key(str(current_node_id))
-            if route_key in inst_data:
-                edge_index = 0 if bool(inst_data.get(route_key)) else len(out_edges) - 1
-            else:
-                data = current_node.get("data", {})
+            inst_data = instance.data if isinstance(instance.data, dict) else {}
+            route_mode = ApprovalInstanceService._condition_node_route_mode(
+                current_node, out_edge_count=len(out_edges)
+            )
+            cond_label = ApprovalInstanceService._node_display_label(current_node) or "后续分支"
+            if route_mode in ("previous_approver", "initiator"):
+                edge_index = ApprovalInstanceService._read_branch_edge_index(
+                    inst_data, str(current_node_id), len(out_edges)
+                )
+                if edge_index is None:
+                    if route_mode == "previous_approver":
+                        raise ValidationError(
+                            f"请先由前序审批人选择「{cond_label}」后再继续，禁止默认跳转"
+                        )
+                    raise ValidationError(
+                        f"流程发起人须在提交时选择「{cond_label}」分支，禁止默认跳转"
+                    )
+            elif route_mode == "formula":
+                data = current_node.get("data", {}) if isinstance(current_node, dict) else {}
                 conditions = data.get("conditions") or data.get("condition_list") or []
                 edge_index = ApprovalInstanceService._evaluate_conditions(instance, conditions)
                 if edge_index < 0 or edge_index >= len(out_edges):
-                    edge_index = len(out_edges) - 1
+                    raise ValidationError(
+                        f"条件节点「{cond_label}」未命中任何规则且未配置其余分支，流程无法继续"
+                    )
+            else:
+                edge_index = ApprovalInstanceService._read_branch_edge_index(
+                    inst_data, str(current_node_id), len(out_edges)
+                )
+                if edge_index is None:
+                    data = current_node.get("data", {}) if isinstance(current_node, dict) else {}
+                    conditions = data.get("conditions") or data.get("condition_list") or []
+                    edge_index = ApprovalInstanceService._evaluate_conditions(instance, conditions)
+                    if edge_index < 0 or edge_index >= len(out_edges):
+                        raise ValidationError(
+                            f"条件节点「{cond_label}」无法确定出边，禁止默认走第一条"
+                        )
             next_node_id = out_edges[edge_index].get("target")
         else:
             next_node_id = out_edges[0].get("target")

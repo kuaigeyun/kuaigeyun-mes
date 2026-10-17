@@ -92,6 +92,9 @@ const SalesContractLinkedDetailDrawer = lazy(() =>
 const ReworkOrderLinkedDetailDrawer = lazy(() =>
   import('./drawers/ReworkOrderLinkedDetailDrawer').then((m) => ({ default: m.ReworkOrderLinkedDetailDrawer })),
 );
+const PaymentLinkedDetailDrawer = lazy(() =>
+  import('./drawers/PaymentLinkedDetailDrawer').then((m) => ({ default: m.PaymentLinkedDetailDrawer })),
+);
 
 /** 高于列表详情抽屉、报价内嵌关联，以及在线消息壳（z-index 1050） */
 const LINKED_DRAWER_Z_OFFSET = 80;
@@ -375,6 +378,16 @@ function LinkedDocumentDetailHost({
     case 'performance_summary':
       drawer = (
         <PerformanceSummaryLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+      break;
+    case 'payment':
+      drawer = (
+        <PaymentLinkedDetailDrawer
           open
           documentId={documentId}
           onClose={onClose}

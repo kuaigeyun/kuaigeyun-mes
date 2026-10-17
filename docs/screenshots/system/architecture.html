@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>kuaigeyun 系统架构</title>
+<style>
+  :root {
+    --primary: #000950;
+    --primary-soft: #eef0f8;
+    --muted: #475569;
+    --line: #dce1ec;
+    --line-strong: #b8c0d4;
+    --card: #fff;
+    --private: #b8860b;
+    --sky: #3d7ab5;
+    --teal: #2f7c72;
+    --sand: #9a7a3a;
+    --pad: 20px;
+    --pad-sm: 14px;
+    --ink: #000950;
+    --ink-sub: #1c2a66;
+    --fs-section: 26px;
+    --fs-badge: 20px;
+    --fs-chip: 24px;
+    --fs-cell-title: 24px;
+    --fs-cell-sub: 24px;
+    --fs-app-title: 24px;
+    --fs-app-desc: 24px;
+    --fs-tech: 24px;
+    --fs-body: 24px;
+    --gap-layer: 36px;
+    --gap-block: 16px;
+    --gap-item: 16px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #f7f8fb;
+    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+    color: var(--primary);
+    line-height: 1.5;
+  }
+
+  #diagram {
+    width: 2200px;
+    margin: 0 auto;
+    padding: 4px;
+    background: #fff;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: var(--fs-badge);
+    font-weight: 600;
+    line-height: 1.2;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .badge.main { background: var(--primary); }
+  .badge.private { background: var(--private); }
+
+  .layer {
+    background: var(--primary-soft);
+    border: 1px solid var(--line-strong);
+    border-radius: 16px;
+    padding: var(--pad);
+  }
+  .layer-user { background: #eaf3fb; border-color: #c5d8eb; }
+  .layer-fe   { background: #eef0f8; border-color: #c4cadf; }
+  .layer-gw   { background: #e8f5f2; border-color: #b9ddd6; }
+  .layer-biz  { background: #eef0f8; border-color: #c4cadf; }
+  .layer-data { background: #f7f2e8; border-color: #e0d2b0; }
+
+  .layer-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    font-size: var(--fs-section);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .layer-title::before {
+    content: "";
+    width: 5px;
+    height: 1.15em;
+    background: var(--primary);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .layer-user .layer-title::before { background: var(--sky); }
+  .layer-gw .layer-title::before { background: var(--teal); }
+  .layer-data .layer-title::before { background: var(--sand); }
+
+  .arrow {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: var(--gap-layer);
+  }
+  .arrow-mark {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 28px;
+  }
+  .arrow-stem {
+    width: 3px;
+    height: 14px;
+    background: var(--primary);
+    border-radius: 2px;
+    opacity: 0.45;
+  }
+  .arrow-head {
+    width: 0;
+    height: 0;
+    border-left: 9px solid transparent;
+    border-right: 9px solid transparent;
+    border-top: 11px solid var(--primary);
+    opacity: 0.55;
+    margin-top: -1px;
+  }
+
+  /* --- 用户层 --- */
+  .users {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: var(--gap-item);
+  }
+  .users .chip {
+    background: var(--card);
+    border: 1px solid #c9dceb;
+    border-radius: 10px;
+    padding: 22px 12px;
+    text-align: center;
+    font-size: var(--fs-chip);
+    font-weight: 500;
+    box-shadow: inset 0 0 0 1px rgba(61, 122, 181, 0.04);
+  }
+
+  /* --- 前端 / 数据 / 网关 --- */
+  .row-2, .row-3 {
+    display: grid;
+    gap: var(--gap-item);
+  }
+  .row-2 { grid-template-columns: 1fr 1fr; }
+  .row-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  .cell {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px 22px;
+    min-height: 112px;
+  }
+  .cell.tone-main {
+    background: linear-gradient(180deg, #f7f8fd 0%, #fff 55%);
+    border-color: #c8cee3;
+  }
+  .cell.tone-private {
+    background: linear-gradient(180deg, #fbf7ee 0%, #fff 55%);
+    border-color: #e2d4b4;
+  }
+  .cell-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .cell-title {
+    font-size: var(--fs-cell-title);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .cell-sub {
+    margin-top: 10px;
+    font-size: var(--fs-cell-sub);
+    font-weight: 500;
+    color: var(--ink-sub);
+    line-height: 1.5;
+  }
+
+  .gw {
+    background: linear-gradient(180deg, #f3fbf9 0%, #fff 60%);
+    border: 1px solid #b9ddd6;
+    border-radius: 12px;
+    padding: 22px 16px;
+    text-align: center;
+  }
+  .gw-t {
+    font-size: var(--fs-chip);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .gw-s {
+    margin-top: 8px;
+    font-size: var(--fs-body);
+    font-weight: 500;
+    color: var(--ink-sub);
+  }
+
+  /* --- 业务层 --- */
+  .biz-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-block);
+    min-width: 0;
+  }
+
+  .block {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .block-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .block-head .path {
+    font-size: var(--fs-body);
+    font-weight: 500;
+    line-height: 1.3;
+  }
+  .block-head .path.muted {
+    font-weight: 500;
+    color: var(--ink-sub);
+  }
+
+  .apps-5 {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--gap-item);
+  }
+  .apps-6 {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: var(--gap-item);
+  }
+
+  .app {
+    background: #f4f6fc;
+    border: 1px solid #d0d6e8;
+    border-radius: 12px;
+    padding: 18px 14px 20px;
+    min-height: 168px;
+    display: flex;
+    flex-direction: column;
+  }
+  .apps-5 .app:nth-child(1) { background: #f3f6fd; border-color: #cdd6ea; }
+  .apps-5 .app:nth-child(2) { background: #f2f8f6; border-color: #c5ddd6; }
+  .apps-5 .app:nth-child(3) { background: #f7f4fb; border-color: #d5cce6; }
+  .apps-5 .app:nth-child(4) { background: #f8f6f1; border-color: #ddd4c4; }
+  .apps-5 .app:nth-child(5) { background: #f3f5fb; border-color: #c8d0e6; }
+  .app-t {
+    font-size: var(--fs-app-title);
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.3;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(0, 9, 80, 0.12);
+  }
+  .app-d {
+    font-size: var(--fs-app-desc);
+    font-weight: 500;
+    color: var(--ink-sub);
+    text-align: center;
+    line-height: 1.65;
+    flex: 1;
+  }
+  .app-d div + div { margin-top: 4px; }
+
+  .pro .app {
+    min-height: 120px;
+    padding: 16px 12px 18px;
+    background: #fbf8f1;
+    border-color: #e4d7b8;
+  }
+  .pro .app-t {
+    font-size: var(--fs-app-title);
+    border-bottom: none;
+    margin-bottom: 8px;
+    padding-bottom: 0;
+  }
+  .pro .app-d {
+    line-height: 1.5;
+  }
+
+  .block.custom {
+    padding: 18px 20px;
+    background: linear-gradient(90deg, #fbf8f1 0%, #fff 40%);
+    border-color: #e4d7b8;
+  }
+  .block.custom .block-head {
+    margin-bottom: 0;
+  }
+
+  .runtime-label {
+    font-size: var(--fs-body);
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 14px;
+  }
+  .techs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .tech {
+    background: #f3f5fb;
+    border: 1px solid #cdd4e8;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: var(--fs-tech);
+    font-weight: 500;
+    line-height: 1.3;
+  }
+  .tech:nth-child(3n+2) {
+    background: #f2f8f6;
+    border-color: #c5ddd6;
+  }
+  .tech:nth-child(3n) {
+    background: #f8f6f1;
+    border-color: #ddd4c4;
+  }
+</style>
+</head>
+<body>
+<div id="diagram">
+  <section class="layer layer-user">
+    <div class="layer-title">用户层</div>
+    <div class="users">
+      <div class="chip">PC</div>
+      <div class="chip">移动 App</div>
+      <div class="chip">H5 / 小程序</div>
+      <div class="chip">企微钉钉飞书</div>
+      <div class="chip">触屏工位</div>
+      <div class="chip">TV 看板</div>
+    </div>
+  </section>
+  <div class="arrow" aria-hidden="true"><div class="arrow-mark"><span class="arrow-stem"></span><span class="arrow-head"></span></div></div>
+
+  <section class="layer layer-fe">
+    <div class="layer-title">前端层</div>
+    <div class="row-2">
+      <div class="cell tone-main">
+        <div class="cell-head">
+          <span class="badge main">主仓</span>
+          <span class="cell-title">PC Web</span>
+        </div>
+        <div class="cell-sub">React 18 / TypeScript / Vite 5 / Ant Design 6 / UniTable</div>
+      </div>
+      <div class="cell tone-private">
+        <div class="cell-head">
+          <span class="badge private">私仓 终端</span>
+          <span class="cell-title">kuaigeyun-client</span>
+        </div>
+        <div class="cell-sub">Expo / React Native / Electron 工位 / TV / 小程序 / 办公 H5</div>
+      </div>
+    </div>
+  </section>
+  <div class="arrow" aria-hidden="true"><div class="arrow-mark"><span class="arrow-stem"></span><span class="arrow-head"></span></div></div>
+
+  <section class="layer layer-gw">
+    <div class="layer-title">网关层</div>
+    <div class="row-3">
+      <div class="gw"><div class="gw-t">Caddy</div><div class="gw-s">反向代理</div></div>
+      <div class="gw"><div class="gw-t">静态 / 负载</div><div class="gw-s">Web / H5</div></div>
+      <div class="gw"><div class="gw-t">/api</div><div class="gw-s">后端转发</div></div>
+    </div>
+  </section>
+  <div class="arrow" aria-hidden="true"><div class="arrow-mark"><span class="arrow-stem"></span><span class="arrow-head"></span></div></div>
+
+  <section class="layer layer-biz">
+    <div class="layer-title">业务层 插件组装运行</div>
+    <div class="biz-main">
+      <div class="block">
+        <div class="block-head">
+          <span class="badge main">主仓 开源</span>
+          <span class="path">kuaigeyun / riveredge-backend / frontend</span>
+        </div>
+        <div class="apps-5">
+          <div class="app">
+            <div class="app-t">主数据</div>
+            <div class="app-d">
+              <div>工厂 / 车间建模</div>
+              <div>物料 / BOM / 工艺</div>
+              <div>客户 / 供应商</div>
+            </div>
+          </div>
+          <div class="app">
+            <div class="app-t">快制造</div>
+            <div class="app-d">
+              <div>销售 / 计划 / 采购</div>
+              <div>生产执行 / 报工</div>
+              <div>仓储 / 质量 / 设备</div>
+              <div>绩效 / 分析看板</div>
+            </div>
+          </div>
+          <div class="app">
+            <div class="app-t">快质量</div>
+            <div class="app-d">
+              <div>来料 / 过程 / 成品检</div>
+              <div>检验方案 / 8D</div>
+              <div>不合格 / 追溯</div>
+            </div>
+          </div>
+          <div class="app">
+            <div class="app-t">快设备</div>
+            <div class="app-d">
+              <div>点检巡检 / 故障</div>
+              <div>维修保养计划</div>
+              <div>模具工装 / 备件</div>
+            </div>
+          </div>
+          <div class="app">
+            <div class="app-t">平台核心</div>
+            <div class="app-d">
+              <div>多租户 / RBAC</div>
+              <div>审批 / 消息 / 打印</div>
+              <div>编码 / 自定义字段</div>
+              <div>配置中心 / 审计</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block pro">
+        <div class="block-head">
+          <span class="badge private">私仓 专业</span>
+          <span class="path">kuaigeyun-pro / License / 工作区组装</span>
+        </div>
+        <div class="apps-6">
+          <div class="app">
+            <div class="app-t">研发 / 交付</div>
+            <div class="app-d"><div>NPI / 变更 / 知识库 / 协同交付</div></div>
+          </div>
+          <div class="app">
+            <div class="app-t">办公 / 财务</div>
+            <div class="app-d"><div>审批办公 / 收付结算 / 发票</div></div>
+          </div>
+          <div class="app">
+            <div class="app-t">数采 / 视觉</div>
+            <div class="app-d"><div>设备 IoT / 视觉检测运维</div></div>
+          </div>
+          <div class="app">
+            <div class="app-t">报表 / 大屏</div>
+            <div class="app-d"><div>BI 分析 / TV 看板</div></div>
+          </div>
+          <div class="app">
+            <div class="app-t">集成 / AI</div>
+            <div class="app-d"><div>连接器 / KU-AI 助手</div></div>
+          </div>
+          <div class="app">
+            <div class="app-t">行业包</div>
+            <div class="app-d"><div>机械 / 注塑 / 电子等</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block custom">
+        <div class="block-head">
+          <span class="badge private">私仓 定制</span>
+          <span class="path muted">kuaigeyun-custom / 客户专属页 / 插件（可选组装）</span>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="runtime-label">运行时（主仓后端）</div>
+        <div class="techs">
+          <span class="tech">Python 3.11</span>
+          <span class="tech">FastAPI</span>
+          <span class="tech">Tortoise ORM</span>
+          <span class="tech">Pydantic 2</span>
+          <span class="tech">Taskiq</span>
+          <span class="tech">Socket.IO</span>
+          <span class="tech">PostgreSQL Cache</span>
+          <span class="tech">渠道写防护</span>
+          <span class="tech">插件 Manifest</span>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div class="arrow" aria-hidden="true"><div class="arrow-mark"><span class="arrow-stem"></span><span class="arrow-head"></span></div></div>
+
+  <section class="layer layer-data">
+    <div class="layer-title">数据层</div>
+    <div class="row-3">
+      <div class="cell tone-main">
+        <div class="cell-head">
+          <span class="badge main">主仓</span>
+          <span class="cell-title">PostgreSQL 15</span>
+        </div>
+        <div class="cell-sub">业务库 / 审计 / PG Cache</div>
+      </div>
+      <div class="cell tone-main">
+        <div class="cell-head">
+          <span class="badge main">主仓</span>
+          <span class="cell-title">对象存储</span>
+        </div>
+        <div class="cell-sub">MinIO / 本地 / 附件图纸</div>
+      </div>
+      <div class="cell tone-private">
+        <div class="cell-head">
+          <span class="badge private">私仓</span>
+          <span class="cell-title">数采与集成（可选）</span>
+        </div>
+        <div class="cell-sub">时序 / 连接器凭据</div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

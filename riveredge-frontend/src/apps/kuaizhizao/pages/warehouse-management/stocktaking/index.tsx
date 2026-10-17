@@ -41,7 +41,6 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 import { formatDateTime, formatQuantity, formatCurrencyAmount } from '../../../../../utils/format';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
@@ -117,7 +116,6 @@ const StocktakingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const deepLinkOpenedRef = useRef(false);
-  const deepLinkFilterRef = useRef<{ id?: number; uuid?: string }>({});
   const { canCreate, canUpdate, canDelete, canAction } = useResourcePermissions(STOCKTAKING_RESOURCE);
   const canRevoke = canAction?.('revoke') ?? false;
   const canExecuteStocktaking = canAction?.('execute') ?? false;
@@ -237,13 +235,8 @@ const StocktakingPage: React.FC = () => {
   useEffect(() => {
     const idRaw = searchParams.get('id')?.trim();
     const uuidRaw = searchParams.get('uuid')?.trim();
-    deepLinkFilterRef.current = {
-      id: idRaw && Number(idRaw) > 0 ? Number(idRaw) : undefined,
-      uuid: uuidRaw || undefined,
-    };
     if (!idRaw && !uuidRaw) {
       deepLinkOpenedRef.current = false;
-      actionRef.current?.reload();
       return;
     }
     if (deepLinkOpenedRef.current) {
@@ -963,28 +956,20 @@ const StocktakingPage: React.FC = () => {
         onCreate={canCreate ? handleCreate : undefined}
         request={async (params, sort, _filter, searchFormValues) => {
           try {
-            const lifecycleStage = resolveListLifecycleStageFromSearch(searchFormValues, params);
             const listParams = resolveStocktakingListParams(searchFormValues, sort);
             const result = await stocktakingApi.list({
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
               ...listParams,
-              status: lifecycleStage ?? listParams.status,
             });
             const { data, total } = normalizeWarehouseListResponse(result);
-            const deepLink = deepLinkFilterRef.current;
-            let rows = data;
-            if (deepLink.id) {
-              rows = rows.filter((row) => row.id === deepLink.id);
-            } else if (deepLink.uuid) {
-              rows = rows.filter((row) => String(row.uuid) === deepLink.uuid);
-            }
             return {
-              data: rows,
+              data,
               success: true,
-              total: deepLink.id || deepLink.uuid ? rows.length : total,
+              total,
             };
-          } catch {
+          } catch (error: any) {
+            messageApi.error(error?.message || t('common.loadFailed'));
             return { data: [], success: false, total: 0 };
           }
         }}

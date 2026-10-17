@@ -268,7 +268,12 @@ export default function LoginPage() {
     redirect?: string | null;
     immediatePath?: string;
     tenantId?: number;
+    requiresPasswordChange?: boolean;
   }) => {
+    if (options?.requiresPasswordChange) {
+      navigate('/personal/profile?forcePasswordChange=1', { replace: true });
+      return;
+    }
     let targetPath: string;
     if (options?.immediatePath) {
       targetPath = options.immediatePath;
@@ -960,12 +965,16 @@ export default function LoginPage() {
               tenant_id: tenantId,
               tenant_name: tenantName,
               user_type: 'user',
+              requires_password_change: loginResponse.requires_password_change === true,
             };
       syncUserStateAfterLogin(userInfo);
       setRegisterDrawerVisible(false);
       setRegisterType('personal');
       message.success(t('pages.login.success'));
-      navigateToHomeAfterLogin({ tenantId });
+      navigateToHomeAfterLogin({
+        tenantId,
+        requiresPasswordChange: loginResponse.requires_password_change === true,
+      });
           }
         } catch (loginError: any) {
           message.warning(t('pages.login.registerSuccessManual'));
@@ -1048,12 +1057,16 @@ export default function LoginPage() {
               tenant_id: tenantId,
               tenant_name: tenantName,
               user_type: 'user',
+              requires_password_change: loginResponse.requires_password_change === true,
             };
       syncUserStateAfterLogin(userInfo);
       setRegisterDrawerVisible(false);
       setRegisterType('personal');
       message.success(t('pages.login.success'));
-      navigateToHomeAfterLogin({ tenantId });
+      navigateToHomeAfterLogin({
+        tenantId,
+        requiresPasswordChange: loginResponse.requires_password_change === true,
+      });
           } else {
             message.warning(t('pages.login.registerSuccessManual'));
             setRegisterDrawerVisible(false);
@@ -1196,13 +1209,18 @@ export default function LoginPage() {
         tenant_id: selectedTenantId,
         tenant_name: tenantName,
         user_type: 'user',
+        requires_password_change: response.requires_password_change === true,
       };
       syncUserStateAfterLogin(userInfo);
 
       const urlParams = new URL(window.location.href).searchParams;
       const redirect = urlParams.get('redirect');
       message.success(t('pages.login.success'));
-      navigateToHomeAfterLogin({ redirect, tenantId: selectedTenantId });
+      navigateToHomeAfterLogin({
+        redirect,
+        tenantId: selectedTenantId,
+        requiresPasswordChange: response.requires_password_change === true,
+      });
     } else {
       message.error(t('pages.login.loginFailed'));
     }
@@ -2176,6 +2194,7 @@ export default function LoginPage() {
           tenant_id: selectedTenantId,
           tenant_name: tenantName,
           user_type: 'user',
+          requires_password_change: response.requires_password_change === true,
         };
         syncUserStateAfterLogin(userInfo);
         setTenantSelectionVisible(false);
@@ -2185,7 +2204,11 @@ export default function LoginPage() {
         const urlParams = new URL(window.location.href).searchParams;
         const redirect = urlParams.get('redirect');
         message.success(t('pages.login.tenantSelected'));
-        navigateToHomeAfterLogin({ redirect, tenantId: selectedTenantId });
+        navigateToHomeAfterLogin({
+          redirect,
+          tenantId: selectedTenantId,
+          requiresPasswordChange: response.requires_password_change === true,
+        });
       } else {
         message.error(t('pages.login.tenantSelectFailed'));
       }

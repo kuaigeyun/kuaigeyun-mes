@@ -23,7 +23,8 @@ def apply_viewer_actions_to_audit_and_capabilities(
     """
     if not audit or not isinstance(audit, dict):
         return audit, capabilities
-    if audit.get("phase") != "pending" or not audit.get("enabled"):
+    # 与列表 enrich 一致：pending 相位即挂 viewer_actions（不依赖 binding enabled）
+    if audit.get("phase") != "pending":
         return audit, capabilities
     if not viewer_actions or not isinstance(viewer_actions, dict):
         return audit, capabilities

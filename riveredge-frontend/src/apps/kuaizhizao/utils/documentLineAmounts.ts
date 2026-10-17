@@ -156,6 +156,37 @@ export function applyDocumentLineInclAmountEdit(opts: {
 }
 
 /**
+ * 用户录入未税金额：未税为真源，反算单价并写回落库行金额（与价税合计录入对称）。
+ * 含税价类下单价 = 价税合计/数量；不含税价类下单价 = 未税金额/数量。
+ */
+export function applyDocumentLineExclAmountEdit(opts: {
+  qty: unknown;
+  taxRate: unknown;
+  priceType: string | undefined;
+  exclAmount: unknown;
+  priceDecimals?: number;
+}): {
+  unit_price: number;
+  item_amount: number;
+  excl: number;
+  tax: number;
+  incl: number;
+} {
+  const qty = toSafeNumber(opts.qty);
+  const pt = opts.priceType ?? 'tax_exclusive';
+  const amounts = calcDocumentLineAmountsFromExclTotal(opts.exclAmount, opts.taxRate);
+  const rawUnit =
+    qty > 0 ? (pt === 'tax_inclusive' ? amounts.incl / qty : amounts.excl / qty) : 0;
+  const unit_price =
+    opts.priceDecimals != null ? roundToPlaces(rawUnit, opts.priceDecimals) : rawUnit;
+  return {
+    unit_price,
+    item_amount: pt === 'tax_inclusive' ? amounts.incl : amounts.excl,
+    ...amounts,
+  };
+}
+
+/**
  * 单据价类切换（含税 ↔ 不含税）：以当前行金额为真源，再反算新单价。
  *
  * 禁止「先把单价按税率换算再 × 数量」——分币单价无法整除时会产生价差

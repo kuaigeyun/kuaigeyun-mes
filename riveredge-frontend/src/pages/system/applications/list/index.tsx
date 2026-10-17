@@ -230,6 +230,7 @@ const CARD_HEADER_TINT: Record<string, string> = {
   'master-data': '#a78bfa',
   kuaiai: '#fb7185',
   kuaiiot: '#2dd4bf',
+  kuaivision: '#818cf8',
   bi: '#4ade80',
   kuaicrm: '#fb923c',
   kuaiplm: '#a78bfa',
@@ -265,6 +266,7 @@ const getCardGradient = (code: string, isActive: boolean, token: GlobalToken, is
     'master-data': 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)', // 丁香紫
     kuaiai: 'linear-gradient(135deg, #fff1f2 0%, #fecdd3 100%)',      // 玫瑰粉
     kuaiiot: 'linear-gradient(135deg, #e6fffb 0%, #b5f5ec 100%)',     // 青绿色
+    kuaivision: 'linear-gradient(135deg, #eef2ff 0%, #c7d2fe 100%)',  // 视觉靛
     bi: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',          // 翡翠绿
     kuaicrm: 'linear-gradient(135deg, #fff7ed 0%, #fdba74 100%)',     // 橙色
     kuaiplm: 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)',     // 丁香紫

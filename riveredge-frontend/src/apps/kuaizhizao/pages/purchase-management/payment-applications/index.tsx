@@ -787,17 +787,29 @@ const PaymentApplicationsPage: React.FC = () => {
               <Descriptions column={1} size="small" style={{ marginTop: 16 }}>
                 <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.linkedPayments')}>
                   <Space wrap size={[8, 4]}>
-                    {detail.linkedPayments.map((p) => (
-                      <Button
-                        key={p.id}
-                        type="link"
-                        size="small"
-                        style={{ padding: 0, height: 'auto' }}
-                        onClick={() => linkedDetail?.openLinkedDocumentDetail('payment', p.id)}
-                      >
-                        {p.code || p.id}
-                      </Button>
-                    ))}
+                    {detail.linkedPayments.map((p) => {
+                      const canOpen = canOpenLinkedDocumentDetail('payment');
+                      return (
+                        <Button
+                          key={p.id}
+                          type="link"
+                          size="small"
+                          style={{ padding: 0, height: 'auto' }}
+                          onClick={() => {
+                            if (!canOpen || !linkedDetail) {
+                              messageApi.warning(t('app.kuaizhizao.paymentApplication.linkedPaymentOpenFailed'));
+                              return;
+                            }
+                            const ok = linkedDetail.openLinkedDocumentDetail('payment', p.id);
+                            if (!ok) {
+                              messageApi.warning(t('app.kuaizhizao.paymentApplication.linkedPaymentOpenFailed'));
+                            }
+                          }}
+                        >
+                          {p.code || p.id}
+                        </Button>
+                      );
+                    })}
                   </Space>
                 </Descriptions.Item>
               </Descriptions>

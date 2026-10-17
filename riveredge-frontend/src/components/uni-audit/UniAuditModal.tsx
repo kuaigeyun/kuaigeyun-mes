@@ -129,7 +129,15 @@ interface UniAuditModalProps {
 
   onConfirm?: (reason?: string) => Promise<void>;
 
-  onAction?: (action: UniAuditAction, reason?: string, payload?: Record<string, unknown>) => Promise<void>;
+  /**
+   * 执行审核动作。返回 true 表示流程仍 pending、弹窗应保持打开并刷新状态
+   * （多级审核同一人连续审下一级）。
+   */
+  onAction?: (
+    action: UniAuditAction,
+    reason?: string,
+    payload?: Record<string, unknown>,
+  ) => Promise<boolean | void>;
 
 }
 
@@ -223,6 +231,8 @@ const EXECUTION_ACTION_LABEL: Record<string, string> = {
   transferred: '转交',
   withdraw: '撤回提交',
   withdrawn: '撤回提交',
+  revoke: '撤销审核',
+  revoked: '撤销审核',
   submit: '提交',
   submitted: '提交',
   pending: '待处理',
@@ -726,7 +736,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
   const [advancedAction, setAdvancedAction] = useState<AdvancedActionState | null>(null);
   /** null=未选择；双分支条件必须显式选是/否，禁止默认跳边 */
-  const [branchDecision, setBranchDecision] = useState<boolean | null>(null);
+  const [branchDecision, setBranchDecision] = useState<number | null>(null);
 
   const sessionUser = resolveUserForMenuPermission(getSessionCurrentUser());
   const adminOpen = isAdminBypass(sessionUser);
@@ -740,6 +750,21 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     const viewerActions = flowStatus?.viewer_actions;
     const hasMyPendingTask =
       viewerActions?.has_my_pending_task ?? flowStatus?.has_my_pending_task ?? false;
+
+    // live 未返回前：审核/驳回不可点，避免列表态 canExecute 或空 viewer_actions 误放行导致第一次点击空跑
+    if (flowLoading) {
+      items = items.map((item) => {
+        if (item.action !== 'approve' && item.action !== 'reject') {
+          return item;
+        }
+        return {
+          ...item,
+          canExecute: false,
+          disabledReason: t('components.uniAudit.flowStatusLoading'),
+        };
+      });
+      return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
+    }
 
     if (flowPending) {
       const caps = flowStatus.node_capabilities ?? {};
@@ -835,7 +860,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
       }
     }
     return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
-  }, [hubActions, flowStatus, currentUserId, adminOpen, rbacAllowedProp, t]);
+  }, [hubActions, flowStatus, flowLoading, currentUserId, adminOpen, rbacAllowedProp, t]);
 
 
 
@@ -901,8 +926,10 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     // 须显式选择时保持未选；仅当配置了明确默认值时预填
     if (nodeDecision.requireExplicit !== false && nodeDecision.defaultValue == null) {
       setBranchDecision(null);
+    } else if (typeof nodeDecision.defaultValue === 'number') {
+      setBranchDecision(nodeDecision.defaultValue);
     } else {
-      setBranchDecision(Boolean(nodeDecision.defaultValue));
+      setBranchDecision(nodeDecision.defaultValue ? 0 : 1);
     }
   }, [nodeDecision?.field, nodeDecision?.defaultValue, nodeDecision?.requireExplicit, open]);
 
@@ -937,7 +964,12 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
   const handleHubAction = async (item: UniAuditHubAction) => {
 
-    if (!onAction || !item.canExecute) return;
+    if (!onAction) return;
+
+    if (!item.canExecute) {
+      message.warning(item.disabledReason || t('components.uniAudit.noPermission'));
+      return;
+    }
 
     if (item.action === 'transfer' || item.action === 'add_sign' || item.action === 'delegate') {
       setAdvancedAction({ action: item.action, open: true });
@@ -956,11 +988,23 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     try {
       const payload =
         item.action === 'approve' ? buildApprovePayload() : undefined;
-      await onAction(
+      const keepOpen = await onAction(
         item.action,
         item.action === 'reject' || item.action === 'urge' ? reason.trim() || undefined : undefined,
         payload,
       );
+      if (keepOpen && entityType && entityId) {
+        setBranchDecision(null);
+        setFlowLoading(true);
+        try {
+          const res = await getApprovalStatus(entityType, entityId);
+          setFlowStatus(res);
+        } catch {
+          setFlowStatus(null);
+        } finally {
+          setFlowLoading(false);
+        }
+      }
 
     } finally {
 
@@ -1090,7 +1134,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
           ) : null}
 
-          {nodeDecision && effectiveHubActions.some((a) => a.action === 'approve' && a.canExecute) ? (
+          {nodeDecision && effectiveHubActions.some((a) => a.action === 'approve') ? (
             <div
               style={{
                 marginBottom: 12,
@@ -1107,22 +1151,21 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
                 {t('components.uniAudit.branchDecisionHint')}
               </Text>
               <Radio.Group
-                value={
-                  branchDecision === null ? undefined : branchDecision ? 'true' : 'false'
-                }
-                onChange={(e) => setBranchDecision(e.target.value === 'true')}
+                value={branchDecision === null ? undefined : branchDecision}
+                onChange={(e) => setBranchDecision(Number(e.target.value))}
                 buttonStyle="solid"
               >
-                <Radio.Button value="true">
-                  {t('components.uniAudit.branchDecisionYes', {
-                    name: nodeDecision.trueBranchLabel || t('common.yes'),
-                  })}
-                </Radio.Button>
-                <Radio.Button value="false">
-                  {t('components.uniAudit.branchDecisionNo', {
-                    name: nodeDecision.falseBranchLabel || t('common.no'),
-                  })}
-                </Radio.Button>
+                {(nodeDecision.branches?.length
+                  ? nodeDecision.branches
+                  : [
+                      { index: 0, label: nodeDecision.trueBranchLabel || t('common.yes') },
+                      { index: 1, label: nodeDecision.falseBranchLabel || t('common.no') },
+                    ]
+                ).map((b) => (
+                  <Radio.Button key={b.index} value={b.index}>
+                    {b.label}
+                  </Radio.Button>
+                ))}
               </Radio.Group>
             </div>
           ) : null}
@@ -1133,7 +1176,17 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
               <Space wrap>
 
-              {effectiveHubActions.map((item) => (
+              {effectiveHubActions.map((item) => {
+                const approveNeedsBranch =
+                  item.action === 'approve'
+                  && Boolean(nodeDecision?.field)
+                  && branchDecision === null;
+                const actionDisabled = !item.canExecute || approveNeedsBranch;
+                const actionLoading =
+                  busyAction === item.action
+                  || (flowLoading && (item.action === 'approve' || item.action === 'reject'));
+
+                return (
 
                 <Button
 
@@ -1143,11 +1196,15 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
                   danger={item.danger}
 
-                  disabled={!item.canExecute}
+                  disabled={actionDisabled}
 
-                  loading={busyAction === item.action}
+                  loading={actionLoading}
 
-                  title={item.canExecute ? undefined : (item.disabledReason || t('components.uniAudit.noPermission'))}
+                  title={
+                    approveNeedsBranch
+                      ? t('components.uniAudit.branchDecisionRequired', { label: nodeDecision?.label })
+                      : (item.canExecute ? undefined : (item.disabledReason || t('components.uniAudit.noPermission')))
+                  }
 
                   icon={
 
@@ -1169,7 +1226,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
                 </Button>
 
-              ))}
+                );
+              })}
 
               </Space>
 

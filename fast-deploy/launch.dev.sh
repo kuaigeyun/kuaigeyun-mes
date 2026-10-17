@@ -153,20 +153,29 @@ powershell_stop_port_listeners() {
 
 get_listening_pids_raw() {
     local port=$1
+    local pids=""
     if command -v powershell.exe >/dev/null 2>&1; then
-        powershell.exe -NoProfile -Command "
+        pids="$(
+            powershell.exe -NoProfile -Command "
             Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue |
               Select-Object -ExpandProperty OwningProcess -Unique |
               Where-Object { \$_ -gt 0 }
         " 2>/dev/null | tr -d '\r' | sort -u | grep -E '^[0-9]+$' || true
-    else
-        netstat -ano 2>/dev/null \
-            | grep LISTENING \
-            | grep -E "[:.]${port}[[:space:]]" \
-            | awk '{print $NF}' \
-            | sort -u \
-            | grep -E '^[0-9]+$' || true
+        )"
     fi
+    # 部分 Win11 构建上 Listen 的 OwningProcess 为 0，Get-NetTCPConnection 筛掉后为空；用 netstat 补 PID
+    if [ -z "$pids" ]; then
+        pids="$(
+            netstat -ano 2>/dev/null \
+                | grep LISTENING \
+                | grep -E "[:.]${port}[[:space:]]" \
+                | awk '{print $NF}' \
+                | sort -u \
+                | grep -E '^[0-9]+$' \
+                | grep -v '^0$' || true
+        )"
+    fi
+    echo "$pids"
 }
 
 # 状态展示用：仅返回仍存活的 PID
@@ -285,16 +294,22 @@ kill_uvicorn_reload_tree() {
                 \$shouldKill = \$true
             }
 
-            # python / uv 本体上的 uvicorn（排除 bash/powershell/wmic 包装命令）
+            # python / uv：CLI uvicorn 或 scripts/run_dev_server.py（开发入口，命令行无 --port）
             if (-not \$shouldKill -and \$name -match '^(python|uv|uvicorn)(\.exe)?$') {
                 if ((\$cmd -match 'server\.main:app') -and (\$cmd -match ('--port[\s=]' + \$port))) {
+                    \$shouldKill = \$true
+                }
+                if (-not \$shouldKill -and \$cmd -match 'run_dev_server\.py') {
                     \$shouldKill = \$true
                 }
             }
 
             # 直接启动后端的 bash（含 Cursor 后台终端；排除 Agent 工具包装）
             if (-not \$shouldKill -and \$name -match 'bash') {
-                if ((\$cmd -match 'riveredge-backend') -and (\$cmd -match 'uv run.*uvicorn.*server\.main:app') -and (\$cmd -match ('--port[\s=]' + \$port)) -and (\$cmd -notmatch 'CURSOR_STATE_INPUT_FILE')) {
+                if ((\$cmd -match 'riveredge-backend') -and (\$cmd -match 'run_dev_server\.py') -and (\$cmd -notmatch 'CURSOR_STATE_INPUT_FILE')) {
+                    \$shouldKill = \$true
+                }
+                if (-not \$shouldKill -and ( \$cmd -match 'riveredge-backend') -and (\$cmd -match 'uv run.*uvicorn.*server\.main:app') -and (\$cmd -match ('--port[\s=]' + \$port)) -and (\$cmd -notmatch 'CURSOR_STATE_INPUT_FILE')) {
                     \$shouldKill = \$true
                 }
             }

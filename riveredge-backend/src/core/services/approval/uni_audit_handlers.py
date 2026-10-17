@@ -1562,6 +1562,16 @@ _dispatch_kuaioa_seal = _make_kuaioa_dispatch(
     decision_import="apps.kuaioa.services.seal_service",
     decision_fn="apply_seal_request_decision",
 )
+_dispatch_kuaioa_expense = _make_kuaioa_dispatch(
+    entity_key="kuaioa_expense",
+    service_import="apps.kuaioa.services.expense_service",
+    service_cls="ExpenseRequestService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.expense_service",
+    decision_fn="apply_expense_request_decision",
+)
 _dispatch_kuaioa_special_price = _make_kuaioa_dispatch(
     entity_key="kuaioa_special_price",
     service_import="apps.kuaioa.services.collaboration_service",
@@ -1680,6 +1690,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "kuaioa_asset_purchase": _dispatch_kuaioa_asset_purchase,
     "kuaioa_leave": _dispatch_kuaioa_leave,
     "kuaioa_seal": _dispatch_kuaioa_seal,
+    "kuaioa_expense": _dispatch_kuaioa_expense,
     "kuaioa_special_price": _dispatch_kuaioa_special_price,
     "kuaioa_concession": _dispatch_kuaioa_concession,
     "kuaioa_process_deviation": _dispatch_kuaioa_process_deviation,

@@ -2,11 +2,73 @@
 
 export type ApprovalNodeType = 'start' | 'approval' | 'cc' | 'condition' | 'end';
 
+export type ConditionRouteMode = 'previous_approver' | 'initiator' | 'formula';
+
 export interface ConditionItem {
   field?: string;
   operator?: string;
   value?: unknown;
   label?: string;
+  /** 公式模式：其余分支 */
+  else?: boolean;
+}
+
+const CONDITION_ROUTE_MODES = new Set<ConditionRouteMode>([
+  'previous_approver',
+  'initiator',
+  'formula',
+]);
+
+function conditionValueFilled(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === 'string' && !value.trim()) return false;
+  return true;
+}
+
+function inferConditionRouteMode(conditions: ConditionItem[], outEdgeCount: number): ConditionRouteMode | undefined {
+  if (outEdgeCount <= 1) return 'formula';
+  if (conditions.some((c) => c.else)) return 'formula';
+  if (conditions.some((c) => String(c.field || '').trim() && conditionValueFilled(c.value))) {
+    return 'formula';
+  }
+  if (conditions.length && conditions.every((c) => !conditionValueFilled(c.value))) {
+    return 'previous_approver';
+  }
+  return undefined;
+}
+
+export function normalizeConditionNodeData(
+  data: ApprovalNodeData = {},
+  outEdgeCount = 0,
+): ApprovalNodeData {
+  const out: ApprovalNodeData = { ...data };
+  const conditions = asList(out.conditions || (out.condition_list as ConditionItem[]));
+  const normalized: ConditionItem[] = conditions.map((c) => ({
+    field: c.field,
+    operator: c.operator || '==',
+    value: c.value,
+    label: c.label || '',
+    else: Boolean(c.else),
+  }));
+  out.conditions = normalized;
+  delete out.condition_list;
+
+  const rawMode = String(out.routeMode || out.route_mode || '').trim() as ConditionRouteMode;
+  if (CONDITION_ROUTE_MODES.has(rawMode)) {
+    out.routeMode = rawMode;
+  } else {
+    const inferred = inferConditionRouteMode(normalized, outEdgeCount);
+    if (inferred) out.routeMode = inferred;
+    else delete out.routeMode;
+  }
+
+  const mode = out.routeMode;
+  if (mode === 'previous_approver' || mode === 'initiator') {
+    out.conditions = normalized.map((item, i) => ({
+      label: String(item.label || '').trim() || `分支${i + 1}`,
+    }));
+  }
+  return out;
 }
 
 export interface ApprovalNodeData {
@@ -31,6 +93,8 @@ export interface ApprovalNodeData {
   decisionOnApproveDefault?: boolean;
   editableFields?: string[] | '*';
   conditions?: ConditionItem[];
+  routeMode?: ConditionRouteMode;
+  route_mode?: ConditionRouteMode;
   [key: string]: unknown;
 }
 
@@ -98,16 +162,6 @@ export function normalizeNodeData(nodeType: string, data: ApprovalNodeData = {})
       if (!out.emptyApproverPolicy) out.emptyApproverPolicy = 'block';
     }
   }
-  if (nodeType === 'condition') {
-    const conditions = asList(out.conditions || (out.condition_list as ConditionItem[]));
-    out.conditions = conditions.map((c) => ({
-      field: c.field,
-      operator: c.operator || '==',
-      value: c.value,
-      label: c.label || '',
-    }));
-    delete out.condition_list;
-  }
   return out;
 }
 
@@ -132,9 +186,19 @@ export function normalizeFlowGraph(raw: { nodes?: unknown[]; edges?: unknown[] }
       id: String(edge.id || `e-${edge.source}-${edge.target}-${i}`),
       source: String(edge.source),
       target: String(edge.target),
-      type: String(edge.type || 'default'),
+      type: String(edge.type || 'step'),
       data: (edge.data as Record<string, unknown>) || {},
     }));
+
+  const outEdgeCountBySource = new Map<string, number>();
+  edges.forEach((e) => {
+    outEdgeCountBySource.set(e.source, (outEdgeCountBySource.get(e.source) || 0) + 1);
+  });
+  nodes.forEach((node) => {
+    if (node.type !== 'condition') return;
+    node.data = normalizeConditionNodeData(node.data, outEdgeCountBySource.get(node.id) || 0);
+  });
+
   return { nodes, edges };
 }
 
@@ -157,8 +221,34 @@ export function validateFlowGraph(graph: FlowGraph): string[] {
     if (node.type === 'condition') {
       const outEdges = graph.edges.filter((e) => e.source === node.id);
       const conds = node.data.conditions || [];
+      const mode = node.data.routeMode;
+      if (outEdges.length > 1 && !mode) {
+        errors.push(`条件节点「${node.data.label || node.id}」须选择分支触发方式`);
+      }
       if (outEdges.length > 1 && conds.length !== outEdges.length) {
-        errors.push(`条件节点「${node.data.label || node.id}」出边数与条件数不一致`);
+        errors.push(`条件节点「${node.data.label || node.id}」出边数与分支数不一致`);
+      }
+      if (mode === 'formula') {
+        const elseCount = conds.filter((c) => c.else).length;
+        if (elseCount > 1) {
+          errors.push(`条件节点「${node.data.label || node.id}」仅允许一条其余分支`);
+        }
+        conds.forEach((c, i) => {
+          if (c.else) return;
+          if (!String(c.field || '').trim()) {
+            errors.push(`条件节点「${node.data.label || node.id}」分支 ${i + 1} 须选择字段`);
+          }
+          if (!conditionValueFilled(c.value)) {
+            errors.push(`条件节点「${node.data.label || node.id}」分支 ${i + 1} 须填写比较数值`);
+          }
+        });
+      }
+      if (mode === 'previous_approver' || mode === 'initiator') {
+        conds.forEach((c, i) => {
+          if (!String(c.label || '').trim()) {
+            errors.push(`条件节点「${node.data.label || node.id}」分支 ${i + 1} 须填写名称`);
+          }
+        });
       }
     }
   });

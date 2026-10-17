@@ -44,6 +44,121 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'business-board-visit-mode-r01',
+    date: '2026-10-17',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.business-board-visit-mode-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.business-board-visit-mode-r01.description',
+  },
+  {
+    id: 'audit-modal-flow-preview-fit-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-modal-flow-preview-fit-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.audit-modal-flow-preview-fit-r01.description',
+  },
+  {
+    id: 'approval-flow-edge-layout-r01',
+    date: '2026-10-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-flow-edge-layout-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.approval-flow-edge-layout-r01.description',
+  },
+  {
+    id: 'approval-condition-route-mode-r01',
+    date: '2026-10-17',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-condition-route-mode-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-condition-route-mode-r01.description',
+  },
+  {
+    id: 'other-expense-submit-status-match-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.other-expense-submit-status-match-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-expense-submit-status-match-r01.description',
+  },
+  {
+    id: 'purchase-invoice-pull-detail-lines-r01',
+    date: '2026-10-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-detail-lines-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-detail-lines-r01.description',
+  },
+  {
+    id: 'payment-app-linked-payment-open-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-app-linked-payment-open-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-app-linked-payment-open-r01.description',
+  },
+  {
+    id: 'payment-app-pull-po-select-status-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-app-pull-po-select-status-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-app-pull-po-select-status-r01.description',
+  },
+  {
+    id: 'purchase-order-buyer-amount-edit-r01',
+    date: '2026-10-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-buyer-amount-edit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-buyer-amount-edit-r01.description',
+  },
+  {
+    id: 'audit-revoke-reopen-final-node-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-revoke-reopen-final-node-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-revoke-reopen-final-node-r01.description',
+  },
+  {
+    id: 'audit-branch-reselect-after-withdraw-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-branch-reselect-after-withdraw-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-branch-reselect-after-withdraw-r01.description',
+  },
+  {
+    id: 'sales-order-list-viewer-actions-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-list-viewer-actions-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-list-viewer-actions-r01.description',
+  },
+  {
+    id: 'audit-viewer-acted-hint-r01',
+    date: '2026-10-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-viewer-acted-hint-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.audit-viewer-acted-hint-r01.description',
+  },
+  {
+    id: 'audit-multilevel-second-click-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-multilevel-second-click-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.audit-multilevel-second-click-r01.description',
+  },
+  {
+    id: 'split-sidebar-qms-ems-groups-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.split-sidebar-qms-ems-groups-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.split-sidebar-qms-ems-groups-r01.description',
+  },
+  {
     id: 'app-center-self-service-lifecycle-r01',
     date: '2026-10-17',
     type: 'fix',

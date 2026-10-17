@@ -829,6 +829,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [collapsed, setCollapsed] = useState<boolean>(false);
 
   useEffect(() => {
+    void import('../utils/sessionCurrentUser').then(({ getSessionCurrentUser }) => {
+      const user = getSessionCurrentUser();
+      if (!user?.requires_password_change) return;
+      if (location.pathname.startsWith('/personal/profile')) return;
+      navigate('/personal/profile?forcePasswordChange=1', { replace: true });
+    });
+  }, [location.pathname, navigate]);
+
+  useEffect(() => {
     if (sidebarCollapsedPref !== undefined) {
       setCollapsed(Boolean(sidebarCollapsedPref));
     }

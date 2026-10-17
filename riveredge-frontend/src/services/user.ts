@@ -222,8 +222,16 @@ export async function deleteUser(userUuid: string): Promise<void> {
  * @param newPassword - 新密码（可选，不提供则使用默认密码）
  * @returns 更新后的用户信息
  */
-export async function resetUserPassword(userUuid: string, newPassword?: string): Promise<User> {
-  return apiRequest<User>(`/core/users/${userUuid}/reset-password`, {
+export interface UserResetPasswordResult {
+  user: User;
+  temporary_password?: string | null;
+}
+
+export async function resetUserPassword(
+  userUuid: string,
+  newPassword?: string,
+): Promise<UserResetPasswordResult> {
+  return apiRequest<UserResetPasswordResult>(`/core/users/${userUuid}/reset-password`, {
     method: 'POST',
     data: newPassword ? { password: newPassword } : {},
   });

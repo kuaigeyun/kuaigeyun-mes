@@ -9,9 +9,11 @@ import {
   UniPullQueryModal,
   filterByPullScope,
   paginatePullRows,
+  renderPullQueryDocStatus,
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
+import { purchaseOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { formatCurrencyAmount } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
@@ -38,6 +40,7 @@ type PullRow = {
   amount?: number;
   status?: string;
   pullable?: boolean;
+  disableReason?: string;
 };
 
 type ExpenseWithFinance = OtherExpenseVoucher & {
@@ -101,14 +104,31 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
         dataIndex: 'amount',
         width: 120,
         align: 'right',
-        render: (v?: number) => (v != null ? formatCurrencyAmount(v) : '—'),
+        render: (v?: number) => (v != null && v > 0 ? formatCurrencyAmount(v) : '—'),
       },
-      { title: t('common.status'), dataIndex: 'status', width: 100 },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        width: 100,
+        render: (v) => renderPullQueryDocStatus(t, v),
+      },
     ],
     [t],
   );
 
   const isPullable = useCallback((row: PullRow) => row.pullable === true, []);
+
+  const warnDisabledRow = useCallback(
+    (row: PullRow) => {
+      const reason = String(row.disableReason || '').trim();
+      if (reason) {
+        messageApi.warning(reason);
+        return;
+      }
+      messageApi.warning(t('app.kuaizhizao.paymentApplication.pullSourceNotSelectable'));
+    },
+    [messageApi, t],
+  );
 
   const pullFromPoQuery = useUniPullQuery<PullRow>({
     rowKey: 'id',
@@ -124,14 +144,23 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
           keyword: keyword.trim() || undefined,
         });
         const items = res.data ?? [];
-        const rows: PullRow[] = items.map((o) => ({
-          id: Number(o.id),
-          code: String(o.order_code ?? o.id),
-          partnerName: String(o.supplier_name ?? ''),
-          amount: Number(o.prepayment_amount ?? o.total_amount ?? 0),
-          status: String(o.status ?? o.review_status ?? ''),
-          pullable: o.capabilities?.push_payment_application?.allowed === true,
-        }));
+        const rows: PullRow[] = items.map((o) => {
+          const cap = o.capabilities?.push_payment_application;
+          const prepay = Number(o.prepayment_amount ?? 0);
+          const reasonCode = cap?.reason ? String(cap.reason) : '';
+          return {
+            id: Number(o.id),
+            code: String(o.order_code ?? o.id),
+            partnerName: String(o.supplier_name ?? ''),
+            // 仅展示预付额度，禁止用订单总额冒充可请款（否则「全部单据」上看似有金额却选不了）
+            amount: prepay > 0 ? prepay : undefined,
+            status: String(o.status ?? o.review_status ?? ''),
+            pullable: cap?.allowed === true,
+            disableReason: reasonCode
+              ? purchaseOrderCapabilityReasonMessage(reasonCode, t)
+              : t('app.kuaizhizao.paymentApplication.pullFromPoNeedPrepay'),
+          };
+        });
         return paginatePullRows(filterByPullScope(rows, scope, isPullable), page, pageSize);
       } catch (e) {
         messageApi.error(getApiErrorMessage(e, t('common.loadFailed')));
@@ -147,8 +176,11 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
       try {
         const preview = await previewPullPaymentApplicationFromPurchaseOrder(selected.id);
         if (preview.has_blocking_issues) {
+          const code = String(preview.blocking_reason || '').trim();
+          const fromCap = code ? purchaseOrderCapabilityReasonMessage(code, t) : '';
           messageApi.warning(
-            String(preview.blocking_reason || preview.summary || t('common.operationFailed')),
+            (fromCap && fromCap !== code ? fromCap : '')
+              || String(preview.summary || t('common.operationFailed')),
           );
           return;
         }
@@ -196,17 +228,28 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
             ?? (res as { items?: unknown[] }).items
             ?? []);
         const rows: PullRow[] = (items as Array<Record<string, unknown>>).map((o) => {
-          const caps = (o.capabilities || {}) as Record<string, { allowed?: boolean }>;
+          const caps = (o.capabilities || {}) as Record<string, { allowed?: boolean; reason?: string }>;
           const status = String(o.status ?? '');
+          const pushCap = caps.push_payment_application;
+          const posted = isPurchaseReceiptPosted(status);
+          const pullable = posted && pushCap?.allowed === true;
+          let disableReason = t('app.kuaizhizao.paymentApplication.pullSourceNotSelectable');
+          if (!posted) {
+            disableReason = purchaseOrderCapabilityReasonMessage(
+              'purchase_receipt.push_payment_application.not_posted',
+              t,
+            );
+          } else if (pushCap?.reason) {
+            disableReason = purchaseOrderCapabilityReasonMessage(String(pushCap.reason), t);
+          }
           return {
             id: Number(o.id),
             code: String(o.receipt_code ?? o.receiptCode ?? o.id),
             partnerName: String(o.supplier_name ?? o.supplierName ?? ''),
-            amount: Number(o.total_amount ?? o.totalAmount ?? 0),
+            amount: Number(o.total_amount ?? o.totalAmount ?? 0) || undefined,
             status,
-            pullable:
-              isPurchaseReceiptPosted(status)
-              && caps.push_payment_application?.allowed === true,
+            pullable,
+            disableReason,
           };
         });
         return paginatePullRows(filterByPullScope(rows, scope, isPullable), page, pageSize);
@@ -259,9 +302,10 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
             id: s.id,
             code: s.statement_code,
             partnerName: s.partner_name,
-            amount: Number(s.closing_balance ?? s.debit_total ?? 0),
+            amount: Number(s.closing_balance ?? s.debit_total ?? 0) || undefined,
             status: s.status,
             pullable: ok,
+            disableReason: t('app.kuaizhizao.paymentApplication.pullStatementNotConfirmed'),
           };
         });
         return paginatePullRows(filterByPullScope(rows, scope, isPullable), page, pageSize);
@@ -342,9 +386,10 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
             id: e.id,
             code: e.expense_code,
             partnerName: e.counterparty_name,
-            amount: Number(e.total_amount || 0),
+            amount: Number(e.total_amount || 0) || undefined,
             status: e.status,
             pullable: Number(e.payable_id || 0) > 0,
+            disableReason: t('app.kuaizhizao.paymentApplication.otherExpenseNoPayable'),
           }));
         return paginatePullRows(filterByPullScope(rows, scope, isPullable), page, pageSize);
       } catch (e) {
@@ -460,6 +505,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
         selectedRows={pullFromPoQuery.selectedRows}
         onSelectedRowKeysChange={pullFromPoQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromPoQuery.isRowDisabled}
+        onDisabledRowClick={warnDisabledRow}
         searchDraft={pullFromPoQuery.searchDraft}
         onSearchDraftChange={pullFromPoQuery.setSearchDraft}
         onSearchApply={pullFromPoQuery.handleSearchApply}
@@ -472,6 +518,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
         scopeOptions={pullFromPoQuery.scopeOptions}
         scope={pullFromPoQuery.scope}
         onScopeChange={pullFromPoQuery.handleScopeChange}
+        footerHint={t('app.kuaizhizao.paymentApplication.pullFromPoHint')}
       />
       <UniPullQueryModal<PullRow>
         open={pullFromReceiptQuery.open}
@@ -488,6 +535,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
         selectedRows={pullFromReceiptQuery.selectedRows}
         onSelectedRowKeysChange={pullFromReceiptQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromReceiptQuery.isRowDisabled}
+        onDisabledRowClick={warnDisabledRow}
         searchDraft={pullFromReceiptQuery.searchDraft}
         onSearchDraftChange={pullFromReceiptQuery.setSearchDraft}
         onSearchApply={pullFromReceiptQuery.handleSearchApply}
@@ -516,6 +564,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
         selectedRows={pullFromStatementQuery.selectedRows}
         onSelectedRowKeysChange={pullFromStatementQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromStatementQuery.isRowDisabled}
+        onDisabledRowClick={warnDisabledRow}
         searchDraft={pullFromStatementQuery.searchDraft}
         onSearchDraftChange={pullFromStatementQuery.setSearchDraft}
         onSearchApply={pullFromStatementQuery.handleSearchApply}
@@ -544,6 +593,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
         selectedRows={pullFromExpenseQuery.selectedRows}
         onSelectedRowKeysChange={pullFromExpenseQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromExpenseQuery.isRowDisabled}
+        onDisabledRowClick={warnDisabledRow}
         searchDraft={pullFromExpenseQuery.searchDraft}
         onSearchDraftChange={pullFromExpenseQuery.setSearchDraft}
         onSearchApply={pullFromExpenseQuery.handleSearchApply}

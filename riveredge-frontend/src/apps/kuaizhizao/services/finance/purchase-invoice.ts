@@ -8,6 +8,18 @@ import {
 
 const PURCHASE_INVOICE_API = '/apps/kuaicaiwu/purchase-invoices';
 
+/** 收票预览：源单物料明细（对照开票内容，只读） */
+export type PurchaseInvoicePullDetailLine = {
+  line_no: number;
+  material_code: string;
+  material_name: string;
+  material_spec?: string | null;
+  unit: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+};
+
 export type PurchaseInvoicePullPreview = DocumentPushPreview & {
   source_type?: 'purchase_order' | 'purchase_receipt' | 'payable';
   supplier_id?: number;
@@ -18,6 +30,8 @@ export type PurchaseInvoicePullPreview = DocumentPushPreview & {
   payable_code?: string;
   /** 同时付款上限（应付剩余可付） */
   remaining_settle_amount?: number;
+  /** 源单物料明细，便于确认本次开票对应内容 */
+  detail_lines?: PurchaseInvoicePullDetailLine[];
 };
 
 export type PurchaseInvoicePullCandidate = {

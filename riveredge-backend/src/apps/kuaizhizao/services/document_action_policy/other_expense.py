@@ -6,7 +6,10 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
-from apps.kuaizhizao.services.document_action_policy.types import ActionCapability
+from apps.kuaizhizao.services.document_action_policy.types import (
+    CAPABILITY_REASON_MESSAGES,
+    ActionCapability,
+)
 
 
 def _cap(allowed: bool, reason: Optional[str] = None) -> ActionCapability:
@@ -17,6 +20,50 @@ def _status(row: Any) -> str:
     return str(getattr(row, "status", "") or "").strip()
 
 
+def _status_key(status: Any) -> str:
+    """与前端 matchesAnyStatus 对齐：忽略大小写与下划线，并兼容中文态。"""
+    raw = str(status or "").strip()
+    if not raw:
+        return ""
+    if raw in {"草稿"}:
+        return "draft"
+    if raw in {"待审核"}:
+        return "pendingreview"
+    if raw in {"已驳回", "审核驳回", "驳回"}:
+        return "rejected"
+    if raw in {"已审核", "已通过", "审核通过"}:
+        return "approved"
+    if raw in {"已确认"}:
+        return "confirmed"
+    if raw in {"已取消", "已作废"}:
+        return "cancelled"
+    return raw.casefold().replace("_", "")
+
+
+def is_other_expense_draft_status(st: str) -> bool:
+    return _status_key(st) == "draft"
+
+
+def is_other_expense_pending_status(st: str) -> bool:
+    return _status_key(st) == "pendingreview"
+
+
+def is_other_expense_approved_status(st: str) -> bool:
+    return _status_key(st) == "approved"
+
+
+def is_other_expense_confirmed_status(st: str) -> bool:
+    return _status_key(st) == "confirmed"
+
+
+def is_other_expense_rejected_status(st: str) -> bool:
+    return _status_key(st) == "rejected"
+
+
+def is_other_expense_cancelled_status(st: str) -> bool:
+    return _status_key(st) == "cancelled"
+
+
 def derive_other_expense_capabilities(
     row: Any,
     *,
@@ -24,12 +71,12 @@ def derive_other_expense_capabilities(
     has_payment: bool = False,
 ) -> dict[str, ActionCapability]:
     st = _status(row)
-    draft = st == "Draft"
-    pending = st == "PendingReview"
-    approved = st == "Approved"
-    confirmed = st == "Confirmed"
-    rejected = st == "Rejected"
-    cancelled = st == "Cancelled"
+    draft = is_other_expense_draft_status(st)
+    pending = is_other_expense_pending_status(st)
+    approved = is_other_expense_approved_status(st)
+    confirmed = is_other_expense_confirmed_status(st)
+    rejected = is_other_expense_rejected_status(st)
+    cancelled = is_other_expense_cancelled_status(st)
     kind = str(getattr(row, "counterparty_kind", "") or "").strip().lower()
     needs_supplier = kind == "supplier"
     bank_ok = bool(getattr(row, "bank_account_id", None))
@@ -85,4 +132,6 @@ def assert_other_expense_capability(row: Any, action: str) -> None:
     cap = caps.get(action)
     if not cap or not cap.allowed:
         reason = cap.reason if cap else "other_expense.action.not_allowed"
-        raise BusinessLogicError(reason)
+        raise BusinessLogicError(
+            CAPABILITY_REASON_MESSAGES.get(reason, reason)
+        )

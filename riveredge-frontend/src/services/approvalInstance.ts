@@ -113,6 +113,8 @@ export interface ApprovalFlowViewerActions {
   has_my_pending_task: boolean;
   approve: boolean;
   reject: boolean;
+  /** 当前人已通过本单某一级，流程仍在后续节点 */
+  my_acted?: boolean;
   block_reason?: string | null;
 }
 
@@ -135,14 +137,16 @@ export interface ApprovalStatusResponse {
     allow_add_sign?: boolean;
     allow_edit_during_approval?: boolean;
   };
-  /** 当前审批下一节点为双分支条件（或显式 decisionOnApprove）时，审核前须显式选边 */
+  /** 下一节点为 previous_approver 条件时，审核前须按下标选边 */
   current_node_decision?: {
     field: string;
     label: string;
+    kind?: 'branch_index' | 'boolean';
+    branches?: Array<{ index: number; label: string }>;
     trueBranchLabel?: string;
     falseBranchLabel?: string;
     requireExplicit?: boolean;
-    defaultValue?: boolean | null;
+    defaultValue?: boolean | number | null;
   } | null;
   tasks?: Array<{
     uuid: string;

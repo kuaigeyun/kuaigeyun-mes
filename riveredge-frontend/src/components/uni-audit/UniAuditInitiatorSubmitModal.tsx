@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Form, Modal, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
-import type { SubmitInitiatorNodeHint } from '../../services/uniAudit';
+import type { SubmitInitiatorBranchHint, SubmitInitiatorNodeHint } from '../../services/uniAudit';
 import { searchUserDisplay } from '../../services/user';
 import { formatUserDisplayLabel } from '../../utils/userDisplay';
 
@@ -10,9 +10,13 @@ export interface UniAuditInitiatorSubmitModalProps {
   entityName: string;
   submitTitle: string;
   nodes: SubmitInitiatorNodeHint[];
+  branchConditions?: SubmitInitiatorBranchHint[];
   loading?: boolean;
   onCancel: () => void;
-  onConfirm: (selectedByNode: Record<string, number[]>) => Promise<void>;
+  onConfirm: (
+    selectedByNode: Record<string, number[]>,
+    branchByCondition: Record<string, number>,
+  ) => Promise<void>;
 }
 
 const UniAuditInitiatorSubmitModal: React.FC<UniAuditInitiatorSubmitModalProps> = ({
@@ -20,6 +24,7 @@ const UniAuditInitiatorSubmitModal: React.FC<UniAuditInitiatorSubmitModalProps> 
   entityName,
   submitTitle,
   nodes,
+  branchConditions = [],
   loading,
   onCancel,
   onConfirm,
@@ -59,6 +64,8 @@ const UniAuditInitiatorSubmitModal: React.FC<UniAuditInitiatorSubmitModalProps> 
     };
   }, [open, form]);
 
+  const branchField = (id: string) => `branch_${id}`;
+
   const handleOk = async () => {
     const values = await form.validateFields();
     const selectedByNode: Record<string, number[]> = {};
@@ -71,7 +78,16 @@ const UniAuditInitiatorSubmitModal: React.FC<UniAuditInitiatorSubmitModalProps> 
         return;
       }
     }
-    await onConfirm(selectedByNode);
+    const branchByCondition: Record<string, number> = {};
+    for (const cond of branchConditions) {
+      const raw = values[branchField(cond.condition_node_id)];
+      if (raw === undefined || raw === null || raw === '') {
+        if (cond.required) return;
+        continue;
+      }
+      branchByCondition[cond.condition_node_id] = Number(raw);
+    }
+    await onConfirm(selectedByNode, branchByCondition);
   };
 
   return (
@@ -94,6 +110,34 @@ const UniAuditInitiatorSubmitModal: React.FC<UniAuditInitiatorSubmitModalProps> 
         />
       ) : null}
       <Form form={form} layout="vertical">
+        {branchConditions.map((cond) => (
+          <Form.Item
+            key={cond.condition_node_id}
+            name={branchField(cond.condition_node_id)}
+            label={cond.label}
+            rules={
+              cond.required
+                ? [
+                    {
+                      required: true,
+                      message: t('pages.approval.submitInitiatorBranchRequired', {
+                        label: cond.label,
+                      }),
+                    },
+                  ]
+                : undefined
+            }
+          >
+            <Select
+              allowClear={!cond.required}
+              placeholder={t('pages.approval.submitInitiatorBranchPlaceholder')}
+              options={(cond.branches || []).map((b) => ({
+                label: b.label,
+                value: b.index,
+              }))}
+            />
+          </Form.Item>
+        ))}
         {nodes.map((node) => (
           <Form.Item
             key={node.node_id}

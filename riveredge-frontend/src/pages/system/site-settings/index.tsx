@@ -128,6 +128,12 @@ function getInitialValuesFromConfigStore(
     'security.token_check_interval': configs['security.token_check_interval'] ?? configs.security?.token_check_interval ?? 60,
     'security.inactivity_timeout': configs['security.inactivity_timeout'] ?? configs.security?.inactivity_timeout ?? 1800,
     'security.user_cache_time': configs['security.user_cache_time'] ?? configs.security?.user_cache_time ?? 300,
+    'security.password_mode': configs.security?.password_mode ?? 'simple',
+    'security.password_min_length': configs.security?.password_min_length ?? 8,
+    'security.password_min_char_classes': configs.security?.password_min_char_classes ?? 3,
+    'security.password_check_personal_weak': configs.security?.password_check_personal_weak !== false,
+    'security.password_max_age_days': configs.security?.password_max_age_days ?? 90,
+    'security.password_reset_help': configs.security?.password_reset_help ?? '',
     'ui.max_tabs': configs['ui.max_tabs'] ?? configs.ui?.max_tabs ?? 20,
     'ui.default_page_size': configs['ui.default_page_size'] ?? configs.ui?.default_page_size ?? 20,
     'ui.table_loading_delay': configs['ui.table_loading_delay'] ?? configs.ui?.table_loading_delay ?? 0,
@@ -200,6 +206,12 @@ const SITE_SETTINGS_SYSTEM_TAB_FIELDS = [
   'security.token_check_interval',
   'security.inactivity_timeout',
   'security.user_cache_time',
+  'security.password_mode',
+  'security.password_min_length',
+  'security.password_min_char_classes',
+  'security.password_check_personal_weak',
+  'security.password_max_age_days',
+  'security.password_reset_help',
   'ui.max_tabs',
   'ui.default_page_size',
   'ui.table_loading_delay',
@@ -736,6 +748,12 @@ const SiteSettingsPage: React.FC = () => {
       'security.token_check_interval': values['security.token_check_interval'],
       'security.inactivity_timeout': values['security.inactivity_timeout'],
       'security.user_cache_time': values['security.user_cache_time'],
+      'security.password_mode': values['security.password_mode'],
+      'security.password_min_length': values['security.password_min_length'],
+      'security.password_min_char_classes': values['security.password_min_char_classes'],
+      'security.password_check_personal_weak': values['security.password_check_personal_weak'],
+      'security.password_max_age_days': values['security.password_max_age_days'],
+      'security.password_reset_help': values['security.password_reset_help'],
       'ui.max_tabs': values['ui.max_tabs'],
       'ui.default_page_size': values['ui.default_page_size'],
       'ui.table_loading_delay': values['ui.table_loading_delay'],
@@ -818,6 +836,12 @@ const SiteSettingsPage: React.FC = () => {
         'security.token_check_interval': setting.settings?.security?.token_check_interval ?? 60,
         'security.inactivity_timeout': setting.settings?.security?.inactivity_timeout ?? 1800,
         'security.user_cache_time': setting.settings?.security?.user_cache_time ?? 300,
+        'security.password_mode': setting.settings?.security?.password_mode ?? 'simple',
+        'security.password_min_length': setting.settings?.security?.password_min_length ?? 8,
+        'security.password_min_char_classes': setting.settings?.security?.password_min_char_classes ?? 3,
+        'security.password_check_personal_weak': setting.settings?.security?.password_check_personal_weak !== false,
+        'security.password_max_age_days': setting.settings?.security?.password_max_age_days ?? 90,
+        'security.password_reset_help': setting.settings?.security?.password_reset_help ?? '',
         'ui.max_tabs': setting.settings?.ui?.max_tabs ?? 20,
         'ui.default_page_size': setting.settings?.ui?.default_page_size ?? 20,
         'ui.table_loading_delay': setting.settings?.ui?.table_loading_delay ?? 0,
@@ -846,6 +870,12 @@ const SiteSettingsPage: React.FC = () => {
         'security.token_check_interval': setting.settings?.security?.token_check_interval ?? 60,
         'security.inactivity_timeout': setting.settings?.security?.inactivity_timeout ?? 1800,
         'security.user_cache_time': setting.settings?.security?.user_cache_time ?? 300,
+        'security.password_mode': setting.settings?.security?.password_mode ?? 'simple',
+        'security.password_min_length': setting.settings?.security?.password_min_length ?? 8,
+        'security.password_min_char_classes': setting.settings?.security?.password_min_char_classes ?? 3,
+        'security.password_check_personal_weak': setting.settings?.security?.password_check_personal_weak !== false,
+        'security.password_max_age_days': setting.settings?.security?.password_max_age_days ?? 90,
+        'security.password_reset_help': setting.settings?.security?.password_reset_help ?? '',
         'ui.max_tabs': setting.settings?.ui?.max_tabs ?? 20,
         'ui.default_page_size': setting.settings?.ui?.default_page_size ?? 20,
         'ui.table_loading_delay': setting.settings?.ui?.table_loading_delay ?? 0,
@@ -1255,6 +1285,12 @@ const SiteSettingsPage: React.FC = () => {
             token_check_interval: sys['security.token_check_interval'],
             inactivity_timeout: sys['security.inactivity_timeout'],
             user_cache_time: sys['security.user_cache_time'],
+            password_mode: sys['security.password_mode'],
+            password_min_length: sys['security.password_min_length'],
+            password_min_char_classes: sys['security.password_min_char_classes'],
+            password_check_personal_weak: sys['security.password_check_personal_weak'],
+            password_max_age_days: sys['security.password_max_age_days'],
+            password_reset_help: sys['security.password_reset_help'],
           };
         }
         if (sys['ui.max_tabs'] !== undefined) {
@@ -1299,6 +1335,12 @@ const SiteSettingsPage: React.FC = () => {
           'security.token_check_interval': settings.security?.token_check_interval,
           'security.inactivity_timeout': settings.security?.inactivity_timeout,
           'security.user_cache_time': settings.security?.user_cache_time,
+          'security.password_mode': settings.security?.password_mode,
+          'security.password_min_length': settings.security?.password_min_length,
+          'security.password_min_char_classes': settings.security?.password_min_char_classes,
+          'security.password_check_personal_weak': settings.security?.password_check_personal_weak,
+          'security.password_max_age_days': settings.security?.password_max_age_days,
+          'security.password_reset_help': settings.security?.password_reset_help,
           'ui.max_tabs': settings.ui?.max_tabs,
           'ui.default_page_size': settings.ui?.default_page_size,
           'ui.table_loading_delay': settings.ui?.table_loading_delay,
@@ -1770,6 +1812,90 @@ const SiteSettingsPage: React.FC = () => {
                 <InputNumber min={0} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
+          </Row>
+        </Card>
+      </Col>
+      <Col span={24}>
+        <Card
+          title={t('pages.system.siteSettings.groupPasswordPolicy')}
+          size="small"
+          className="detail-drawer-section-title-accent"
+        >
+          <Row gutter={[16, 0]}>
+            <Col span={24}>
+              <Form.Item
+                name="security.password_mode"
+                label={t('pages.system.siteSettings.passwordMode')}
+                tooltip={t('pages.system.siteSettings.passwordModeTooltip')}
+              >
+                <ThemedSegmented
+                  options={[
+                    { label: t('pages.system.siteSettings.passwordModeSimple'), value: 'simple' },
+                    { label: t('pages.system.siteSettings.passwordModeStrengthened'), value: 'strengthened' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item
+                name="security.password_min_length"
+                label={t('pages.system.siteSettings.passwordMinLength')}
+                tooltip={t('pages.system.siteSettings.passwordMinLengthTooltip')}
+              >
+                <InputNumber min={6} max={128} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev['security.password_mode'] !== cur['security.password_mode']}>
+              {({ getFieldValue }) =>
+                getFieldValue('security.password_mode') === 'strengthened' ? (
+                  <>
+                    <Col xs={24} sm={12} md={8}>
+                      <Form.Item
+                        name="security.password_min_char_classes"
+                        label={t('pages.system.siteSettings.passwordMinCharClasses')}
+                        tooltip={t('pages.system.siteSettings.passwordMinCharClassesTooltip')}
+                      >
+                        <InputNumber min={1} max={4} style={{ width: '100%' }} />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={12} md={8}>
+                      <Form.Item
+                        name="security.password_max_age_days"
+                        label={t('pages.system.siteSettings.passwordMaxAgeDays')}
+                        tooltip={t('pages.system.siteSettings.passwordMaxAgeDaysTooltip')}
+                      >
+                        <InputNumber min={0} max={365} style={{ width: '100%' }} />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={12} md={8}>
+                      <Form.Item
+                        name="security.password_check_personal_weak"
+                        label={t('pages.system.siteSettings.passwordCheckPersonalWeak')}
+                        valuePropName="checked"
+                        tooltip={t('pages.system.siteSettings.passwordCheckPersonalWeakTooltip')}
+                      >
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col span={24}>
+                      <Form.Item
+                        name="security.password_reset_help"
+                        label={t('pages.system.siteSettings.passwordResetHelp')}
+                        tooltip={t('pages.system.siteSettings.passwordResetHelpTooltip')}
+                      >
+                        <Input.TextArea rows={2} maxLength={500} showCount />
+                      </Form.Item>
+                    </Col>
+                  </>
+                ) : (
+                  <Col span={24}>
+                    <Typography.Text type="secondary">
+                      {t('pages.system.siteSettings.passwordModeSimpleHint')}
+                    </Typography.Text>
+                  </Col>
+                )
+              }
+            </Form.Item>
           </Row>
         </Card>
       </Col>

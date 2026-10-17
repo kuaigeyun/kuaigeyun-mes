@@ -52,18 +52,28 @@ async def get_approval_gate_status(
     entity_type: str,
     entity_id: int,
 ) -> dict:
-    """读取审批实例门控：pending / 已通过 / 已驳回。"""
+    """
+    读取审批实例门控：pending / 已通过 / 已驳回。
+
+    只读 instance 状态，禁止走 get_approval_status 的 bootstrap/reconcile。
+    审核/驳回前若再 reconcile，可能在真正投票前推进节点并取消待办，导致要点两次。
+    """
     from core.services.approval.approval_instance_service import ApprovalInstanceService
 
-    approval_status = await ApprovalInstanceService.get_approval_status(
+    instance = await ApprovalInstanceService.get_instance_by_entity(
         tenant_id=tenant_id,
         entity_type=entity_type,
         entity_id=entity_id,
     )
-    has_instance = bool(approval_status.get("has_instance"))
-    status = approval_status.get("status")
+    has_instance = instance is not None
+    status = instance.status if instance else None
     return {
-        "approval_status": approval_status,
+        "approval_status": {
+            "has_instance": has_instance,
+            "has_flow": has_instance,
+            "status": status,
+            "current_node": instance.current_node if instance else None,
+        },
         "has_pending_flow": has_instance and status == "pending",
         "flow_completed_approved": has_instance and status == "approved",
         "flow_completed_rejected": has_instance and status == "rejected",

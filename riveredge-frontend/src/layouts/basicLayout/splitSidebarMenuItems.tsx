@@ -40,20 +40,10 @@ export function buildSplitSecondaryMenuItems(
       const key = menuItemKey(item);
       if (!key) continue;
 
-      if (item.type === 'group') {
-        const children = walk(item.children ?? []);
-        if (!children?.length) continue;
-        result.push({
-          type: 'group',
-          key,
-          label: typeof item.name === 'string' ? item.name : '',
-          children,
-        });
-        continue;
-      }
-
       const visibleChildren = (item.children ?? []).filter((child) => child.hideInMenu !== true);
-      if (visibleChildren.length > 0 && !item.path) {
+      // 快质量 / 快设备等 manifest 分组是 type=group（平铺侧栏用分组标题）。
+      // 双列右栏与快制造一样用可折叠子菜单，避免分组标题与叶子摊成一列。
+      if ((item.type === 'group' || !item.path) && visibleChildren.length > 0) {
         const children = walk(visibleChildren);
         if (!children?.length) continue;
         result.push({

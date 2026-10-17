@@ -12,6 +12,81 @@ MANAGER_APPROVER_TYPES = frozenset({"manager", "department", "multi_level_manage
 DESIGN_TIME_EMPTY_OK_TYPES = frozenset({"role", "initiator_select"}) | MANAGER_APPROVER_TYPES
 EMPTY_APPROVER_POLICIES = frozenset({"block", "auto_pass", "fallback_user", "escalate_admin"})
 CONDITION_OPERATORS = frozenset({"==", "eq", "!=", "ne", ">", "gt", "<", "lt", ">=", "gte", "<=", "lte", "contains", "in", "between"})
+CONDITION_ROUTE_MODES = frozenset({"previous_approver", "initiator", "formula"})
+
+
+def _condition_value_filled(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str) and not value.strip():
+        return False
+    return True
+
+
+def _infer_condition_route_mode(
+    conditions: List[Dict[str, Any]],
+    *,
+    out_edge_count: int,
+) -> Optional[str]:
+    """旧图加载时推断 routeMode；无法推断返回 None（保存校验失败）。"""
+    if out_edge_count <= 1:
+        return "formula"
+    if any(bool(c.get("else")) for c in conditions):
+        return "formula"
+    if any(
+        str(c.get("field") or "").strip() and _condition_value_filled(c.get("value"))
+        for c in conditions
+    ):
+        return "formula"
+    if conditions and all(not _condition_value_filled(c.get("value")) for c in conditions):
+        return "previous_approver"
+    return None
+
+
+def normalize_condition_node_data(
+    data: Optional[Dict[str, Any]],
+    *,
+    out_edge_count: int = 0,
+) -> Dict[str, Any]:
+    out = dict(data or {})
+    conditions = out.get("conditions") or out.get("condition_list") or []
+    normalized_conditions: List[Dict[str, Any]] = []
+    for item in _as_list(conditions):
+        if not isinstance(item, dict):
+            continue
+        normalized_conditions.append(
+            {
+                "field": item.get("field"),
+                "operator": item.get("operator") or "==",
+                "value": item.get("value"),
+                "label": item.get("label") or "",
+                "else": bool(item.get("else")),
+            }
+        )
+    out["conditions"] = normalized_conditions
+    out.pop("condition_list", None)
+
+    raw_mode = str(out.get("routeMode") or out.pop("route_mode", "") or "").strip()
+    if raw_mode in CONDITION_ROUTE_MODES:
+        out["routeMode"] = raw_mode
+    else:
+        inferred = _infer_condition_route_mode(normalized_conditions, out_edge_count=out_edge_count)
+        if inferred:
+            out["routeMode"] = inferred
+        else:
+            out.pop("routeMode", None)
+
+    mode = out.get("routeMode")
+    if mode in ("previous_approver", "initiator"):
+        trimmed: List[Dict[str, Any]] = []
+        for i, item in enumerate(normalized_conditions):
+            trimmed.append(
+                {
+                    "label": str(item.get("label") or "").strip() or f"分支{i + 1}",
+                }
+            )
+        out["conditions"] = trimmed
+    return out
 
 
 def _as_list(value: Any) -> List[Any]:
@@ -100,21 +175,8 @@ def normalize_node_data(node_type: str, data: Optional[Dict[str, Any]]) -> Dict[
                 out["timeoutHours"] = hours
                 out.pop("timeout_hours", None)
     if node_type == "condition":
-        conditions = out.get("conditions") or out.get("condition_list") or []
-        normalized_conditions: List[Dict[str, Any]] = []
-        for item in _as_list(conditions):
-            if not isinstance(item, dict):
-                continue
-            normalized_conditions.append(
-                {
-                    "field": item.get("field"),
-                    "operator": item.get("operator") or "==",
-                    "value": item.get("value"),
-                    "label": item.get("label") or "",
-                }
-            )
-        out["conditions"] = normalized_conditions
-        out.pop("condition_list", None)
+        # routeMode / conditions 在 normalize_flow_graph 二遍按出边数补齐
+        pass
     return out
 
 
@@ -157,6 +219,22 @@ def normalize_flow_graph(raw: Any) -> Dict[str, Any]:
                 "data": edge.get("data") if isinstance(edge.get("data"), dict) else {},
             }
         )
+
+    out_edge_count_by_source: Dict[str, int] = {}
+    for edge in edges:
+        src = str(edge.get("source") or "")
+        if src:
+            out_edge_count_by_source[src] = out_edge_count_by_source.get(src, 0) + 1
+
+    for node in nodes:
+        if node.get("type") != "condition":
+            continue
+        node_id = str(node.get("id") or "")
+        node["data"] = normalize_condition_node_data(
+            node.get("data") if isinstance(node.get("data"), dict) else {},
+            out_edge_count=out_edge_count_by_source.get(node_id, 0),
+        )
+
     return {"nodes": nodes, "edges": edges}
 
 
@@ -195,14 +273,37 @@ def validate_flow_graph(graph: Dict[str, Any]) -> None:
         if node_type == "condition":
             out_edges = [e for e in edges if e.get("source") == node_id]
             conditions = data.get("conditions") or []
+            route_mode = str(data.get("routeMode") or "").strip()
+            label = (data.get("label") or node_id or "").strip()
+            if len(out_edges) > 1 and not route_mode:
+                raise ValidationError(
+                    f"条件节点「{label}」须选择分支触发方式（上一节点人员 / 流程发起人 / 公式）"
+                )
+            if route_mode not in CONDITION_ROUTE_MODES and len(out_edges) > 1:
+                raise ValidationError(f"条件节点「{label}」routeMode 非法: {route_mode!r}")
             if len(out_edges) > 1 and len(conditions) != len(out_edges):
                 raise ValidationError(
-                    f"条件节点 {node_id} 出边数({len(out_edges)})与条件数({len(conditions)})不一致"
+                    f"条件节点「{label}」出边数({len(out_edges)})与分支数({len(conditions)})不一致"
                 )
-            for cond in conditions:
-                op = cond.get("operator")
-                if op and op not in CONDITION_OPERATORS:
-                    raise ValidationError(f"条件节点 {node_id} 含非法运算符: {op}")
+            if route_mode in ("previous_approver", "initiator"):
+                for i, cond in enumerate(conditions):
+                    if not str(cond.get("label") or "").strip():
+                        raise ValidationError(f"条件节点「{label}」分支 {i + 1} 须填写名称")
+            if route_mode == "formula":
+                else_indices = [i for i, c in enumerate(conditions) if c.get("else")]
+                if len(else_indices) > 1:
+                    raise ValidationError(f"条件节点「{label}」仅允许一条「其余」分支")
+                for i, cond in enumerate(conditions):
+                    if cond.get("else"):
+                        continue
+                    field = str(cond.get("field") or "").strip()
+                    if not field:
+                        raise ValidationError(f"条件节点「{label}」分支 {i + 1} 须选择字段")
+                    if not _condition_value_filled(cond.get("value")):
+                        raise ValidationError(f"条件节点「{label}」分支 {i + 1} 须填写比较数值")
+                    op = cond.get("operator")
+                    if op and op not in CONDITION_OPERATORS:
+                        raise ValidationError(f"条件节点「{label}」含非法运算符: {op}")
 
     for edge in edges:
         if edge.get("source") not in ids or edge.get("target") not in ids:

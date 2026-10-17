@@ -81,17 +81,27 @@ class PaymentApplicationPullService:
         order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=purchase_order_id)
         if not order:
             raise NotFoundError(f"采购订单不存在: {purchase_order_id}")
+        from infra.services.business_config_service import BusinessConfigService
+
         prepay_map = await _order_prepayment_linked_by_ids(
             tenant_id, [purchase_order_id], source_type="purchase_order", target_type="payment"
         )
-        caps = derive_purchase_order_capabilities(
-            order, has_prepayment_payment=prepay_map.get(purchase_order_id, False)
-        )
-        prepay_cap = caps.push_prepayment
         amount = Decimal(str(order.prepayment_amount or 0))
         reserved = await self._sum_prepayment_application_reserved(tenant_id, purchase_order_id)
         max_push = max(Decimal("0"), amount - reserved)
-        allowed = prepay_cap.allowed and max_push > 0
+        require_app = await BusinessConfigService().get_finance_require_payment_application(
+            tenant_id
+        )
+        # 须用 push_payment_application（与列表 capabilities / 取单勾选同源），
+        # 禁止误用 push_prepayment：组织开启「预付款须走付款申请」时后者恒为否。
+        caps = derive_purchase_order_capabilities(
+            order,
+            has_prepayment_payment=prepay_map.get(purchase_order_id, False),
+            require_payment_application=require_app,
+            prepayment_application_remaining=max_push,
+        )
+        app_cap = caps.push_payment_application
+        allowed = bool(app_cap.allowed) and max_push > 0
         return {
             "target_type": "payment_application",
             "source_type": "purchase_order",
@@ -106,7 +116,7 @@ class PaymentApplicationPullService:
             ),
             "items": [],
             "has_blocking_issues": not allowed,
-            "blocking_reason": prepay_cap.reason if not prepay_cap.allowed else (
+            "blocking_reason": app_cap.reason if not app_cap.allowed else (
                 "payment_application.pull_from_purchase_order.no_amount" if max_push <= 0 else None
             ),
             "supplier_id": order.supplier_id,

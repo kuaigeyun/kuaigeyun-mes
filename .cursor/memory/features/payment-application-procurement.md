@@ -34,6 +34,14 @@ keywords: payment-application, payment_application, 付款申请, PayableOpenAmo
 - 打印/导出：列表 `showExportButton` + `UniCapabilityBatchButton`（print）+ `useKuaizhizaoPrintModal`；API `GET …/payment-applications/{id}/print`；预置 `PAYMENT_APPLICATION_PRINT`（`PRINT_STYLE_A4_PLAIN` 黑白，非可视化 designer）；`DocumentPrintService` document_type=`payment_application`；存量租户需跑 `/apps/kuaizhizao/print/load-presets` 或打印模板管理「加载预设」
 - 打印金额：`format_business_amount` + `get_amount_decimal_places`（配置中心金额小数位）；禁止裸 `str(Decimal)` 带出库表最高位
 
+## 踩坑
+
+1. **从采购订单预付取单**：`pullable` 只认 `capabilities.push_payment_application.allowed`；申请金额列只展示 `prepayment_amount`（禁止用 `total_amount` 冒充，否则「全部单据」看起来有金额却选不了）。
+2. **预览门禁**：`PaymentApplicationPullService.preview_from_purchase_order` 必须用 `push_payment_application` + `require_payment_application` + remaining，禁止误用 `push_prepayment`（组织开启「预付款须走付款申请」时后者恒否）。
+3. **状态列**：取单弹窗用 `renderPullQueryDocStatus`，禁止裸显 `CONFIRMED`。
+4. **不可选行**：`UniPullQueryModal.onDisabledRowClick` + `purchaseOrderCapabilityReasonMessage` 提示原因。
+5. **已下推付款单跳转**：须把 `payment` 登记进 `LINKED_DOCUMENT_DETAIL_TYPES` + `PaymentLinkedDetailDrawer`（`FinanceVoucherDetailDrawer`）；未登记时 `openLinkedDocumentDetail('payment', id)` 静默 false。
+
 ## 禁止
 
 - 为付款申请另起第二套 pull API / 平行选单组件；只扩 `documentActionRegistry` 动作键与 `usePaymentApplicationPullMenus`

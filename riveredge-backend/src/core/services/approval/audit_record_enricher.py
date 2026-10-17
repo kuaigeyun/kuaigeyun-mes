@@ -63,7 +63,8 @@ async def _attach_batch_viewer_actions(
         audit = item.get("audit") if isinstance(item, dict) else getattr(item, "audit", None)
         if not isinstance(audit, dict):
             continue
-        if audit.get("phase") != "pending" or not audit.get("enabled"):
+        # 仅按 phase=pending 挂 viewer_actions：已有进行中实例时 binding 关闭仍须「待我审核/您已审核」
+        if audit.get("phase") != "pending":
             continue
         rid = _read_record_id(item)
         if rid is not None:

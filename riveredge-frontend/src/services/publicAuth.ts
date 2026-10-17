@@ -41,6 +41,7 @@ export interface LoginResponse {
   }>;
   default_tenant_id?: number;
   requires_tenant_selection?: boolean;
+  requires_password_change?: boolean;
 }
 
 /** 登录响应中的组织名称（唯一来源：后端 user.tenant_name） */

@@ -143,6 +143,14 @@ class UserResetPasswordRequest(BaseModel):
     password: Optional[str] = Field(None, description="新密码，如果不提供则使用默认密码")
 
 
+class UserResetPasswordResponse(BaseModel):
+    user: UserResponse
+    temporary_password: Optional[str] = Field(
+        None,
+        description="加强模式下自动生成的临时密码（须告知用户并在下次登录修改）",
+    )
+
+
 class UserBatchDeleteRequest(BaseModel):
     """批量删除用户请求"""
     user_uuids: List[str] = Field(..., min_length=1, description="用户 UUID 列表")
@@ -758,7 +766,7 @@ async def delete_user(
         )
 
 
-@router.post("/{user_uuid}/reset-password", response_model=UserResponse)
+@router.post("/{user_uuid}/reset-password", response_model=UserResetPasswordResponse)
 async def reset_user_password(
     user_uuid: str,
     data: Optional[UserResetPasswordRequest] = None,
@@ -785,13 +793,16 @@ async def reset_user_password(
     """
     try:
         new_password = data.password if data else None
-        user = await UserService.reset_password(
+        user, temporary_password = await UserService.reset_password(
             tenant_id=tenant_id,
             user_uuid=user_uuid,
             new_password=new_password,
             current_user_id=current_user.id
         )
-        return await _user_to_response(user)
+        return UserResetPasswordResponse(
+            user=await _user_to_response(user),
+            temporary_password=temporary_password,
+        )
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

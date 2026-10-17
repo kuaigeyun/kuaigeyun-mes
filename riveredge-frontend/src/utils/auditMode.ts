@@ -15,6 +15,8 @@ export interface AuditViewerActionsLike {
   has_my_pending_task?: boolean;
   approve?: boolean;
   reject?: boolean;
+  /** 当前人已通过本单某一级，且当前节点不再是他的待办 */
+  my_acted?: boolean;
   block_reason?: string | null;
 }
 

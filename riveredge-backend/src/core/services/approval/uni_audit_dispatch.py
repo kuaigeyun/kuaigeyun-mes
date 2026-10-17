@@ -445,6 +445,18 @@ async def execute_uni_audit(
 
     body = dict(payload or {})
 
+    branch_token = None
+    if act == "submit":
+        from core.services.approval.audit_submit_context import (
+            reset_submit_branch_by_node,
+            set_submit_branch_by_node,
+        )
+        from core.services.approval.audit_submit_selection import parse_submit_branch_selection
+
+        branches = parse_submit_branch_selection(body)
+        if branches:
+            branch_token = set_submit_branch_by_node(branches)
+
     if act in ("transfer", "add_sign", "delegate", "urge"):
         return await _dispatch_advanced(
             act,
@@ -469,7 +481,13 @@ async def execute_uni_audit(
     if body and "payload" in inspect.signature(handler).parameters:
         call_kwargs["payload"] = body
 
-    result = await handler(act, **call_kwargs)
+    try:
+        result = await handler(act, **call_kwargs)
+    finally:
+        if branch_token is not None:
+            from core.services.approval.audit_submit_context import reset_submit_branch_by_node
+
+            reset_submit_branch_by_node(branch_token)
     from core.services.integration.document_push_silent import maybe_silent_push_after_audit
 
     await maybe_silent_push_after_audit(

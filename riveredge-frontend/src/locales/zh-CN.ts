@@ -109,6 +109,9 @@ export default {
   'dashboard.businessBoard.heroImageInvalidType': '请上传图片文件（PNG、JPG、WebP 等）',
   'dashboard.businessBoard.heroImageTooLarge': '图片请小于 5MB',
   'dashboard.businessBoard.resetTitle': '恢复为默认标题',
+  'dashboard.businessBoard.visitModeLabel': '参观模式',
+  'dashboard.businessBoard.visitModeHint':
+    '开启后，中心球体周围的制造指标将展示下方手填数值，不再使用实时数据。适合接待参观或演示。仅系统管理员可配置。',
   'dashboard.businessBoard.section.salesPanel': '销售态势',
   'dashboard.businessBoard.section.purchasePanel': '采购到货态势',
   'dashboard.businessBoard.section.processProgress': '工序执行进展',
@@ -9331,6 +9334,7 @@ export default {
   'app.kuaizhizao.paymentApplication.requestAmount': '申请金额',
   'app.kuaizhizao.paymentApplication.paidAmount': '已付金额',
   'app.kuaizhizao.paymentApplication.linkedPayments': '已下推付款单',
+  'app.kuaizhizao.paymentApplication.linkedPaymentOpenFailed': '无法打开付款单详情，请稍后重试或从付款单列表查看',
   'app.kuaizhizao.paymentApplication.sourceDocuments': '来源单据',
   'app.kuaizhizao.paymentApplication.pushPayment': '下推付款单',
   'app.kuaizhizao.paymentApplication.pushPaymentSuccess': '已生成付款单 {{code}}',
@@ -9344,6 +9348,12 @@ export default {
   'app.kuaizhizao.paymentApplication.createFromSourceSuccess': '已从{{source}}生成付款申请 {{code}}',
   'app.kuaizhizao.paymentApplication.createFailed': '生成付款申请失败',
   'app.kuaizhizao.paymentApplication.noPrepayAmount': '采购订单无可预付请款额度',
+  'app.kuaizhizao.paymentApplication.pullFromPoNeedPrepay':
+    '请先在采购订单填写预付款金额，且订单须已审核或已确认',
+  'app.kuaizhizao.paymentApplication.pullFromPoHint':
+    '仅「可加载」且已填预付款的已审核/已确认采购订单可选；点灰色行可查看原因',
+  'app.kuaizhizao.paymentApplication.pullSourceNotSelectable': '该来源单据当前不可创建付款申请',
+  'app.kuaizhizao.paymentApplication.pullStatementNotConfirmed': '仅已确认或已发送的供应商对账单可创建付款申请',
   'app.kuaizhizao.paymentApplication.otherExpenseNoPayable': '该其他费用支出尚未生成应付单，请先审核',
   'app.kuaizhizao.paymentApplication.otherExpenseNoOpenAmount': '关联应付单无可请款余额',
   'app.kuaizhizao.paymentApplication.amountInvalid': '申请金额须大于 0',
@@ -21174,6 +21184,14 @@ export default {
   'app.kuaicaiwu.purchaseInvoice.pull.col.invoicedAmount': '已开票',
   'app.kuaicaiwu.purchaseInvoice.pull.col.invoiceableAmount': '可开票',
   'app.kuaicaiwu.purchaseInvoice.pull.col.convertStatus': '转单状态',
+  'app.kuaicaiwu.purchaseInvoice.pull.detailTitle': '开票明细',
+  'app.kuaicaiwu.purchaseInvoice.pull.detailEmpty': '源单暂无物料明细',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.lineNo': '行号',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.materialCode': '物料编码',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.materialName': '物料名称',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.materialSpec': '规格',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.unitPrice': '单价',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.lineAmount': '金额',
   'app.kuaicaiwu.purchaseInvoice.pull.converted': '已创建',
   'app.kuaicaiwu.purchaseInvoice.pull.convertible': '可创建',
   'app.kuaicaiwu.purchaseInvoice.form.invoiceNumberRequired': '请输入发票号码',
@@ -31381,6 +31399,10 @@ export default {
     '报工弹窗累计料损不再出现多余小数',
   'pages.dashboard.updateLog.entries.work-order-report-material-loss-precision-r01.description':
     '新建报工时累计料损按数量小数位收口后再展示，避免工序数量相加出现长串尾数。',
+  'pages.dashboard.updateLog.entries.split-sidebar-qms-ems-groups-r01.title':
+    '双列侧栏质量与设备按分组折叠',
+  'pages.dashboard.updateLog.entries.split-sidebar-qms-ems-groups-r01.description':
+    '快质量、快设备在双列右栏改为可折叠分组，与快制造一致，不再把分组标题和叶子摊成一列。',
   'pages.dashboard.updateLog.entries.app-center-self-service-lifecycle-r01.title':
     '应用中心分类自主启停对组织侧生效',
   'pages.dashboard.updateLog.entries.app-center-self-service-lifecycle-r01.description':
@@ -32115,6 +32137,58 @@ export default {
     '审核按钮待办人提示与当前节点一致',
   'pages.dashboard.updateLog.entries.audit-block-reason-current-node-r01.description':
     '节点推进后取消上一节点残留待办；不可审提示优先按当前节点待办/可审名单展示，不再出现流程图已到节点2、按钮仍提示节点1的情况。',
+  'pages.dashboard.updateLog.entries.business-board-visit-mode-r01.title':
+    '运营看板支持参观模式手填指标',
+  'pages.dashboard.updateLog.entries.business-board-visit-mode-r01.description':
+    '看板设置中新增参观模式，开启后中心制造指标可手填展示；该配置仅系统管理员可见并可保存。',
+  'pages.dashboard.updateLog.entries.audit-modal-flow-preview-fit-r01.title':
+    '审核弹窗流程图与设计器同一套排版',
+  'pages.dashboard.updateLog.entries.audit-modal-flow-preview-fit-r01.description':
+    '提交/审核弹窗左侧流程预览与设计器同一套节点；手柄圆点保留可见，连线从节点底边中心直线接到下一节点，不再在节点外侧拐成悬空竖线。',
+  'pages.dashboard.updateLog.entries.approval-flow-edge-layout-r01.title':
+    '审批流与审核预览连线按流程图规则排版',
+  'pages.dashboard.updateLog.entries.approval-flow-edge-layout-r01.description':
+    '审批流设计器与审核预览按最长路径自上而下排版，单链节点主干居中对齐；连线采用正交折线，节点宽度与画布一致，避免斜线错位。',
+  'pages.dashboard.updateLog.entries.approval-condition-route-mode-r01.title':
+    '审批条件分支支持三种触发方式',
+  'pages.dashboard.updateLog.entries.approval-condition-route-mode-r01.description':
+    '条件节点可配置上一节点人员、流程发起人或字段公式选边；审核与提交弹窗按模式必选分支，禁止无选择默认跳转。',
+  'pages.dashboard.updateLog.entries.other-expense-submit-status-match-r01.title':
+    '其他费用支出提交不再误报状态不允许',
+  'pages.dashboard.updateLog.entries.other-expense-submit-status-match-r01.description':
+    '提交门禁与前端状态判定对齐，兼容草稿中英文与大小写；误报 other_expense.submit.not_allowed 已修复，错误提示改为中文说明。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-detail-lines-r01.title':
+    '采购收票预览展示源单物料明细',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-detail-lines-r01.description':
+    '从采购订单、入库单或应付单创建进项发票时，预览弹窗在金额汇总下展示源单物料明细，便于核对本次开票对应的物料与金额。',
+  'pages.dashboard.updateLog.entries.payment-app-linked-payment-open-r01.title':
+    '付款申请已下推付款单号可打开详情',
+  'pages.dashboard.updateLog.entries.payment-app-linked-payment-open-r01.description':
+    '付款申请详情中「已下推付款单」单号已接入关联单据抽屉，点击可嵌套打开付款单原版详情，不再点了无反应。',
+  'pages.dashboard.updateLog.entries.payment-app-pull-po-select-status-r01.title':
+    '付款申请取采购订单可选中，状态显示中文',
+  'pages.dashboard.updateLog.entries.payment-app-pull-po-select-status-r01.description':
+    '从采购订单预付创建付款申请时，待选列表状态改为中文徽章；不可选行点击会提示原因（如未填预付款）；预览门禁与可勾选能力对齐，避免误用预付付款单能力导致无法确认。',
+  'pages.dashboard.updateLog.entries.purchase-order-buyer-amount-edit-r01.title':
+    '采购订单默认当前采购员，金额可与单价互算',
+  'pages.dashboard.updateLog.entries.purchase-order-buyer-amount-edit-r01.description':
+    '新建采购订单采购员自动代入当前登录用户；明细不含税金额（未开含税时为合计）可直接录入，失焦后按数量反算单价，改单价仍会刷新金额。',
+  'pages.dashboard.updateLog.entries.audit-revoke-reopen-final-node-r01.title':
+    '撤销审核后停在终审人待办，可直接再审',
+  'pages.dashboard.updateLog.entries.audit-revoke-reopen-final-node-r01.description':
+    '采购申请、销售订单反审核不再一律退回草稿重提；有多级流程时保留条件分支等前序决策，在终审节点重建待办，终审人可再次点击审核。',
+  'pages.dashboard.updateLog.entries.audit-branch-reselect-after-withdraw-r01.title':
+    '撤回重提后条件分支可重新选择',
+  'pages.dashboard.updateLog.entries.audit-branch-reselect-after-withdraw-r01.description':
+    '撤回提交会清掉本轮「是否总经理特批」等选边；流程图只按当前审批实例显示，不再把上一轮已选的否/是当成已通过，避免无法再选总经理特批。',
+  'pages.dashboard.updateLog.entries.sales-order-list-viewer-actions-r01.title':
+    '销售订单列表审核状态按当前待办人显示',
+  'pages.dashboard.updateLog.entries.sales-order-list-viewer-actions-r01.description':
+    '销售订单列表/详情补齐 viewer_actions；待审单无论审核开关是否仍开着，均可显示「待我审核」或「您已审核」，与采购申请等单据一致。',
+  'pages.dashboard.updateLog.entries.audit-viewer-acted-hint-r01.title':
+    '审核列表按当前人显示待我审核或您已审核',
+  'pages.dashboard.updateLog.entries.audit-viewer-acted-hint-r01.description':
+    '多级审核中，当前登录人已通过本级时审核状态显示「您已审核」，轮到本人时显示「待我审核」；未轮到且无需撤回时审核按钮置灰并提示当前待办人。',
   'pages.dashboard.updateLog.entries.audit-multilevel-second-click-r01.title':
     '多级审核第二级一次点击即可通过',
   'pages.dashboard.updateLog.entries.audit-multilevel-second-click-r01.description':
@@ -40927,6 +41001,18 @@ export default {
   'pages.approval.submitInitiatorOptional': '可选',
   'pages.approval.submitInitiatorRequired': '请为「{{node}}」选择审批人',
   'pages.approval.submitInitiatorPlaceholder': '选择{{entity}}审批人',
+  'pages.approval.submitInitiatorBranchRequired': '请为「{{label}}」选择分支',
+  'pages.approval.submitInitiatorBranchPlaceholder': '选择后续分支',
+  'pages.approval.designer.routeMode': '分支触发方式',
+  'pages.approval.designer.routeModeRequired': '请选择分支触发方式',
+  'pages.approval.designer.routeModePreviousApprover': '上一节点人员',
+  'pages.approval.designer.routeModeInitiator': '流程发起人',
+  'pages.approval.designer.routeModeFormula': '按字段公式',
+  'pages.approval.designer.branchList': '分支名称',
+  'pages.approval.designer.branchNameRequired': '请填写分支名称',
+  'pages.approval.designer.conditionElseBranch': '其余分支（未命中时走此出边）',
+  'pages.approval.designer.fieldRequired': '请选择比较字段',
+  'pages.approval.designer.valueRequired': '请填写比较数值',
   'pages.approval.designer.decisionOnApproveEnabled': '审批通过时由本节点决定后续分支',
   'pages.approval.designer.decisionOnApproveField': '分支字段名',
   'pages.approval.designer.decisionOnApproveFieldRequired': '请填写分支字段名',
@@ -43840,6 +43926,9 @@ export default {
   'components.uniAudit.colAuditStatus': '审核状态',
   'components.uniAudit.phaseDraft': '草稿',
   'components.uniAudit.phasePending': '待审核',
+  'components.uniAudit.phasePendingMine': '待我审核',
+  'components.uniAudit.youAudited': '您已审核',
+  'components.uniAudit.youAuditedWaiting': '您已完成本级审核，等待后续节点',
   'components.uniAudit.phaseApproved': '已通过',
   'components.uniAudit.phaseRejected': '已驳回',
   'components.uniAudit.phaseNone': '—',

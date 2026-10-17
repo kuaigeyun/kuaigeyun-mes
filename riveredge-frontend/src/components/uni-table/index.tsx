@@ -163,6 +163,7 @@ import {
   isUniTableStatusBadgeColumn,
   resolveUniTableAuditStackedColumnWidth,
   resolveUniTableDetailProgressColumnWidth,
+  resolveUniTableAuditPhaseColumnWidth,
   resolveUniTableLifecycleColumnWidth,
   resolveUniTableMarkerBadgeColumnWidth,
   resolveUniTableProgressColumnWidth,
@@ -1729,13 +1730,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           uniTableKeepWidth: true,
         }
       }
-      /** 审核状态列：与 lifecycle 同宽，屏蔽页面手写 width 漂移 */
+      /** 审核状态列：四字「待我审核 / 您已审核」，屏蔽页面手写 width 漂移 */
       if (isUniTableAuditPhaseColumn(col)) {
         const { width: _w, minWidth: _mw, sorter: _sorter, defaultSortOrder: _dso, ...auditRest } = col
         return {
           ...auditRest,
-          width: resolveUniTableLifecycleColumnWidth(),
-          minWidth: resolveUniTableLifecycleColumnWidth(),
+          width: resolveUniTableAuditPhaseColumnWidth(),
+          minWidth: resolveUniTableAuditPhaseColumnWidth(),
           resizable: false,
           align: 'center' as const,
           uniTableKeepWidth: true,

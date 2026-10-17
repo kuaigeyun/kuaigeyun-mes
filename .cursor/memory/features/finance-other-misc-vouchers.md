@@ -21,6 +21,13 @@ keywords: other_income, other_expense, finance-misc-category, misc_voucher_posti
 - 复用 Payment/Receipt 或生成应收应付
 - UniPullQuery / 核销
 
+## 状态门禁（踩坑）
+
+- 写库真源为英文 PascalCase：`Draft` / `PendingReview` / `Approved` / …
+- 前端 `UniWorkflowActions` 用 `matchesAnyStatus`（忽略大小写）且 draft 含 `草稿`
+- capability / 撤回 / 反审须用 `is_other_expense_*_status` / `is_other_income_*_status`，**禁止**只比 `== "Draft"`（否则会出现有提交按钮却报 `other_expense.submit.not_allowed`）
+- `audit_phase._PENDING` 须含 `pendingreview`（`PendingReview` 经 `_norm` 后的形态）
+
 ## 交付
 
 - 迁移 `863_…other_misc_vouchers.py`；行表审计列 `868_…other_voucher_line_audit_columns.py`（与付款申请 865 同模式，行表须对齐 BaseModel）；编码规则 `867_…seed_other_income_expense_code_rules.py`
