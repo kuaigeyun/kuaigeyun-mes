@@ -142,7 +142,7 @@ export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = ({
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
-        defaultEdgeOptions={{ type: 'straight' }}
+        defaultEdgeOptions={{ type: 'default' }}
         fitView
         fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
         nodesDraggable={false}

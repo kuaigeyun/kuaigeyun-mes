@@ -1,5 +1,5 @@
 /**
- * 审批流 / 审核预览：自上而下分层布局 + 直线连线。
+ * 审批流 / 审核预览：自上而下分层布局 + 贝塞尔连线。
  * 条件分支在汇合前左右错开；汇合节点回主干，避免双线叠在同一竖轴上。
  * 节点宽度须与 UniFlowNode（宽节点 220、起止 120）一致。
  */
@@ -210,8 +210,8 @@ export function applyVerticalLayout(nodes: Node[], edges: Edge[]): Node[] {
 }
 
 /**
- * 直线贴手柄中心。
- * 条件多出口：按「出边在图中的原始顺序」挂 branch-N，与 conditions[N] 标签一致（禁止按 x 重排打乱是/否）。
+ * 贝塞尔曲线（React Flow `default`）：分叉斜连更顺，仍从手柄中心进出。
+ * 条件多出口：按出边原始顺序挂 branch-N，与 conditions[N] 一致。
  */
 export function enrichApprovalFlowEdges(nodes: Node[], edges: Edge[]): Edge[] {
   const typeById = new Map(nodes.map((n) => [n.id, n.type]));
@@ -234,7 +234,7 @@ export function enrichApprovalFlowEdges(nodes: Node[], edges: Edge[]): Edge[] {
     return {
       ...e,
       id,
-      type: 'straight',
+      type: 'default',
       ...(branchIdx != null ? { sourceHandle: `branch-${branchIdx}` } : {}),
     };
   });

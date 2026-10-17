@@ -32142,6 +32142,10 @@ export default {
     '运营看板支持参观模式手填指标',
   'pages.dashboard.updateLog.entries.business-board-visit-mode-r01.description':
     '看板设置中新增参观模式，开启后可对手填指标覆盖展示，未填项仍用实时数据；该配置仅系统管理员可见并可保存。',
+  'pages.dashboard.updateLog.entries.approval-flow-bezier-edges-r01.title':
+    '审批流程图连线改为贝塞尔曲线',
+  'pages.dashboard.updateLog.entries.approval-flow-bezier-edges-r01.description':
+    '设计器与审核预览的流程连线由斜直线改为贝塞尔曲线，条件分叉与汇合更顺滑。',
   'pages.dashboard.updateLog.entries.approval-flow-branch-fanout-r01.title':
     '条件分支流程图左右分叉不再叠线',
   'pages.dashboard.updateLog.entries.approval-flow-branch-fanout-r01.description':

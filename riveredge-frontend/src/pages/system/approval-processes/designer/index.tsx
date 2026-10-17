@@ -122,7 +122,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       const normalizedEdges = edgesData.map((e, i) => ({
         ...e,
         id: e.id || `e-${e.source}-${e.target}-${i}`,
-        type: e.type || 'step',
+        type: e.type || 'default',
       }));
       const { nodes: laidOutNodes, edges: laidOutEdges } = enrichApprovalFlowGraph(
         nodesData as Node[],
@@ -154,9 +154,9 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     const newNode: Node = { id: newId, type, position: { x: 0, y: 0 }, data: { label } };
     const outEdges = edges.filter((e) => e.source === sourceNodeId);
     let newEdges = edges.filter((e) => e.source !== sourceNodeId);
-    newEdges.push({ id: `e-${sourceNodeId}-${newId}`, source: sourceNodeId, target: newId, type: 'straight' });
+    newEdges.push({ id: `e-${sourceNodeId}-${newId}`, source: sourceNodeId, target: newId, type: 'default' });
     outEdges.forEach((e, i) => {
-      newEdges.push({ id: `e-${newId}-${e.target}-${i}`, source: newId, target: e.target, type: 'straight' });
+      newEdges.push({ id: `e-${newId}-${e.target}-${i}`, source: newId, target: e.target, type: 'default' });
     });
     
     setNodeDataMap(prev => ({ ...prev, [newId]: { label } }));
@@ -173,8 +173,8 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     const newNode: Node = { id: newId, type, position: { x: 0, y: 0 }, data: { label } };
     const newEdges = [
       ...edges,
-      { id: `e-${sourceNodeId}-${newId}`, source: sourceNodeId, target: newId, type: 'straight' },
-      { id: `e-${newId}-end`, source: newId, target: 'end', type: 'straight' },
+      { id: `e-${sourceNodeId}-${newId}`, source: sourceNodeId, target: newId, type: 'default' },
+      { id: `e-${newId}-end`, source: newId, target: 'end', type: 'default' },
     ];
     
     setNodeDataMap(prev => ({ ...prev, [newId]: { label } }));
@@ -190,8 +190,8 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     const label = t(`pages.approval.designer.${type}Node`);
     const newNode: Node = { id: newId, type, position: { x: 0, y: 0 }, data: { label } };
     const newEdges = edges.filter((e) => e.id !== edge.id).concat([
-      { id: `e-${edge.source}-${newId}`, source: edge.source, target: newId, type: 'straight' },
-      { id: `e-${newId}-${edge.target}`, source: newId, target: edge.target, type: 'straight' },
+      { id: `e-${edge.source}-${newId}`, source: edge.source, target: newId, type: 'default' },
+      { id: `e-${newId}-${edge.target}`, source: newId, target: edge.target, type: 'default' },
     ]);
     
     setNodeDataMap(prev => ({ ...prev, [newId]: { label } }));
@@ -202,7 +202,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
   }, [selectedEdge, nodes, edges, setNodes, setEdges, t]);
 
   const onConnect = useCallback((params: Connection) => {
-    setEdges((eds) => addEdge({ ...params, type: 'straight' }, eds));
+    setEdges((eds) => addEdge({ ...params, type: 'default' }, eds));
   }, [setEdges]);
 
   const handleSave = async () => {
@@ -406,7 +406,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       <ReactFlow
         nodes={flowNodes as any}
         edges={flowEdges}
-        defaultEdgeOptions={{ type: 'straight' }}
+        defaultEdgeOptions={{ type: 'default' }}
         nodesDraggable={false}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}

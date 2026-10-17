@@ -186,7 +186,7 @@ export function normalizeFlowGraph(raw: { nodes?: unknown[]; edges?: unknown[] }
       id: String(edge.id || `e-${edge.source}-${edge.target}-${i}`),
       source: String(edge.source),
       target: String(edge.target),
-      type: String(edge.type || 'step'),
+      type: String(edge.type || 'default'),
       data: (edge.data as Record<string, unknown>) || {},
     }));
 
