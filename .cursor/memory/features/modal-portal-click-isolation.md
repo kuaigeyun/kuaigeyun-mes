@@ -23,10 +23,9 @@ keywords:
 
 | 层 | 路径 |
 |----|------|
-| 全局 Dialog 注入 | `riveredge-frontend/src/patches/isolatedRcDialog.tsx`（vite alias `@rc-component/dialog`） |
 | 工具 | `riveredge-frontend/src/utils/modalEventIsolation.ts`（`MODAL_ISOLATE_POINTER_PROPS` / `mergeOverlayIsolateProps`） |
 | 遮罩可点 | `riveredge-frontend/src/global.less` → `.ant-modal-mask { pointer-events: auto }` |
-| 单页补强（可选） | Modal 上传 `maskProps` / `wrapProps` 展开 `MODAL_ISOLATE_POINTER_PROPS` |
+| 单页必传 | Modal 上传 `maskProps` / `wrapProps` 展开 `MODAL_ISOLATE_POINTER_PROPS`（FormModalTemplate / UniAuditModal 已带） |
 
 ## 根因
 
@@ -35,6 +34,5 @@ keywords:
 
 ## 踩坑
 
-- `wrapProps.onClick` 会盖掉 rc-dialog 内部 `maskClosable` 的 wrap onClick；全局 patch 已按 `e.target === e.currentTarget` 补回关闭。
-- vite `optimizeDeps.exclude` 须含 `@rc-component/dialog`，避免预构建绕过 alias。
-- 子路径 `@rc-component/dialog/es/DialogWrap` 不走 alias，供 patch 引用原实现。
+- **禁止**用 vite alias 替换 `@rc-component/dialog` 做全局注入：与 antd 预构建交织会拖慢/卡死首屏模块图，看门狗 15s 误报白屏。
+- `wrapProps.onClick` 会盖掉 rc-dialog 内部 `maskClosable` 的 wrap onClick；合并时需自行补 `e.target === e.currentTarget` 关闭，或只用 `stopPropagation` 不覆盖业务 onClick。
