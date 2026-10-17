@@ -238,6 +238,22 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.document-amount-summary-precision-r01.description',
   },
   {
+    id: 'data-backup-restore-serial-remap-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-restore-serial-remap-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-restore-serial-remap-r01.description',
+  },
+  {
+    id: 'data-backup-local-restore-host-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-local-restore-host-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-local-restore-host-r01.description',
+  },
+  {
     id: 'sales-order-list-line-materials-r01',
     date: '2026-10-15',
     type: 'fix',

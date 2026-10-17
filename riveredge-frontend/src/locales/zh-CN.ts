@@ -31296,6 +31296,14 @@ export default {
     '修复接入设备查看数据趋势图选点位后空白',
   'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.description':
     '趋势图 Tab 改为可见时再挂载图表并固定容器高度；数值字段兼容字符串小数；无数据时给出明确空态提示。',
+  'pages.dashboard.updateLog.entries.data-backup-restore-serial-remap-r01.title':
+    '修复跨组织恢复因主键冲突失败',
+  'pages.dashboard.updateLog.entries.data-backup-restore-serial-remap-r01.description':
+    '跨平台或跨组织恢复时，备份内自增主键常与目标库其它组织已占用的 id 冲突。恢复前若探测到冲突，会对 id 主键表及指向它们的外键统一偏移后再导入，不再误删其它组织数据。',
+  'pages.dashboard.updateLog.entries.data-backup-local-restore-host-r01.title':
+    '修复本机备份恢复误报「备份文件不存在」',
+  'pages.dashboard.updateLog.entries.data-backup-local-restore-host-r01.description':
+    '本机上传的备份 zip 只在当前 API 主机可读；共享任务队列上其它主机抢到恢复任务会误报文件不存在。本机存储备份改为在已校验文件的进程内执行恢复，并修正 Worker 路径与 psql 报错可读性。',
   'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.title':
     '修复销售订单列表明细列不显示物料',
   'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.description':
