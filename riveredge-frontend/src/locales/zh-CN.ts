@@ -32142,6 +32142,10 @@ export default {
     '运营看板支持参观模式手填指标',
   'pages.dashboard.updateLog.entries.business-board-visit-mode-r01.description':
     '看板设置中新增参观模式，开启后可对手填指标覆盖展示，未填项仍用实时数据；该配置仅系统管理员可见并可保存。',
+  'pages.dashboard.updateLog.entries.modal-portal-click-isolation-r01.title':
+    '弹出层打开后点击不再穿透到底层页面',
+  'pages.dashboard.updateLog.entries.modal-portal-click-isolation-r01.description':
+    '修复 Modal 遮罩可点透与 Portal 冒泡导致的底层表格误点；全局隔离弹层指针事件，点遮罩仍可关闭且不会点到列表。',
   'pages.dashboard.updateLog.entries.audit-modal-preview-fit-gate-r01.title':
     '审核弹窗流程图自适应与不可审按钮收口',
   'pages.dashboard.updateLog.entries.audit-modal-preview-fit-gate-r01.description':

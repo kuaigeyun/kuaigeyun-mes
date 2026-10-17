@@ -56,6 +56,7 @@ import { getApprovalStatus, type ApprovalStatusResponse } from '../../services/a
 import { DOCUMENT_STATUS_SEMANTIC_COLOR } from '../../constants/documentStatusColors';
 import { MarkerTag, StatusTag } from '../../constants/statusBadges';
 import { resolveAuditFlowExecutePermission } from '../../utils/auditFlowViewerGate';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 import ApprovalFlowPreview from './ApprovalFlowPreview';
 import UniAuditAdvancedActionModal, { type AdvancedActionState } from './UniAuditAdvancedActionModal';
 import type { UniAuditAction } from './types';
@@ -1143,6 +1144,10 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
         destroyOnHidden
 
+        maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+
+        wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+
         styles={{
           body: {
             paddingTop: 12,
@@ -1399,6 +1404,10 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
       width={1120}
 
       destroyOnHidden
+
+      maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+
+      wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
 
     >
 

@@ -471,6 +471,11 @@ export default defineConfig({
       { find: 'react/jsx-runtime', replacement: resolvePkg('react/jsx-runtime.js') },
       { find: 'react-dom', replacement: resolvePkg('react-dom') },
       { find: 'react', replacement: resolvePkg('react') },
+      // Modal Portal 点击隔离：须写在 antd 别名之前，仅替换包入口（子路径仍走原包）
+      {
+        find: /^@rc-component\/dialog$/,
+        replacement: `${srcRootPosix}/patches/isolatedRcDialog.tsx`,
+      },
       { find: 'antd', replacement: resolvePkg('antd') },
       { find: '@ant-design/icons', replacement: resolvePkg('@ant-design/icons') },
     ],
@@ -509,6 +514,8 @@ export default defineConfig({
     ],
     // 首屏不直接引用的大块头显式排除，让 Vite 在页面访问时再按需构建
     exclude: [
+      // 须走 src/patches/isolatedRcDialog，不能打进 antd 预构建图
+      '@rc-component/dialog',
       'echarts',
       'three',
       'monaco-editor',

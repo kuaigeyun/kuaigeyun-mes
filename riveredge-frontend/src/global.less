@@ -153,6 +153,14 @@
   overflow-y: auto;
 }
 
+/*
+ * antd 6 默认 .ant-modal-mask { pointer-events: none }，遮罩仅视觉、不接手势。
+ * 恢复为可命中，避免点遮罩区域落到下层页面（与 patches/isolatedRcDialog 冒泡隔离配套）。
+ */
+.ant-modal-mask {
+  pointer-events: auto !important;
+}
+
 /* 表单 Modal：与标准 Modal 一致，沿用全局 .ant-modal-body 的限高与滚动；内层仅保证宽度 */
 .form-modal-template .form-modal-content-inner,
 .form-modal-template-fixed-footer .form-modal-content-inner {

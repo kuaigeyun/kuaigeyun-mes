@@ -116,6 +116,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 产线清零、zscl 清 0、发送型 MQTT、command_code t0/c0/z0、报工后自动清零 | `features/iot-line-clear-mqtt.md` |
 | 角色同步创建职位、职位代码已存在 | `features/role-create-position-reuse-code.md` |
 | SOP 配错物料、工序兜底、QC 分域 | `features/sop-shopfloor-match-domain.md` |
+| Modal 点击穿透、portal 冒泡、遮罩点到列表、maskProps | `features/modal-portal-click-isolation.md` |
 | 工作台更新说明、platformUpdateLog、版本卡 | `features/platform-update-log.md` |
 | 运营看板、参观模式、visit_mode、手填指标 | `features/business-board-visit-mode.md` |
 | 简易/加强密码、password_mode、强制改密、站点登录密码策略 | `features/tenant-password-policy.md` |
@@ -257,6 +258,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/pc-audit-unreview-empty-pending.md` | PC 审核反审核空壳待审与补齐写回 | approval | 已交付 |
 | `features/audit-revoke-reopen-final-node.md` | 撤销审核重开终审节点待再审 | approval | 已交付 |
 | `features/purchase-order-buyer-amount-edit.md` | 采购订单采购员默认与金额单价互算 | mes-purchase | 已交付 |
+| `features/modal-portal-click-isolation.md` | Modal Portal 点击不穿透底层 | modal / portal | 已交付 |
 | `features/audit-hub-approve-button-visible.md` | 审核弹窗可审人须有审核按钮 | approval | 已交付 |
 | `features/audit-multilevel-second-click.md` | 多级审核一次点击，列表待我审核/您已审核 | approval | 已交付 |
 | `features/downstream-revoke-delete-original-path.md` | 下推下游原路反审/删除门禁 | mes-production | 已交付 |
