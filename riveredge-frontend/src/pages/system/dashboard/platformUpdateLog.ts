@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'attendance-fill-bottom-gap-r01',
+    date: '2026-10-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.attendance-fill-bottom-gap-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.attendance-fill-bottom-gap-r01.description',
+  },
+  {
     id: 'leave-attendance-employee-match-r01',
     date: '2026-10-18',
     type: 'fix',
