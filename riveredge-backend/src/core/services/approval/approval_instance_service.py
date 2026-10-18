@@ -853,6 +853,10 @@ class ApprovalInstanceService:
             tenant_id, entity_type, instance
         )
 
+        from core.config.audit_registry import entry_by_entity_type
+
+        audit_entry = entry_by_entity_type(entity_type)
+
         if not instance and not process:
             return {
                 "has_flow": False,
@@ -867,6 +871,7 @@ class ApprovalInstanceService:
                 "viewer_can_revoke": False,
                 "viewer_can_withdraw_submit": False,
                 "viewer_can_recall_own": False,
+                "audit_resource": audit_entry.resource if audit_entry else None,
             }
 
         tasks: List[ApprovalTask] = []
@@ -1092,12 +1097,17 @@ class ApprovalInstanceService:
                 has_revoke = await UserPermissionService.has_permission(
                     int(viewer_id), tenant_id, revoke_code
                 )
+            withdraw_history = [
+                h
+                for h in history
+                if instance and int(h.approval_instance_id) == int(instance.id)
+            ]
             flow_flags = await compute_viewer_flow_withdraw_revoke(
                 tenant_id=tenant_id,
                 viewer_id=int(viewer_id),
                 instance=instance,
                 process_nodes=process.nodes if process else {},
-                history=history,
+                history=withdraw_history,
                 admin_bypass=admin_bypass,
                 has_revoke_permission=has_revoke or admin_bypass,
             )
@@ -1173,6 +1183,7 @@ class ApprovalInstanceService:
             "viewer_can_withdraw_submit": viewer_can_withdraw_submit,
             "viewer_can_recall_own": viewer_can_recall_own,
             "current_node_decision": current_node_decision,
+            "audit_resource": audit_entry.resource if audit_entry else None,
         }
 
     @staticmethod

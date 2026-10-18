@@ -181,6 +181,15 @@ class IntegrationConfigService:
         try:
             payload = data.model_dump()
             IntegrationConfigService._normalize_config_on_save(payload.get("type"), payload.get("config"))
+            if payload.get("type") == "wecom" and payload.get("is_active", True):
+                from core.services.integration.wecom_connector_guidance import (
+                    assert_wecom_corp_agent_unique_across_tenants,
+                )
+
+                await assert_wecom_corp_agent_unique_across_tenants(
+                    tenant_id=tenant_id,
+                    config=payload.get("config") if isinstance(payload.get("config"), dict) else {},
+                )
             integration = IntegrationConfig(
                 tenant_id=tenant_id,
                 **payload,
@@ -355,6 +364,21 @@ class IntegrationConfigService:
             merged.pop("api_key_configured", None)
             IntegrationConfigService._normalize_config_on_save(integration.type, merged)
             update_data["config"] = merged
+
+        will_be_active = update_data.get("is_active", integration.is_active)
+        if integration.type == "wecom" and will_be_active:
+            merged_cfg = update_data.get("config")
+            if not isinstance(merged_cfg, dict):
+                merged_cfg = dict(integration.config or {})
+            from core.services.integration.wecom_connector_guidance import (
+                assert_wecom_corp_agent_unique_across_tenants,
+            )
+
+            await assert_wecom_corp_agent_unique_across_tenants(
+                tenant_id=tenant_id,
+                config=merged_cfg,
+                exclude_integration_uuid=str(integration.uuid),
+            )
         
         for key, value in update_data.items():
             setattr(integration, key, value)

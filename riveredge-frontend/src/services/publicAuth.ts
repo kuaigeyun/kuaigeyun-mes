@@ -163,6 +163,24 @@ export interface WeComAuthorizeUrlResponse {
   state: string;
 }
 
+export interface WeComResolveTenantResponse {
+  tenant_id: number;
+  tenant_domain: string;
+  candidates_count: number;
+}
+
+export async function resolveWecomTenant(params: {
+  corp_id: string;
+  agent_id: number;
+}): Promise<WeComResolveTenantResponse> {
+  return publicRequest<WeComResolveTenantResponse>('/auth/wecom/resolve-tenant', {
+    params: {
+      corp_id: params.corp_id,
+      agent_id: params.agent_id,
+    },
+  });
+}
+
 export async function getWecomAuthorizeUrl(params: {
   redirect_uri: string;
   tenant_id: number;

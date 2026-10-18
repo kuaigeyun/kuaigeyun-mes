@@ -293,6 +293,14 @@ async def compute_viewer_flow_withdraw_revoke(
                 tenant_id=tenant_id,
                 approval_instance_id=instance.id,
             ).all()
+        else:
+            # 驳回重提会新建 pending 实例；须只认当前实例上的 approve，禁止混入历史实例
+            active_inst_id = int(instance.id)
+            hist = [
+                h
+                for h in hist
+                if int(getattr(h, "approval_instance_id", 0) or 0) == active_inst_id
+            ]
         if (
             withdraw_policy["allowSubmitterWithdraw"]
             and int(instance.submitter_id) == vid

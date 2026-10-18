@@ -13,6 +13,7 @@ import { MODAL_CONFIG, FORM_LAYOUT } from './constants';
 import { useSubmitShortcut } from '../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../utils/globalSubmitShortcut';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
+import { getApiErrorMessage } from '../../utils/errorHandler';
 
 /**
  * `grid` 开启时，Alert / 说明 / Divider 等非 ProForm 字段必须包在本组件内。
@@ -243,6 +244,8 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
           if (firstName != null && typeof inst.scrollToField === 'function') {
             inst.scrollToField(firstName as never, { behavior: 'smooth', block: 'center' });
           }
+        } else {
+          messageApi.error(getApiErrorMessage(err) || t('common.saveFailed'));
         }
       })
       .finally(() => {

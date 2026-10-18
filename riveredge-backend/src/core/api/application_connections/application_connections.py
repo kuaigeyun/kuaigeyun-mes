@@ -4,8 +4,8 @@
 仅处理 type 为预置应用连接器类型的 IntegrationConfig 记录。
 """
 
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Optional, Any
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from uuid import UUID
 
 from core.schemas.integration_config import (
@@ -98,6 +98,27 @@ async def list_application_connections(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取应用连接列表失败: {str(e)}",
         )
+
+
+@router.get("/wecom/deployment-guide")
+async def get_wecom_deployment_guide(
+    request: Request,
+    corp_id: Optional[str] = Query(None, description="可选，生成带 Agent 的登录入口 URL"),
+    agent_id: Optional[int] = Query(None, ge=1, description="可选，与 corp_id 联用"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict[str, Any]:
+    """企业微信连接器部署说明（OAuth 回调、工作台主页、可信域名）。"""
+    from core.services.integration.wecom_connector_guidance import build_wecom_deployment_guide
+
+    base = str(request.base_url).rstrip("/")
+    parsed_agent: int | None = agent_id
+    return await build_wecom_deployment_guide(
+        tenant_id=tenant_id,
+        request_base_url=base,
+        corp_id=(corp_id or "").strip() or None,
+        agent_id=parsed_agent,
+    )
 
 
 @router.get("/{uuid}", response_model=IntegrationConfigResponse)

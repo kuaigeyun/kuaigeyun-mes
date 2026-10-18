@@ -34,6 +34,7 @@ import {
   guestLogin,
   getWecomAuthorizeUrl,
   getWecomWWLoginConfig,
+  resolveWecomTenant,
   wecomLoginCallback,
   getGiteeAuthorizeUrl,
   giteeLoginCallback,
@@ -1314,6 +1315,19 @@ export default function LoginPage() {
       const parsed = Number(urlTenantId);
       if (Number.isFinite(parsed) && parsed > 0) {
         return parsed;
+      }
+    }
+    const corpId = urlParams.get('corp_id')?.trim();
+    const agentRaw = urlParams.get('agent_id');
+    if (corpId && agentRaw) {
+      const agentId = Number(agentRaw);
+      if (Number.isFinite(agentId) && agentId > 0) {
+        try {
+          const resolved = await resolveWecomTenant({ corp_id: corpId, agent_id: agentId });
+          return resolved.tenant_id;
+        } catch {
+          // 未唯一命中时不猜测，继续后续解析
+        }
       }
     }
     const storedTenantId = getTenantId();

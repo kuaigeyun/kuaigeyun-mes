@@ -139,6 +139,16 @@ class WeComBootstrapTenantResponse(BaseModel):
         0,
         description="启用企微连接器且凭证完整的组织数量",
     )
+    tenant_domain: str | None = Field(
+        None,
+        description="命中组织时的组织域名（路径入口）",
+    )
+
+
+class WeComResolveTenantResponse(BaseModel):
+    tenant_id: int
+    tenant_domain: str
+    candidates_count: int = 1
 
 
 class GiteeAuthorizeUrlResponse(BaseModel):
@@ -370,35 +380,77 @@ async def wecom_authorize_url(
 
 
 @router.get("/wecom/bootstrap-tenant", response_model=WeComBootstrapTenantResponse)
-async def wecom_bootstrap_tenant():
+async def wecom_bootstrap_tenant(
+    corp_id: str | None = Query(None, description="企业微信 CorpID（与 agent_id 联用反查组织）"),
+    agent_id: int | None = Query(None, ge=1, description="企业微信 AgentId"),
+):
     """
     企微移动端 H5 打开且 URL 无 tenant_id 时：若全站仅有一个启用且凭证完整的企微组织，返回该组织 ID，供静默 OAuth。
     多组织时不猜测，由前端依赖本地记忆或 URL 参数。
     """
-    from core.models.integration_config import IntegrationConfig
-
-    rows = await IntegrationConfig.filter(
-        type="wecom",
-        is_active=True,
-        deleted_at__isnull=True,
+    from core.services.integration.wecom_tenant_resolve import (
+        list_wecom_enabled_tenant_ids,
+        resolve_tenant_by_wecom_corp_agent,
     )
-    tenant_ids: list[int] = []
-    seen: set[int] = set()
-    for row in rows:
-        tid = int(row.tenant_id)
-        if tid in seen:
-            continue
-        creds = await get_wecom_credentials(tid)
-        if not creds:
-            continue
-        seen.add(tid)
-        tenant_ids.append(tid)
+    from infra.models.tenant import Tenant
+
+    if corp_id and agent_id is not None:
+        resolved = await resolve_tenant_by_wecom_corp_agent(corp_id=corp_id, agent_id=agent_id)
+        if resolved:
+            return WeComBootstrapTenantResponse(
+                tenant_id=resolved.tenant_id,
+                candidates_count=1,
+                tenant_domain=resolved.tenant_domain or None,
+            )
+        enabled = await list_wecom_enabled_tenant_ids()
+        return WeComBootstrapTenantResponse(
+            tenant_id=None,
+            candidates_count=len(enabled),
+        )
+
+    tenant_ids = await list_wecom_enabled_tenant_ids()
 
     if len(tenant_ids) == 1:
-        return WeComBootstrapTenantResponse(tenant_id=tenant_ids[0], candidates_count=1)
+        tid = tenant_ids[0]
+        tenant = await Tenant.get_or_none(id=tid)
+        domain = (tenant.domain or "").strip() if tenant else ""
+        return WeComBootstrapTenantResponse(
+            tenant_id=tid,
+            candidates_count=1,
+            tenant_domain=domain or None,
+        )
     return WeComBootstrapTenantResponse(
         tenant_id=None,
         candidates_count=len(tenant_ids),
+    )
+
+
+@router.get("/wecom/resolve-tenant", response_model=WeComResolveTenantResponse)
+async def wecom_resolve_tenant(
+    corp_id: str = Query(..., min_length=1, description="企业微信 CorpID"),
+    agent_id: int = Query(..., ge=1, description="企业微信 AgentId"),
+):
+    """按 CorpID + AgentId 唯一反查组织；0 或多命中返回 404/409，不猜测默认组织。"""
+    from core.services.integration.wecom_tenant_resolve import resolve_tenant_by_wecom_corp_agent
+
+    resolved = await resolve_tenant_by_wecom_corp_agent(corp_id=corp_id, agent_id=agent_id)
+    if not resolved:
+        from core.services.integration.wecom_tenant_resolve import list_wecom_enabled_tenant_ids
+
+        enabled = await list_wecom_enabled_tenant_ids()
+        if not enabled:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="未找到启用企业微信连接器的组织",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="CorpID 与 AgentId 未唯一对应一个组织，请手动选择组织",
+        )
+    return WeComResolveTenantResponse(
+        tenant_id=resolved.tenant_id,
+        tenant_domain=resolved.tenant_domain,
+        candidates_count=resolved.candidates_count,
     )
 
 
