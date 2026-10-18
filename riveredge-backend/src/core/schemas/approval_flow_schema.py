@@ -144,6 +144,26 @@ def normalize_node_data(node_type: str, data: Optional[Dict[str, Any]]) -> Dict[
                 bool(out.get("submitterWithdrawOnlyBeforeAnyApprove", False)),
             )
             out.setdefault("allowApproverRecall", bool(out.get("allowApproverRecall", True)))
+            raw_reject_allowed = out.get("rejectAllowedTargets")
+            if raw_reject_allowed is None:
+                raw_reject_allowed = out.pop("reject_allowed_targets", None)
+            if raw_reject_allowed is None:
+                out["rejectAllowedTargets"] = ["previous", "submitter"]
+            else:
+                items = raw_reject_allowed if isinstance(raw_reject_allowed, list) else [raw_reject_allowed]
+                parsed = []
+                for item in items:
+                    val = str(item or "").strip().lower()
+                    if val in ("previous", "submitter") and val not in parsed:
+                        parsed.append(val)
+                out["rejectAllowedTargets"] = parsed if parsed else ["previous", "submitter"]
+            default_reject = str(
+                out.get("rejectDefaultTarget") or out.pop("reject_default_target", None) or "previous"
+            ).strip().lower()
+            out["rejectDefaultTarget"] = "submitter" if default_reject == "submitter" else "previous"
+            if out["rejectDefaultTarget"] not in out["rejectAllowedTargets"]:
+                out["rejectDefaultTarget"] = out["rejectAllowedTargets"][0]
+            out.pop("reject_allowed_targets", None)
             out.setdefault("allowRevokeAfterApproved", bool(out.get("allowRevokeAfterApproved", True)))
             landing = str(out.get("revokeLanding") or out.get("revoke_landing") or "reopen_final").strip().lower()
             out["revokeLanding"] = landing if landing in ("reopen_final", "to_draft") else "reopen_final"

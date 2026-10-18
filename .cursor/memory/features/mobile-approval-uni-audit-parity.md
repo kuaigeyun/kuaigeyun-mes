@@ -28,6 +28,11 @@ keywords: mobile approval getApprovalStatus uni-audit recall_own withdraw viewer
 - 分支条件：`current_node_decision` + `instance_data_patch`。
 - 状态接口返回 `audit_resource` 供 `hasReviewPermission`。
 
+## 驳回落点
+
+- 读 `getApprovalStatus.reject_options`；驳回 Sheet 传 `reject_target`（`previous` / `submitter`）。
+- 细则见 `features/audit-reject-targets.md`。
+
 ## 撤回提交（驳回重提）
 
 - `viewer_can_withdraw_submit` / `compute_viewer_flow_withdraw_revoke` 的 history **仅当前活跃实例**（与 `batch_flow_withdraw_revoke_flags_for_entities` 一致）；驳回重提新建实例后，旧实例上的 approve 不得阻断撤回。

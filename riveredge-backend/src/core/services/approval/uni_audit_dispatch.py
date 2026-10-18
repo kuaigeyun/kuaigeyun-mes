@@ -538,9 +538,19 @@ async def execute_uni_audit(
     if body and "payload" in inspect.signature(handler).parameters:
         call_kwargs["payload"] = body
 
+    reject_token = None
+    if act == "reject":
+        from core.services.approval.audit_reject_context import set_reject_target
+
+        reject_token = set_reject_target(body.get("reject_target"))
+
     try:
         result = await handler(act, **call_kwargs)
     finally:
+        if reject_token is not None:
+            from core.services.approval.audit_reject_context import reset_reject_target
+
+            reset_reject_target(reject_token)
         if branch_token is not None:
             from core.services.approval.audit_submit_context import reset_submit_branch_by_node
 

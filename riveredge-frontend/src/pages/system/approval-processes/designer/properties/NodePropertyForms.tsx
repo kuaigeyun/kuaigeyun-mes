@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ProFormCheckbox,
   ProFormSelect,
   ProFormSwitch,
   ProFormDependency,
@@ -181,6 +182,27 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
       <ProFormSwitch
         name="allowApproverRecall"
         label={t('pages.approval.designer.allowApproverRecall')}
+      />
+      <Divider orientation="left" plain style={{ margin: '8px 0 4px' }}>
+        {t('pages.approval.designer.rejectSection')}
+      </Divider>
+      <ProFormCheckbox.Group
+        name="rejectAllowedTargets"
+        label={t('pages.approval.designer.rejectAllowedTargets')}
+        initialValue={['previous', 'submitter']}
+        options={[
+          { label: t('pages.approval.designer.rejectTargetPrevious'), value: 'previous' },
+          { label: t('pages.approval.designer.rejectTargetSubmitter'), value: 'submitter' },
+        ]}
+      />
+      <ProFormSelect
+        name="rejectDefaultTarget"
+        label={t('pages.approval.designer.rejectDefaultTarget')}
+        initialValue="previous"
+        options={[
+          { label: t('pages.approval.designer.rejectTargetPrevious'), value: 'previous' },
+          { label: t('pages.approval.designer.rejectTargetSubmitter'), value: 'submitter' },
+        ]}
       />
       <Divider orientation="left" plain style={{ margin: '8px 0 4px' }}>
         {t('pages.approval.designer.revokeSection')}

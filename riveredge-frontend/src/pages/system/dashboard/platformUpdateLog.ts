@@ -44,6 +44,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'audit-reject-targets-r01',
+    date: '2026-10-18',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-reject-targets-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.audit-reject-targets-r01.description',
+  },
+  {
     id: 'audit-resubmit-withdraw-scope-r01',
     date: '2026-10-18',
     type: 'fix',

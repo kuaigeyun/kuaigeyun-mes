@@ -87,6 +87,10 @@ export interface ApprovalNodeData {
   submitterWithdrawOnlyBeforeAnyApprove?: boolean;
   /** 审批中：审批人撤回本级同意 */
   allowApproverRecall?: boolean;
+  /** 驳回允许落点 */
+  rejectAllowedTargets?: Array<'previous' | 'submitter'>;
+  /** 驳回默认落点 */
+  rejectDefaultTarget?: 'previous' | 'submitter';
   /** 已通过：是否允许反审 */
   allowRevokeAfterApproved?: boolean;
   revokeLanding?: 'reopen_final' | 'to_draft';
@@ -170,6 +174,29 @@ export function normalizeNodeData(nodeType: string, data: ApprovalNodeData = {})
       out.allowSubmitterWithdraw = out.allowSubmitterWithdraw !== false;
       out.submitterWithdrawOnlyBeforeAnyApprove = Boolean(out.submitterWithdrawOnlyBeforeAnyApprove);
       out.allowApproverRecall = Boolean(out.allowApproverRecall);
+      const rawRejectAllowed = out.rejectAllowedTargets ?? out.reject_allowed_targets;
+      if (rawRejectAllowed == null) {
+        out.rejectAllowedTargets = ['previous', 'submitter'];
+      } else {
+        const list = Array.isArray(rawRejectAllowed) ? rawRejectAllowed : [rawRejectAllowed];
+        const parsed: Array<'previous' | 'submitter'> = [];
+        for (const item of list) {
+          const val = String(item || '').trim().toLowerCase();
+          if ((val === 'previous' || val === 'submitter') && !parsed.includes(val)) {
+            parsed.push(val);
+          }
+        }
+        out.rejectAllowedTargets = parsed.length ? parsed : ['previous', 'submitter'];
+      }
+      delete out.reject_allowed_targets;
+      const defaultReject = String(
+        out.rejectDefaultTarget ?? out.reject_default_target ?? 'previous',
+      ).toLowerCase();
+      out.rejectDefaultTarget = defaultReject === 'submitter' ? 'submitter' : 'previous';
+      delete out.reject_default_target;
+      if (!out.rejectAllowedTargets.includes(out.rejectDefaultTarget)) {
+        out.rejectDefaultTarget = out.rejectAllowedTargets[0];
+      }
       out.allowRevokeAfterApproved = out.allowRevokeAfterApproved !== false;
       const landing = String(out.revokeLanding || out.revoke_landing || 'reopen_final').toLowerCase();
       out.revokeLanding = landing === 'to_draft' ? 'to_draft' : 'reopen_final';

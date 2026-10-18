@@ -128,7 +128,7 @@ interface UniAuditModalProps {
 
   onCancel: () => void;
 
-  onConfirm?: (reason?: string) => Promise<void>;
+  onConfirm?: (reason?: string, payload?: Record<string, unknown>) => Promise<void>;
 
   /**
    * 执行审核动作。返回 true 表示流程仍 pending、弹窗应保持打开并刷新状态
@@ -787,6 +787,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
   const [advancedAction, setAdvancedAction] = useState<AdvancedActionState | null>(null);
   /** null=未选择；双分支条件必须显式选是/否，禁止默认跳边 */
   const [branchDecision, setBranchDecision] = useState<number | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<'previous' | 'submitter'>('previous');
 
   const sessionUser = resolveUserForMenuPermission(getSessionCurrentUser());
   const adminOpen = isAdminBypass(sessionUser);
@@ -1053,6 +1054,18 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     }
   }, [nodeDecision?.field, nodeDecision?.defaultValue, nodeDecision?.requireExplicit, open]);
 
+  const rejectOptions = flowStatus?.reject_options;
+  useEffect(() => {
+    const target = rejectOptions?.default_target;
+    if (target === 'previous' || target === 'submitter') {
+      setRejectTarget(target);
+    }
+  }, [rejectOptions?.default_target, open]);
+
+  const buildRejectPayload = (): Record<string, unknown> => ({
+    reject_target: rejectTarget,
+  });
+
   const buildApprovePayload = (): Record<string, unknown> | undefined => {
     if (!nodeDecision?.field || branchDecision === null) return undefined;
     return {
@@ -1070,7 +1083,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     try {
 
-      await onConfirm(reason.trim() || undefined);
+      const payload = action === 'reject' ? buildRejectPayload() : undefined;
+      await onConfirm(reason.trim() || undefined, payload);
 
     } finally {
 
@@ -1107,7 +1121,11 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     try {
       const payload =
-        item.action === 'approve' ? buildApprovePayload() : undefined;
+        item.action === 'approve'
+          ? buildApprovePayload()
+          : item.action === 'reject'
+            ? buildRejectPayload()
+            : undefined;
       const keepOpen = await onAction(
         item.action,
         item.action === 'reject' || item.action === 'urge' ? reason.trim() || undefined : undefined,
@@ -1237,21 +1255,38 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         >
 
           {hasReject && (
-
-            <Input.TextArea
-
-              value={reason}
-
-              onChange={(e) => setReason(e.target.value)}
-
-              rows={3}
-
-              placeholder="如需驳回，请输入驳回原因（可选）"
-
-              style={{ marginBottom: 12 }}
-
-            />
-
+            <>
+              {(rejectOptions?.allowed_targets?.length ?? 0) > 1 ? (
+                <div style={{ marginBottom: 12 }}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+                    {t('components.uniAudit.rejectTargetHint')}
+                  </Text>
+                  <Radio.Group
+                    value={rejectTarget}
+                    onChange={(e) => setRejectTarget(e.target.value)}
+                  >
+                    {rejectOptions?.allowed_targets?.includes('previous') ? (
+                      <Radio value="previous">
+                        {t('components.uniAudit.rejectTargetPrevious')}
+                        {rejectOptions?.previous_node_label
+                          ? ` (${rejectOptions.previous_node_label})`
+                          : ''}
+                      </Radio>
+                    ) : null}
+                    {rejectOptions?.allowed_targets?.includes('submitter') ? (
+                      <Radio value="submitter">{t('components.uniAudit.rejectTargetSubmitter')}</Radio>
+                    ) : null}
+                  </Radio.Group>
+                </div>
+              ) : null}
+              <Input.TextArea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                placeholder={t('components.uniAudit.rejectReasonPlaceholder')}
+                style={{ marginBottom: 12 }}
+              />
+            </>
           )}
 
           {flowAssigneeBlockHint ? (
@@ -1464,19 +1499,38 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         )}
 
         {canExecute && action === 'reject' && (
-
-          <Input.TextArea
-
-            value={reason}
-
-            onChange={(e) => setReason(e.target.value)}
-
-            rows={4}
-
-            placeholder="请输入驳回原因（可选）"
-
-          />
-
+          <>
+            {(rejectOptions?.allowed_targets?.length ?? 0) > 1 ? (
+              <div>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+                  {t('components.uniAudit.rejectTargetHint')}
+                </Text>
+                <Radio.Group
+                  value={rejectTarget}
+                  onChange={(e) => setRejectTarget(e.target.value)}
+                  style={{ marginBottom: 12 }}
+                >
+                  {rejectOptions?.allowed_targets?.includes('previous') ? (
+                    <Radio value="previous">
+                      {t('components.uniAudit.rejectTargetPrevious')}
+                      {rejectOptions?.previous_node_label
+                        ? ` (${rejectOptions.previous_node_label})`
+                        : ''}
+                    </Radio>
+                  ) : null}
+                  {rejectOptions?.allowed_targets?.includes('submitter') ? (
+                    <Radio value="submitter">{t('components.uniAudit.rejectTargetSubmitter')}</Radio>
+                  ) : null}
+                </Radio.Group>
+              </div>
+            ) : null}
+            <Input.TextArea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={4}
+              placeholder={t('components.uniAudit.rejectReasonPlaceholder')}
+            />
+          </>
         )}
 
         <AuditHubDetailPanel
