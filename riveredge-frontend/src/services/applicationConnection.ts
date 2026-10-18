@@ -93,6 +93,27 @@ export async function getApplicationConnectionListAll(
   return out;
 }
 
+export interface WeComDeploymentGuide {
+  origin: string;
+  tenant_domain: string;
+  oauth_callback_url: string;
+  workbench_home_url: string;
+  login_with_agent_url: string;
+  trusted_domain: string;
+}
+
+export async function getWecomDeploymentGuide(params?: {
+  corp_id?: string;
+  agent_id?: number;
+}): Promise<WeComDeploymentGuide> {
+  return apiRequest<WeComDeploymentGuide>('/core/application-connections/wecom/deployment-guide', {
+    params: {
+      corp_id: params?.corp_id,
+      agent_id: params?.agent_id,
+    },
+  });
+}
+
 export async function getApplicationConnectionByUuid(uuid: string): Promise<ApplicationConnection> {
   return apiRequest<ApplicationConnection>(`/core/application-connections/${uuid}`);
 }

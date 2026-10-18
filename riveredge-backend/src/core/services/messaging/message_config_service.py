@@ -288,9 +288,17 @@ class MessageConfigService:
         content = "RiverEdge 消息渠道测试"
 
         if provider in ("wecom", "wechat_work", "企业微信"):
-            from core.services.messaging.wecom_message_service import send_wecom_text_message
+            from core.services.messaging.wecom_message_service import (
+                resolve_wecom_recipient_userids,
+                send_wecom_text_message,
+            )
 
-            user_ids = [v.strip() for v in target.replace(",", "|").split("|") if v.strip()]
+            user_ids, resolve_error = await resolve_wecom_recipient_userids(
+                tenant_id=tenant_id,
+                recipient=target,
+            )
+            if resolve_error:
+                return False, "企业微信测试目标无效", resolve_error
             sent = await send_wecom_text_message(
                 tenant_id=tenant_id,
                 user_ids=user_ids,
@@ -299,7 +307,7 @@ class MessageConfigService:
             return (
                 (True, "企业微信测试消息已发送", None)
                 if sent
-                else (False, "企业微信未配置或测试目标无效", "请确认已启用 type=wecom 的应用连接器，并填写企微 UserID")
+                else (False, "企业微信未配置或测试目标无效", "请确认已启用 type=wecom 的应用连接器，并填写企微 UserID 或平台用户 ID")
             )
 
         if provider in ("webhook", "http", "rest"):

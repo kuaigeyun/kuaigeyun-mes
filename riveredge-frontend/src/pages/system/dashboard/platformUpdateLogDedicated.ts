@@ -9,6 +9,46 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-firmware-release-date-locked-r01',
+    date: '2026-10-18',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-firmware-release-date-locked-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-firmware-release-date-locked-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-drawings-menu-flatten-r01',
+    date: '2026-10-18',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-drawings-menu-flatten-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-drawings-menu-flatten-r01.description',
+  },
+  {
+    id: 'funide-oa-firmware-software-description-r01',
+    date: '2026-10-18',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-firmware-software-description-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-firmware-software-description-r01.description',
+  },
+  {
+    id: 'funide-oa-drawing-distribution-party-r01',
+    date: '2026-10-18',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-drawing-distribution-party-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-drawing-distribution-party-r01.description',
+  },
+  {
     id: 'haoligo-home-permission-reload-loop-r01',
     date: '2026-10-18',
     type: 'fix',

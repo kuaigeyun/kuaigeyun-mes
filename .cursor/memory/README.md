@@ -42,6 +42,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 同步/推送 Hub、外推、DocumentPush、preferIds、`:sync` / `:push` | `features/sync-push-hub-master-data.md` |
 | SyncFromSource、多源映射、只补缺字段、match_key 合并 | `features/sync-from-source-multi-source-merge.md` |
 | 通知仓库 504、服务器暂时不可用、NestedTransaction 死锁 | `features/notify-warehouse-nested-tx-deadlock.md` |
+| 企业微信、消息提醒推企微、push wecom、站内信不进企微 | `features/wecom-push-from-pc-messages.md` |
 | 单位/物料同步串扰、单位写成物料编码、query_measureunits | `features/unit-material-sync-decouple.md` |
 | 单位显示成编码、库存/工单见吨(T)、MaterialUnitLabel、单位名称 | `features/material-unit-display-name.md` |
 | 来源类型转换没生效、FErpClsID、source_type 仍 Buy | `features/sync-material-source-type-conversion.md` |
@@ -75,6 +76,8 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 定制图纸详情、主文件附加文件、afterBasic、FilePreviewModal | `features/funide-oa-drawing-detail-files-section.md` |
 | 设备管理附件预览、计量证书、校准记录「N 个附件」、DocumentAttachmentsReadonly | `features/equipment-attachment-online-preview.md` |
 | 客诉 8D、工作台跳系统首页、eight-d-reports/:id、host-mirror | `features/funide-oa-eight-d-workbench-route.md` |
+| 图纸下发保存没反应、图档发放部门使用人、issueDepartmentId | `features/funide-oa-drawing-distribution-party.md` |
+| 产品固件软件12位编码、软件描述、software_description | `features/funide-oa-firmware-software-description.md` |
 | 研发电子/结构菜单、2D/3D/模具交付物、试验委托 general | `features/funide-oa-rd-electronics-structure-menu.md` |
 | 构建 dist、deploy、H5、launch.dev、fast-deploy、开机自启 install-service | `features/fast-deploy-scripts.md` |
 | APP 转 PRO、compose、财务管理托管、数据中心占位 | `features/app-pro-migration-compose.md` |
@@ -132,6 +135,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 审核反审核、空壳待审、writeback_failure、revoke_noop | `features/pc-audit-unreview-empty-pending.md` |
 | 终审撤销回到上一级、终审人无审核按钮、撤销应留终审人待办可再审 | `features/audit-revoke-reopen-final-node.md` |
 | 审批流撤回反审、viewer_can_revoke、allowSubmitterWithdraw、recall_own | `features/approval-flow-withdraw-revoke-policy.md` |
+| 手机待我审批、UniAudit 门控、executeUniAuditAction | `features/mobile-approval-uni-audit-parity.md` |
 | 采购订单采购员空白、不含税金额不能改、金额单价互算 | `features/purchase-order-buyer-amount-edit.md` |
 | 采购申请到货日带入行、行到货日必填、required_date | `features/purchase-requisition-line-delivery-carry.md` |
 | 确认入库加载确认预览失败、仓库回显、loadConfirmPreviewFailed | `features/inbound-confirm-preview-warehouse-display.md` |
@@ -177,6 +181,8 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/funide-oa-drawing-detail-files-section.md` | 定制工程图纸详情图纸文件板块 | funide-oa | 已交付 |
 | `features/equipment-attachment-online-preview.md` | 设备管理计量证书与附件在线预览 | kuaizhizao-ops | 已交付 |
 | `features/funide-oa-eight-d-workbench-route.md` | 客诉 8D 工作台路由须手挂 | funide-oa | 已交付 |
+| `features/funide-oa-drawing-distribution-party.md` | 定制图档发放保存须带部门与使用人 | funide-oa | 已交付 |
+| `features/funide-oa-firmware-software-description.md` | 产品固件软件12位编码与软件描述 | funide-oa | 已交付 |
 | `features/kuaiai-insights-in-hub.md` | KU-AI 调用分析并入能力矩阵 | kuaiai | 已交付 |
 | `features/kuaiai-pulse-offline.md` | KU-AI 异常感知下线 | kuaiai | 已交付 |
 | `features/kuaiai-trust-offline.md` | KU-AI 信任中心下线 | kuaiai | 已交付 |
@@ -214,6 +220,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/sync-push-hub-master-data.md` | 物料/BOM/工序 SyncPushHub + 外推 | sync-push | 已交付 |
 | `features/sync-from-source-multi-source-merge.md` | 入站多源：只补缺字段 + 匹配键合并 | sync-from-source | 已交付 |
 | `features/notify-warehouse-nested-tx-deadlock.md` | 通知仓库 Nested 事务死锁修复 | kuaizhizao-warehouse | 已交付 |
+| `features/wecom-push-from-pc-messages.md` | PC 业务消息提醒推企业微信（user_id 解析） | messaging | 已交付 |
 | `features/unit-material-sync-decouple.md` | 单位/物料同步别名与写入前去重拆开 | sync-from-source | 已交付 |
 | `features/material-unit-display-name.md` | 用户可见单位一律显示目录名称 | materialUnitDisplay / MaterialUnitLabel | 已交付 |
 | `features/sync-material-source-type-conversion.md` | 物料来源类型转换依赖 FieldKeys | sync-from-source | 已交付 |
@@ -266,6 +273,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/pc-audit-unreview-empty-pending.md` | PC 审核反审核空壳待审与补齐写回 | approval | 已交付 |
 | `features/audit-revoke-reopen-final-node.md` | 撤销审核重开终审节点待再审 | approval | 已交付 |
 | `features/approval-flow-withdraw-revoke-policy.md` | 审批流撤回/反审设计器与身份门控 | approval | 已交付 |
+| `features/mobile-approval-uni-audit-parity.md` | 手机审批中心与 PC getApprovalStatus/uni-audit | mobile, approval | 已交付 |
 | `features/purchase-order-buyer-amount-edit.md` | 采购订单采购员默认与金额单价互算 | mes-purchase | 已交付 |
 | `features/purchase-requisition-line-delivery-carry.md` | 采购申请表头到货日带入行且行必填 | mes-purchase | 已交付 |
 | `features/inbound-confirm-preview-warehouse-display.md` | 入库确认预览仓库走回显不拦确认 | mes-warehouse | 已交付 |

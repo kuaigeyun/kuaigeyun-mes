@@ -298,9 +298,9 @@ const MessageConfigListPage: React.FC = () => {
         icon: null,
         content: (
           <div style={{ marginTop: 16 }}>
-            <p>{t('pages.system.messageConfig.testInputLabel', { target: type === 'email' ? t('pages.system.messageConfig.testTargetEmail') : type === 'push' ? '企业微信 UserID 或应用接收人' : t('pages.system.messageConfig.testTargetPhone') })}</p>
+            <p>{t('pages.system.messageConfig.testInputLabel', { target: type === 'email' ? t('pages.system.messageConfig.testTargetEmail') : type === 'push' ? t('pages.system.messageConfig.testTargetPush') : t('pages.system.messageConfig.testTargetPhone') })}</p>
             <Input 
-              placeholder={type === 'email' ? t('pages.system.messageConfig.testTargetPlaceholderEmail') : type === 'push' ? '如 userid 或 user1|user2' : t('pages.system.messageConfig.testTargetPlaceholderPhone')}
+              placeholder={type === 'email' ? t('pages.system.messageConfig.testTargetPlaceholderEmail') : type === 'push' ? t('pages.system.messageConfig.testTargetPlaceholderPush') : t('pages.system.messageConfig.testTargetPlaceholderPhone')}
               onChange={(e) => { testTarget = e.target.value; }}
             />
           </div>
@@ -806,6 +806,17 @@ const MessageConfigListPage: React.FC = () => {
                         colProps={{ span: 24 }}
                       />
                     ) : null}
+                  </ProFormDependency>
+                  <ProFormDependency name={['provider']}>
+                    {({ provider }) =>
+                      provider === 'wecom' ? (
+                        <ProFormSwitch
+                          name="wecom_use_textcard"
+                          label={t('pages.system.messageConfig.wecomUseTextcard')}
+                          tooltip={t('pages.system.messageConfig.wecomUseTextcardHint')}
+                          colProps={{ span: 24 }}
+                        />
+                      ) : null}
                   </ProFormDependency>
                   <ProFormText
                     name="recipient_field"

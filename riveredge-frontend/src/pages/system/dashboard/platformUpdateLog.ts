@@ -44,6 +44,54 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'audit-resubmit-withdraw-scope-r01',
+    date: '2026-10-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-resubmit-withdraw-scope-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-resubmit-withdraw-scope-r01.description',
+  },
+  {
+    id: 'mobile-approval-advanced-actions-r01',
+    date: '2026-10-18',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-approval-advanced-actions-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-approval-advanced-actions-r01.description',
+  },
+  {
+    id: 'mobile-approval-uni-audit-parity-r01',
+    date: '2026-10-18',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-approval-uni-audit-parity-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-approval-uni-audit-parity-r01.description',
+  },
+  {
+    id: 'form-modal-save-error-visible-r01',
+    date: '2026-10-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.form-modal-save-error-visible-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.form-modal-save-error-visible-r01.description',
+  },
+  {
+    id: 'wecom-multi-tenant-enhance-r01',
+    date: '2026-10-18',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.wecom-multi-tenant-enhance-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.wecom-multi-tenant-enhance-r01.description',
+  },
+  {
+    id: 'wecom-push-recipient-resolve-r01',
+    date: '2026-10-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.wecom-push-recipient-resolve-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.wecom-push-recipient-resolve-r01.description',
+  },
+  {
     id: 'uni-audit-flow-four-fixes-r01',
     date: '2026-10-18',
     type: 'fix',

@@ -179,6 +179,15 @@ class BusinessNotificationService:
         except (TypeError, ValueError):
             entity_id_int = None
 
+        from core.services.business.notification_document_url import ensure_notification_document_url
+
+        await ensure_notification_document_url(
+            tenant_id,
+            vars_payload,
+            trigger_document=doc,
+            entity_uuid=str(entity_uuid) if entity_uuid else None,
+        )
+
         # IDEM：同一实体同一触发动作已成功发送则跳过。
         # P2-20：可重复动作（质检失败/异常/驳回/触发类）不加永久去重，避免合法二次提醒被吞。
         _REPEATABLE_ACTIONS = frozenset({

@@ -142,6 +142,8 @@ export interface ApprovalStatusResponse {
   viewer_can_revoke?: boolean;
   viewer_can_withdraw_submit?: boolean;
   viewer_can_recall_own?: boolean;
+  /** manifest.audit 资源前缀，供跨模块审批 UI 做 RBAC */
+  audit_resource?: string | null;
   /** 下一节点为 previous_approver 条件时，审核前须按下标选边 */
   current_node_decision?: {
     field: string;

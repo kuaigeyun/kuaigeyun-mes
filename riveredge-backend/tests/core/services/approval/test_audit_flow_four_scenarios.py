@@ -21,7 +21,10 @@ import pytest
 from apps.kuaizhizao.services.document_action_policy.purchase_requisition import (
     derive_purchase_requisition_capabilities,
 )
-from core.services.approval.approval_flow_policy import viewer_may_recall_own_on_instance
+from core.services.approval.approval_flow_policy import (
+    compute_viewer_flow_withdraw_revoke,
+    viewer_may_recall_own_on_instance,
+)
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.approval.approval_viewer_actions import build_flow_viewer_actions
 from core.services.approval.audit_capability_gate import gate_audit_allowed_actions
@@ -236,3 +239,45 @@ class TestScenarioRejectedResubmit:
         out = gate_audit_allowed_actions(audit, caps)
         assert out is not None
         assert "submit" in out["allowed_actions"]
+
+    @pytest.mark.asyncio
+    async def test_submitter_withdraw_after_resubmit_ignores_prior_instance_approves(self):
+        """驳回重提新建实例：旧轮 approve 不得阻断本轮撤回提交。"""
+        graph = {
+            "nodes": [
+                {"id": "start", "type": "start"},
+                {
+                    "id": "n1",
+                    "type": "approval",
+                    "data": {
+                        "allowSubmitterWithdraw": True,
+                        "submitterWithdrawOnlyBeforeAnyApprove": True,
+                    },
+                },
+                {"id": "end", "type": "end"},
+            ],
+            "edges": [{"source": "start", "target": "n1"}, {"source": "n1", "target": "end"}],
+        }
+        pending_instance = SimpleNamespace(
+            id=200,
+            status="pending",
+            submitter_id=100,
+            current_node="n1",
+        )
+        mixed_history = [
+            SimpleNamespace(approval_instance_id=100, action="approve", action_by=200),
+            SimpleNamespace(approval_instance_id=100, action="reject", action_by=200),
+            SimpleNamespace(approval_instance_id=200, action="submit", action_by=100),
+        ]
+        with patch(
+            "core.services.approval.approval_flow_policy.viewer_may_recall_own_on_instance",
+            new=AsyncMock(return_value=False),
+        ):
+            flags = await compute_viewer_flow_withdraw_revoke(
+                tenant_id=1,
+                viewer_id=100,
+                instance=pending_instance,
+                process_nodes=graph,
+                history=mixed_history,
+            )
+        assert flags["viewer_can_withdraw_submit"] is True

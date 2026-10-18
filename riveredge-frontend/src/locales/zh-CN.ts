@@ -6749,9 +6749,12 @@ export default {
   'app.funide-oa.menu.r05.complaintAnalysis': '投诉月度分析',
   'app.funide-oa.menu.r06.deliverables': '交付物',
   'app.funide-oa.menu.r06.productFirmwares': '产品固件',
-  'app.funide-oa.productFirmware.fields.softwareItemCode': '软件编码',
-  'app.funide-oa.productFirmware.fields.softwareItemCodePlaceholder': '请输入软件编码（可含横杠等分隔符）',
-  'app.funide-oa.productFirmware.messages.softwareItemCodeMaxLength': '软件编码不能超过50个字符',
+  'app.funide-oa.productFirmware.fields.softwareItemCode': '软件12位编码',
+  'app.funide-oa.productFirmware.fields.softwareItemCodePlaceholder': '请输入软件12位编码',
+  'app.funide-oa.productFirmware.fields.softwareDescription': '软件描述',
+  'app.funide-oa.productFirmware.fields.softwareDescriptionPlaceholder': '请输入软件描述',
+  'app.funide-oa.productFirmware.messages.softwareItemCodeMaxLength': '软件12位编码不能超过50个字符',
+  'app.funide-oa.productFirmware.messages.softwareDescriptionMaxLength': '软件描述不能超过200个字符',
   'app.funide-oa.menu.r06.productionFiles': '生产软件',
   'app.funide-oa.menu.docControl.deliverables': '交付物',
   'app.funide-oa.menu.r07.annualLabPlans': '年度例试计划',
@@ -26259,6 +26262,8 @@ export default {
   'pages.system.configCenter.notification.form.template': '消息模板',
   'pages.system.configCenter.notification.form.channels': '通知渠道',
   'pages.system.configCenter.notification.form.channelsPlaceholder': '默认站内通知，可多选其它已配置渠道',
+  'pages.system.configCenter.notification.form.channelsWecomHint':
+    '勾选「推送 / 企业微信」渠道时，收件人须已在平台绑定企业微信账号；未绑定会在消息日志中记录失败，站内信不受影响。',
   'pages.system.configCenter.notification.form.designatedSection': '指定通知',
   'pages.system.configCenter.notification.form.formUserSection': '用户指定',
   'pages.system.configCenter.notification.form.formUserSectionDesc':
@@ -29029,6 +29034,17 @@ export default {
   'pages.system.applicationConnections.formAesKeyLabel': '加密 aes_key',
   'pages.system.applicationConnections.formTokenLabel': '签名 token',
   'pages.system.applicationConnections.formCorpIdLabel': '企业 ID',
+  'pages.system.applicationConnections.wecomGuide.intro':
+    '将下列地址配置到企业微信管理后台（可信域名、网页授权回调、自建应用主页）。同一站点多组织时，每个组织应使用独立 AgentId。',
+  'pages.system.applicationConnections.wecomGuide.trustedDomain': '可信域名',
+  'pages.system.applicationConnections.wecomGuide.oauthCallback': 'OAuth 回调（PC 登录）',
+  'pages.system.applicationConnections.wecomGuide.workbenchHome': '推荐工作台主页',
+  'pages.system.applicationConnections.wecomGuide.loginWithAgent': '带 Agent 的登录入口（可选）',
+  'pages.system.applicationConnections.wecomGuide.nextSteps':
+    '下一步：在「消息配置」新建推送渠道（企业微信），并在「业务配置 / 消息提醒」规则中勾选该渠道。',
+  'pages.system.applicationConnections.wecomGuide.copyEmpty': '暂无可复制内容',
+  'pages.system.applicationConnections.wecomGuide.copied': '已复制{{label}}',
+  'pages.system.applicationConnections.wecomGuide.copyFailed': '复制失败，请手动选择复制',
   'pages.system.applicationConnections.dingtalkAppIdLabel': 'App ID',
   'pages.system.applicationConnections.dingtalkAppIdTooltip':
     '对应钉钉开发者后台「应用凭证」中的 App ID；快捷登录可不填',
@@ -30893,7 +30909,12 @@ export default {
   'pages.system.messageConfig.testTitle': '消息渠道测试',
   'pages.system.messageConfig.testInputLabel': '请输入用于接收测试消息的{{target}}：',
   'pages.system.messageConfig.testTargetEmail': '邮箱',
+  'pages.system.messageConfig.testTargetPush': '企微 UserID 或平台用户 ID',
   'pages.system.messageConfig.testTargetPhone': '手机号',
+  'pages.system.messageConfig.testTargetPlaceholderPush': '如 ZhangSan 或 123，多个用竖线分隔',
+  'pages.system.messageConfig.wecomUseTextcard': '企业微信卡片消息',
+  'pages.system.messageConfig.wecomUseTextcardHint':
+    '开启后且模板变量含 document_url 时发送卡片；业务提醒会自动写入组织入口跳转链接（已映射的单据类型）',
   'pages.system.messageConfig.testTargetPlaceholderEmail': 'your-email@example.com',
   'pages.system.messageConfig.testTargetPlaceholderPhone': '接收者手机号',
   'pages.system.messageConfig.testInputRequired': '请输入测试目标地址',
@@ -32174,6 +32195,38 @@ export default {
     '无工作台权限的账号登录后不再整页重载',
   'pages.dashboard.updateLog.entries.haoligo-home-permission-reload-loop-r01.description':
     '首页指向工作台但账号没有该页查看权限时，不再在应用根与站点根之间来回跳转；无权限时停在当前页提示，避免反复卸载布局并重拉菜单与配置。',
+  'pages.dashboard.updateLog.entries.audit-resubmit-withdraw-scope-r01.title':
+    '驳回重提后发起人可撤回提交',
+  'pages.dashboard.updateLog.entries.audit-resubmit-withdraw-scope-r01.description':
+    '审核状态接口计算撤回门控时只统计当前 pending 实例上的审批记录，不再把上一轮驳回前的已通过混进来，重新提交后在无人审过本轮前可正常撤回。',
+  'pages.dashboard.updateLog.entries.mobile-approval-advanced-actions-r01.title':
+    '手机审批支持转交委托加签催办',
+  'pages.dashboard.updateLog.entries.mobile-approval-advanced-actions-r01.description':
+    '待我审批详情「更多」中可转交、委托、前/后加签与制单人催办，选人走人员展示搜索，与 PC 审核弹窗高级动作及 uni-audit 执行路径一致。',
+  'pages.dashboard.updateLog.entries.mobile-approval-uni-audit-parity-r01.title':
+    '手机审批中心与 PC 审核门控一致',
+  'pages.dashboard.updateLog.entries.mobile-approval-uni-audit-parity-r01.description':
+    '待我审批详情会加载流程状态与节点概况，同意驳回撤回提交与撤销审核等动作与 PC UniAudit 同源门控，经统一审核入口执行；制单人待他人审批时不再误显可审按钮。',
+  'pages.dashboard.updateLog.entries.form-modal-save-error-visible-r01.title':
+    '表单保存失败会提示原因',
+  'pages.dashboard.updateLog.entries.form-modal-save-error-visible-r01.description':
+    '新建编辑弹窗保存时，接口校验失败会弹出具体原因，不再出现点了保存却没有任何提示。',
+  'pages.dashboard.updateLog.entries.funide-oa-firmware-release-date-locked-r01.title':
+    '产品固件发布日期固定为当天',
+  'pages.dashboard.updateLog.entries.funide-oa-firmware-release-date-locked-r01.description':
+    '新建产品固件时发布日期自动取站点当天日期，且不可修改。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-drawings-menu-flatten-r01.title':
+    '研发电子结构下图纸菜单不再分组',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-drawings-menu-flatten-r01.description':
+    '2D图、3D图、模具图及DFM 直接排在研发电子/结构下面，不再套一层工程图纸。',
+  'pages.dashboard.updateLog.entries.funide-oa-firmware-software-description-r01.title':
+    '产品固件可填写软件描述',
+  'pages.dashboard.updateLog.entries.funide-oa-firmware-software-description-r01.description':
+    '新建产品固件时，软件编码改为软件12位编码并缩短输入框，右侧增加软件描述。两项都由手工填写并随单据保存。',
+  'pages.dashboard.updateLog.entries.funide-oa-drawing-distribution-party-r01.title':
+    '图档发放保存需填写部门与使用人',
+  'pages.dashboard.updateLog.entries.funide-oa-drawing-distribution-party-r01.description':
+    '图纸下发的新建图档发放补回部门与使用人。这两项是发放单必填，缺了保存会被拒绝且之前没有提示。',
   'pages.dashboard.updateLog.entries.attendance-fill-bottom-gap-r01.title':
     '月度考勤填报表底只留一档间距',
   'pages.dashboard.updateLog.entries.attendance-fill-bottom-gap-r01.description':
@@ -44049,6 +44102,14 @@ export default {
   'components.uniAudit.urge': '催办',
   'components.uniAudit.recallOwnAction': '撤销审核',
   'components.uniAudit.submitterAwaitingOthers': '您为发起人，请等待当前节点审批人处理',
+  'pages.dashboard.updateLog.entries.wecom-multi-tenant-enhance-r01.title':
+    '多租户企业微信对接增强',
+  'pages.dashboard.updateLog.entries.wecom-multi-tenant-enhance-r01.description':
+    '应用连接器提供企微部署说明与跨组织 Agent 冲突校验；登录支持 CorpId 与 AgentId 反查组织；推送渠道可发卡片消息并随业务提醒写入 document_url 跳转链接。',
+  'pages.dashboard.updateLog.entries.wecom-push-recipient-resolve-r01.title':
+    '业务消息可推送到企业微信',
+  'pages.dashboard.updateLog.entries.wecom-push-recipient-resolve-r01.description':
+    '消息提醒规则勾选企业微信推送渠道时，系统会按平台用户解析企微账号再发送；未绑定企微的用户在消息日志中可见失败原因。配置路径：应用连接器、消息渠道、业务配置消息提醒。',
   'pages.dashboard.updateLog.entries.uni-audit-flow-four-fixes-r01.title':
     '审核流程按钮与驳回后重提',
   'pages.dashboard.updateLog.entries.uni-audit-flow-four-fixes-r01.description':
