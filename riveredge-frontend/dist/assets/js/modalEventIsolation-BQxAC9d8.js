@@ -1,0 +1,1 @@
+function n(o){o.stopPropagation()}const a={onMouseDown:n,onClick:n,onDoubleClick:n};function e(o){return o.closest(".ant-modal-content")??o.closest(".ant-modal-wrap")??document.body}export{a as M,e as g};

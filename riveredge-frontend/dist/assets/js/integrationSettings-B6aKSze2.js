@@ -1,0 +1,1 @@
+const E="********",e="deepseek-v4-flash",s="https://api.deepseek.com",_=["deepseek-v4-flash","deepseek-v4-pro"],a="https://api.siliconflow.cn/v1",p="deepseek-ai/DeepSeek-OCR";export{s as D,E as I,e as a,_ as b,a as c,p as d};

@@ -1,0 +1,1 @@
+function h(t){const{headers:l,getHeaderId:c,getItems:f,buildRowKey:r,mapItemRow:u,mapEmptyHeaderRow:a}=t,o=[];for(const e of l){const i=c(e),n=f(e)??[];if(n.length===0){a&&o.push({...a(e),_rowKey:r(e,null,0)});continue}n.forEach((s,d)=>{o.push({...u(e,s,d),_rowKey:r(e,s,d),_headerId:i})})}return o}function w(t){return t==="table"?"order":"detail"}export{h as f,w as r};

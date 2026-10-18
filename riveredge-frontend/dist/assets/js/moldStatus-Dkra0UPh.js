@@ -1,0 +1,1 @@
+const o=["待启用","待用","在用","维修","保养","外协维修","报废","停用"],n=new Set(o),S={待启用:"cyan",待用:"blue",在用:"green",维修:"volcano",保养:"gold",外协维修:"purple",报废:"red",停用:"default"};function r(e){if(n.has(e))return S[e]}export{n as M,o as a,r as g};
