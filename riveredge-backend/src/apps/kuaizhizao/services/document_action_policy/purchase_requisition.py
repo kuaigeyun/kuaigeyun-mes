@@ -11,6 +11,7 @@ from apps.kuaizhizao.constants import (
     ReviewStatus,
     is_draft_status,
     is_pending_review_status,
+    is_rejected_status,
     normalize_status,
 )
 from apps.kuaizhizao.services.document_action_policy.types import (
@@ -72,7 +73,11 @@ def derive_purchase_requisition_capabilities(
 ) -> PurchaseRequisitionCapabilities:
     status = getattr(req, "status", None)
 
-    update_allowed = is_draft_status(status or "") or is_pending_review_status(status or "")
+    update_allowed = (
+        is_draft_status(status or "")
+        or is_pending_review_status(status or "")
+        or is_rejected_status(status or "")
+    )
     update_cap = _cap(
         update_allowed,
         "purchase_requisition.update.not_allowed" if not update_allowed else None,
@@ -88,9 +93,10 @@ def derive_purchase_requisition_capabilities(
         delete_reason = "purchase_requisition.delete.not_allowed"
     delete_cap = _cap(delete_allowed, delete_reason)
 
+    submit_allowed = is_draft_status(status or "") or is_rejected_status(status or "")
     submit_cap = _cap(
-        is_draft_status(status or ""),
-        "purchase_requisition.submit.not_draft" if not is_draft_status(status or "") else None,
+        submit_allowed,
+        "purchase_requisition.submit.not_draft" if not submit_allowed else None,
     )
 
     approve_cap = _cap(

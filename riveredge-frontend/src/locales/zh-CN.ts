@@ -44047,6 +44047,12 @@ export default {
   'components.uniAudit.addSign': '加签',
   'components.uniAudit.delegate': '委托',
   'components.uniAudit.urge': '催办',
+  'components.uniAudit.recallOwnAction': '撤销审核',
+  'components.uniAudit.submitterAwaitingOthers': '您为发起人，请等待当前节点审批人处理',
+  'pages.dashboard.updateLog.entries.uni-audit-flow-four-fixes-r01.title':
+    '审核流程按钮与驳回后重提',
+  'pages.dashboard.updateLog.entries.uni-audit-flow-four-fixes-r01.description':
+    '制单人提交后审核与驳回置灰；节点级撤销审核默认开启且下一节点已审后不可撤；终审撤销后前序节点仍显示已通过；驳回单据可编辑并重新提交。',
   'components.uniPush.disabled.noActions': '当前无可用下推操作',
   'components.uniPush.disabled.selection': '请先选择一条可下推单据',
   'components.uniPush.disabled.unavailable': '当前状态不可下推',

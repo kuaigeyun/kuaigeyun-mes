@@ -143,7 +143,7 @@ def normalize_node_data(node_type: str, data: Optional[Dict[str, Any]]) -> Dict[
                 "submitterWithdrawOnlyBeforeAnyApprove",
                 bool(out.get("submitterWithdrawOnlyBeforeAnyApprove", False)),
             )
-            out.setdefault("allowApproverRecall", bool(out.get("allowApproverRecall", False)))
+            out.setdefault("allowApproverRecall", bool(out.get("allowApproverRecall", True)))
             out.setdefault("allowRevokeAfterApproved", bool(out.get("allowRevokeAfterApproved", True)))
             landing = str(out.get("revokeLanding") or out.get("revoke_landing") or "reopen_final").strip().lower()
             out["revokeLanding"] = landing if landing in ("reopen_final", "to_draft") else "reopen_final"

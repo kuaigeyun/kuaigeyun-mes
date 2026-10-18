@@ -27,10 +27,16 @@ def derive_payment_application_capabilities(app: Any) -> dict[str, ActionCapabil
     status = getattr(app, "status", None)
     remaining = getattr(app, "remaining_amount", 0) or 0
 
-    update_ok = is_draft_status(status or "") or is_pending_review_status(status or "")
+    from apps.kuaizhizao.constants import is_rejected_status
+
+    update_ok = (
+        is_draft_status(status or "")
+        or is_pending_review_status(status or "")
+        or is_rejected_status(status or "")
+    )
     delete_ok = is_draft_status(status or "")
 
-    submit_ok = is_draft_status(status or "")
+    submit_ok = is_draft_status(status or "") or is_rejected_status(status or "")
     approve_ok = is_pending_review_status(status or "")
 
     approved = _is_approved(status)

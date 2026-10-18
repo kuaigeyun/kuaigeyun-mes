@@ -36,6 +36,12 @@ def _is_pending_review(status: Any) -> bool:
     return _norm_status(status) == "待审核"
 
 
+def _is_rejected(status: Any, review_status: Any) -> bool:
+    st = _norm_status(status)
+    rs = _normalize_review_status(review_status)
+    return st in ("已驳回", "rejected") or rs == ReviewStatus.REJECTED.value
+
+
 def _is_effective(status: Any) -> bool:
     return _norm_status(status) in _CONTRACT_EFFECTIVE_STATUSES
 
@@ -68,7 +74,7 @@ def derive_sales_contract_capabilities(
     st = _norm_status(status)
     today = today or date.today()
 
-    update_allowed = _is_draft(status) or _is_pending_review(status)
+    update_allowed = _is_draft(status) or _is_pending_review(status) or _is_rejected(status, review_status)
     update_cap = _cap(
         update_allowed,
         "sales_contract.update.not_draft" if not update_allowed else None,
@@ -80,9 +86,10 @@ def derive_sales_contract_capabilities(
         "sales_contract.delete.not_draft" if not delete_allowed else None,
     )
 
+    submit_allowed = _is_draft(status) or _is_rejected(status, review_status)
     submit_cap = _cap(
-        _is_draft(status),
-        "sales_contract.submit.not_draft" if not _is_draft(status) else None,
+        submit_allowed,
+        "sales_contract.submit.not_draft" if not submit_allowed else None,
     )
 
     withdraw_cap = _cap(

@@ -162,7 +162,13 @@ def derive_purchase_order_capabilities(
     status = getattr(order, "status", None)
     review_status = getattr(order, "review_status", None)
 
-    update_allowed = is_draft_status(status or "") or is_pending_review_status(status or "")
+    from apps.kuaizhizao.constants import is_rejected_status
+
+    update_allowed = (
+        is_draft_status(status or "")
+        or is_pending_review_status(status or "")
+        or is_rejected_status(status or "")
+    )
     update_cap = _cap(
         update_allowed,
         "purchase_order.update.not_allowed" if not update_allowed else None,
@@ -177,9 +183,10 @@ def derive_purchase_order_capabilities(
         delete_reason = "purchase_order.delete.not_allowed"
     delete_cap = _cap(delete_allowed, delete_reason)
 
+    submit_allowed = is_draft_status(status or "") or is_rejected_status(status or "")
     submit_cap = _cap(
-        is_draft_status(status or ""),
-        "purchase_order.submit.not_draft" if not is_draft_status(status or "") else None,
+        submit_allowed,
+        "purchase_order.submit.not_draft" if not submit_allowed else None,
     )
 
     withdraw_cap = _cap(

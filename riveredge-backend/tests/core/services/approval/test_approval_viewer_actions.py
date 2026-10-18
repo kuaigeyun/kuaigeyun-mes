@@ -18,8 +18,26 @@ def test_viewer_has_pending_task_only_on_current_node():
     assert not viewer_has_pending_task_on_instance(viewer_id=11, instance=instance, tasks=tasks)
 
 
+def test_submitter_without_pending_cannot_approve():
+    instance = SimpleNamespace(current_node="n1", status="pending", submitter_id=5)
+    actions = build_flow_viewer_actions(
+        viewer_id=5,
+        instance=instance,
+        tasks=[SimpleNamespace(node_id="n1", approver_id=10, status="pending")],
+        nodes_overview=[
+            {
+                "is_current": True,
+                "eligible_approvers": [{"user_id": 10, "name": "审核节点2"}],
+            }
+        ],
+    )
+    assert actions["approve"] is False
+    assert actions["reject"] is False
+    assert "发起人" in (actions.get("block_reason") or "")
+
+
 def test_build_flow_viewer_actions_when_no_task():
-    instance = SimpleNamespace(current_node="n1", status="pending")
+    instance = SimpleNamespace(current_node="n1", status="pending", submitter_id=1)
     actions = build_flow_viewer_actions(
         viewer_id=99,
         instance=instance,
@@ -37,7 +55,7 @@ def test_build_flow_viewer_actions_when_no_task():
 
 def test_block_reason_prefers_current_node_pending_tasks_over_stale_eligible():
     """节点已到 n2 时，文案须用 n2 pending 待办人，不能被上一节点可审名单带偏。"""
-    instance = SimpleNamespace(current_node="n2", status="pending")
+    instance = SimpleNamespace(current_node="n2", status="pending", submitter_id=1)
     actions = build_flow_viewer_actions(
         viewer_id=99,
         instance=instance,
@@ -62,7 +80,7 @@ def test_block_reason_prefers_current_node_pending_tasks_over_stale_eligible():
 
 def test_block_reason_ignores_stale_pending_not_in_eligible():
     """当前节点仍挂着上一节点人的 pending 时，文案跟可审名单（节点2），不指节点1。"""
-    instance = SimpleNamespace(current_node="n2", status="pending")
+    instance = SimpleNamespace(current_node="n2", status="pending", submitter_id=1)
     actions = build_flow_viewer_actions(
         viewer_id=99,
         instance=instance,
@@ -83,7 +101,7 @@ def test_block_reason_ignores_stale_pending_not_in_eligible():
 
 def test_viewer_already_approved_is_my_acted_not_current_assignee():
     """上一级已由当前人通过、流程停在下一级：对当前人标 my_acted，不能再当成待他审。"""
-    instance = SimpleNamespace(current_node="n2", status="pending")
+    instance = SimpleNamespace(current_node="n2", status="pending", submitter_id=99)
     actions = build_flow_viewer_actions(
         viewer_id=1,
         instance=instance,
@@ -104,7 +122,7 @@ def test_viewer_already_approved_is_my_acted_not_current_assignee():
 
 
 def test_same_person_still_pending_on_next_node_is_not_my_acted():
-    instance = SimpleNamespace(current_node="n2", status="pending")
+    instance = SimpleNamespace(current_node="n2", status="pending", submitter_id=99)
     actions = build_flow_viewer_actions(
         viewer_id=1,
         instance=instance,
@@ -124,7 +142,7 @@ def test_same_person_still_pending_on_next_node_is_not_my_acted():
 
 
 def test_block_reason_falls_back_to_eligible_when_only_prev_node_pending():
-    instance = SimpleNamespace(current_node="n2", status="pending")
+    instance = SimpleNamespace(current_node="n2", status="pending", submitter_id=1)
     actions = build_flow_viewer_actions(
         viewer_id=99,
         instance=instance,

@@ -104,6 +104,15 @@ def is_pending_review_status(status: str) -> bool:
     return n == DocumentStatus.PENDING_REVIEW.value
 
 
+def is_rejected_status(status: str) -> bool:
+    """判断是否为已驳回状态（兼容中文与枚举）"""
+    raw = str(status or "").strip()
+    if not raw:
+        return False
+    n = normalize_status(raw)
+    return n == DocumentStatus.REJECTED.value or raw in ("已驳回", "审核驳回", "驳回")
+
+
 # 支持状态流转的单据类型（用于扩展 StateTransitionRule）
 DOCUMENT_ENTITY_TYPES: Tuple[str, ...] = (
     "demand",

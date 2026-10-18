@@ -833,6 +833,9 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     if (flowPending) {
       const caps = flowStatus.node_capabilities ?? {};
+      const isSubmitter = flowStatus.instance?.submitter_id === currentUserId;
+      const submitterAwaitingOthers =
+        Boolean(isSubmitter) && !hasMyPendingTask && !adminOpen;
       const moduleRbac =
         rbacAllowedProp
         ?? items.find((item) => item.action === 'approve' || item.action === 'reject')?.rbacAllowed
@@ -886,21 +889,28 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         if (!flowPerm.canExecute && rbacAllowed && !assigneeBlockHint) {
           assigneeBlockHint = liveBlockReason;
         }
+        const blockedAsSubmitter =
+          submitterAwaitingOthers
+          && (item.action === 'approve' || item.action === 'reject');
         return {
           ...item,
-          canExecute: flowPerm.canExecute,
+          canExecute: blockedAsSubmitter ? false : flowPerm.canExecute,
           // 流程已加载时禁止沿用列表态旧 block_reason（节点推进后会误显示上一节点待办人）
           disabledReason: !rbacAllowed
             ? t('components.uniAudit.missingReviewPermission')
-            : (flowPerm.canExecute ? undefined : liveBlockReason),
+            : blockedAsSubmitter
+              ? t('components.uniAudit.submitterAwaitingOthers')
+              : (flowPerm.canExecute ? undefined : liveBlockReason),
         };
       });
       // 仅当 live viewer 明确放行（或管理员）时补齐/抬升按钮；禁止用空 viewer 误开
       const liveCanApprove =
         Boolean(moduleRbac)
+        && !submitterAwaitingOthers
         && (adminOpen || Boolean(viewerActions?.approve));
       const liveCanReject =
         Boolean(moduleRbac)
+        && !submitterAwaitingOthers
         && (adminOpen || Boolean(viewerActions?.reject));
       if (liveCanApprove && !items.some((item) => item.action === 'approve')) {
         items.push({
@@ -957,9 +967,16 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
       if (hasMyPendingTask || adminOpen) {
         items.push({ action: 'delegate', title: t('components.uniAudit.delegate'), canExecute: true });
       }
-      const isSubmitter = flowStatus.instance?.submitter_id === currentUserId;
       if (isSubmitter) {
         items.push({ action: 'urge', title: t('components.uniAudit.urge'), canExecute: true });
+      }
+      if (flowStatus.viewer_can_recall_own && !items.some((item) => item.action === 'recall_own')) {
+        items.push({
+          action: 'recall_own',
+          title: t('components.uniAudit.recallOwnAction'),
+          canExecute: true,
+          rbacAllowed: Boolean(moduleRbac),
+        });
       }
     }
     return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };

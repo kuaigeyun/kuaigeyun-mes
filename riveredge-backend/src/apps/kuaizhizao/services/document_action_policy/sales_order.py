@@ -156,7 +156,7 @@ def derive_sales_order_capabilities(
     update_reason = "sales_order.update.not_allowed"
     if is_source_order_locked_for_direct_edit(_norm_status(status), review_status):
         update_reason = "sales_order.update.locked"
-    elif _is_draft(status) or _is_pending_review_status(status):
+    elif _is_draft(status) or _is_pending_review_status(status) or _is_rejected_status(status):
         update_allowed = True
     update_cap = _cap(update_allowed, update_reason if not update_allowed else None)
 
@@ -175,7 +175,7 @@ def derive_sales_order_capabilities(
     delete_cap = _cap(delete_allowed, delete_reason)
 
     # submit — 草稿（已审核时 submit 接口直接返回，不报错）
-    submit_allowed = _is_draft(status)
+    submit_allowed = _is_draft(status) or _is_rejected_status(status)
     submit_cap = _cap(
         submit_allowed,
         "sales_order.submit.not_draft" if not submit_allowed else None,

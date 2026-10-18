@@ -922,6 +922,28 @@ class ApprovalInstanceService:
                 h for h in history
                 if active_id is not None and int(h.approval_instance_id) == active_id
             ]
+            if instance and instance.status == "pending" and isinstance(instance.data, dict):
+                prior_raw = instance.data.get("reopened_from_instance_id")
+                if prior_raw is not None:
+                    try:
+                        prior_id = int(prior_raw)
+                    except (TypeError, ValueError):
+                        prior_id = None
+                    if prior_id is not None:
+                        current_nid = str(instance.current_node or "")
+                        overview_tasks.extend(
+                            t
+                            for t in tasks
+                            if int(t.approval_instance_id) == prior_id
+                            and str(t.node_id or "") != current_nid
+                        )
+                        overview_history.extend(
+                            h
+                            for h in history
+                            if int(h.approval_instance_id) == prior_id
+                            and str(h.from_node or "") != current_nid
+                            and str(h.to_node or "") != current_nid
+                        )
             nodes_overview = await ApprovalInstanceService._build_nodes_overview(
                 tenant_id, process, instance, overview_tasks, overview_history
             )
@@ -1720,13 +1742,20 @@ class ApprovalInstanceService:
                 continue
             node = get_node_config(graph, nid)
             data = node.get("data") if node and isinstance(node.get("data"), dict) else {}
-            if not _node_data_bool(data, "allowApproverRecall", False):
+            if not _node_data_bool(data, "allowApproverRecall", True):
                 continue
             recall_node_id = nid
             break
 
         if not recall_node_id:
             raise AuthorizationError("流程未开启撤回本级或未满足条件")
+
+        from core.services.approval.approval_flow_policy import viewer_may_recall_own_on_instance
+
+        if not await viewer_may_recall_own_on_instance(
+            tenant_id, instance, int(operator_id), process.nodes if process else {}
+        ):
+            raise AuthorizationError("下一审批节点已处理，不可撤回本级")
 
         await ApprovalTask.filter(
             tenant_id=tenant_id,
@@ -1915,6 +1944,7 @@ class ApprovalInstanceService:
             raw_data,
             process_code=process.code,
         )
+        instance_data["reopened_from_instance_id"] = int(approved.id)
 
         new_instance = ApprovalInstance(
             tenant_id=tenant_id,

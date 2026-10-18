@@ -98,7 +98,7 @@ def derive_sales_forecast_capabilities(
         "sales_forecast.delete.not_allowed" if not delete_allowed else None,
     )
 
-    submit_allowed = is_draft_status(status or "")
+    submit_allowed = is_draft_status(status or "") or _is_rejected_status(status)
     submit_cap = _cap(
         submit_allowed,
         "sales_forecast.submit.not_draft" if not submit_allowed else None,
