@@ -842,6 +842,11 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         ?? items.find((item) => item.action === 'approve' || item.action === 'reject')?.rbacAllowed
         ?? adminOpen;
 
+      // 已审过：即使 hub 未带 approve 项，也要展示「您已审核」提示
+      if (viewerActions?.my_acted && viewerActions.block_reason) {
+        assigneeBlockHint = viewerActions.block_reason;
+      }
+
       // live 已返回但无 viewer_actions：默认不可审（禁止 fail-open）
       if (!viewerActions && !adminOpen) {
         const blockReason = t('components.uniAudit.notNodeAssignee');
@@ -904,15 +909,15 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
               : (flowPerm.canExecute ? undefined : liveBlockReason),
         };
       });
-      // 仅当 live viewer 明确放行（或管理员）时补齐/抬升按钮；禁止用空 viewer 误开
+      // 仅当 live viewer 明确放行时补齐/抬升；管理员也不冒充待办人
       const liveCanApprove =
         Boolean(moduleRbac)
         && !submitterAwaitingOthers
-        && (adminOpen || Boolean(viewerActions?.approve));
+        && Boolean(viewerActions?.approve);
       const liveCanReject =
         Boolean(moduleRbac)
         && !submitterAwaitingOthers
-        && (adminOpen || Boolean(viewerActions?.reject));
+        && Boolean(viewerActions?.reject);
       if (liveCanApprove && !items.some((item) => item.action === 'approve')) {
         items.push({
           action: 'approve',
@@ -959,13 +964,14 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         }
         return item;
       });
-      if ((hasMyPendingTask || adminOpen) && caps.allow_transfer) {
+      // 转交/加签/委托须本人持有当前待办；禁止管理员旁路伪装成待办人
+      if (hasMyPendingTask && caps.allow_transfer) {
         items.push({ action: 'transfer', title: t('components.uniAudit.transfer'), canExecute: true });
       }
-      if ((hasMyPendingTask || adminOpen) && caps.allow_add_sign) {
+      if (hasMyPendingTask && caps.allow_add_sign) {
         items.push({ action: 'add_sign', title: t('components.uniAudit.addSign'), canExecute: true });
       }
-      if (hasMyPendingTask || adminOpen) {
+      if (hasMyPendingTask) {
         items.push({ action: 'delegate', title: t('components.uniAudit.delegate'), canExecute: true });
       }
       if (isSubmitter) {

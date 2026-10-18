@@ -27,6 +27,9 @@ export function auditFlowGateApplies(audit?: AuditStateLike | null): boolean {
 /**
  * 是否允许执行 approve/reject（RBAC 通过后再看流程待办）。
  * ``liveViewerActions`` 为弹窗内 getApprovalStatus 结果，优先于 record.audit.viewer_actions。
+ *
+ * 管理员旁路只跳过 RBAC，**不**冒充当前节点待办人：已有 viewer_actions 时必须看
+ * approve/reject；否则点审核会后端报「没有该审批任务」而按钮仍像能审。
  */
 export function resolveAuditFlowExecutePermission(
   action: AuditFlowGatedAction,
@@ -39,10 +42,7 @@ export function resolveAuditFlowExecutePermission(
     flowPending?: boolean;
   },
 ): { canExecute: boolean; blockReason?: string } {
-  if (opts.adminBypass) {
-    return { canExecute: true };
-  }
-  if (!opts.rbacAllowed) {
+  if (!opts.adminBypass && !opts.rbacAllowed) {
     return { canExecute: false };
   }
   const gateActive = opts.flowPending === true || auditFlowGateApplies(opts.audit);

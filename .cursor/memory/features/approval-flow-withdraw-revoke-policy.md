@@ -31,6 +31,7 @@ keywords:
 - **反审**：`:revoke` 必要非充分；须为终审节点实际通过人；`allowRevokeAfterApproved`；管理员 `admin_bypass` 旁路。
 - **撤回提交**：发起人；`allowSubmitterWithdraw`；可选「仅无人审批可撤」。
 - **撤回本级**：节点 `allowApproverRecall`；动作 `POST .../recall_own`（review 权限）。
+- **撤回门禁**：`viewer_may_recall_own_on_instance` — 本级已通过且**后续审批节点尚无人审过**（看路径上后续节点的 `approved` 任务）。空审批人 `auto_pass` 不建任务、不阻断；流程已越过下一道仍可撤。执行时清 `__branch_*` 选边。
 - **反审落点**：终审节点 `revokeLanding` = `reopen_final` | `to_draft`（与 `reopen_at_last_approval_node` 同源终审节点）。
 
 ## 禁止

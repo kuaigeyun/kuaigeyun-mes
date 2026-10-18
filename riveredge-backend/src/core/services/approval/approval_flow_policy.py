@@ -354,13 +354,47 @@ def next_approval_node_id_on_instance_path(
     return None
 
 
+async def _subsequent_approval_has_human_pass(
+    tenant_id: int,
+    instance: ApprovalInstance,
+    process_nodes: Any,
+    from_node_id: str,
+) -> bool:
+    """本节点之后、实例路径上是否已有后续审批节点被人工通过。
+
+    空审批人 auto_pass 只写历史、不建 approved 任务，不视为「下一道已审」，
+    故可继续往后看；任一后续节点存在 approved 任务则阻断撤回本级。
+    """
+    cursor = str(from_node_id or "").strip()
+    if not cursor:
+        return False
+    for _ in range(64):
+        nxt = next_approval_node_id_on_instance_path(process_nodes, cursor, instance)
+        if not nxt:
+            return False
+        has_human = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            node_id=nxt,
+            status="approved",
+        ).exists()
+        if has_human:
+            return True
+        cursor = nxt
+    return False
+
+
 async def viewer_may_recall_own_on_instance(
     tenant_id: int,
     instance: ApprovalInstance,
     viewer_id: int,
     process_nodes: Any,
 ) -> bool:
-    """本级已通过且下一审批节点尚未通过时可撤回本级。"""
+    """本级已通过、且后续审批节点尚无人审过时可撤回本级。
+
+    「下一道」按实例路径上后续审批节点控制：空审批人 auto_pass 越过下一道后，
+    只要更后面仍无人审过，仍允许撤销（避免误点通过后按钮消失）。
+    """
     graph = normalize_flow_graph(process_nodes or {})
     vid = int(viewer_id)
     for node in _approval_nodes_in_graph(graph):
@@ -379,19 +413,11 @@ async def viewer_may_recall_own_on_instance(
         ).first()
         if not approved_task or str(instance.current_node or "") == nid:
             continue
-        next_approval = next_approval_node_id_on_instance_path(process_nodes, nid, instance)
-        if not next_approval:
+        if await _subsequent_approval_has_human_pass(
+            tenant_id, instance, process_nodes, nid
+        ):
             continue
-        if str(instance.current_node or "") != next_approval:
-            continue
-        has_next_approved = await ApprovalTask.filter(
-            tenant_id=tenant_id,
-            approval_instance_id=instance.id,
-            node_id=next_approval,
-            status="approved",
-        ).exists()
-        if not has_next_approved:
-            return True
+        return True
     return False
 
 

@@ -58,8 +58,10 @@ function PreviewFitView({
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!ready || !host) return;
+    let fitted = false;
 
     const run = () => {
+      if (fitted) return;
       const { width, height } = host.getBoundingClientRect();
       if (width < 48 || height < 48) return;
       fitView({
@@ -69,9 +71,11 @@ function PreviewFitView({
         duration: 0,
         includeHiddenNodes: true,
       });
+      fitted = true;
     };
 
     run();
+    // 仅等容器首次有尺寸；适配成功后不再 fit，避免冲掉滚轮缩放
     const observer = new ResizeObserver(run);
     observer.observe(host);
     return () => observer.disconnect();
@@ -116,13 +120,15 @@ function ApprovalFlowPreviewCanvas({
         selected: isCurrent,
       };
     });
-    // 丢掉悬空边，避免贝塞尔甩向 (0,0) 造成「飞线」
+    // 与设计器一致：悬空边丢掉后走同一套 enrichApprovalFlowGraph，勿另写 handle/线型
     const baseEdges: Edge[] = rawEdges
       .filter((e) => nodeIdSet.has(String(e.source)) && nodeIdSet.has(String(e.target)))
       .map((e, idx) => ({
+        ...e,
         id: e.id || `e-${e.source}-${e.target}-${idx}`,
         source: String(e.source),
         target: String(e.target),
+        type: e.type || 'default',
       }));
     const laidOut = enrichApprovalFlowGraph(baseNodes, baseEdges, { relayout: true });
     return {
@@ -130,10 +136,7 @@ function ApprovalFlowPreviewCanvas({
       edges: laidOut.edges.map((e) => ({
         ...e,
         type: 'default' as const,
-        style: { ...APPROVAL_FLOW_EDGE_STYLE },
-        // 明确落到默认单点，避免残留 branch handle
-        sourceHandle: null,
-        targetHandle: null,
+        style: { ...APPROVAL_FLOW_EDGE_STYLE, ...(e.style || {}) },
       })),
     };
   }, [graph, statusByNodeId]);
@@ -182,15 +185,16 @@ function ApprovalFlowPreviewCanvas({
         edges={edges}
         nodeTypes={NODE_TYPES}
         defaultEdgeOptions={{ type: 'default', style: { ...APPROVAL_FLOW_EDGE_STYLE } }}
+        fitViewOptions={{ padding: 0.14, maxZoom: 1 }}
         minZoom={0.05}
-        maxZoom={1}
+        maxZoom={2}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
-        panOnDrag={false}
-        zoomOnScroll={false}
-        zoomOnPinch={false}
-        zoomOnDoubleClick={false}
+        panOnDrag
+        zoomOnScroll
+        zoomOnPinch
+        zoomOnDoubleClick
         preventScrolling
         proOptions={{ hideAttribution: true }}
         style={{ width: '100%', height: '100%' }}
