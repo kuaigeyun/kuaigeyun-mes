@@ -421,22 +421,12 @@ function AuditHubDetailPanel({
 
           </div>
 
-          <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
-
-            <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-
-              <ApprovalFlowPreview
-
-                graph={process?.nodes}
-
-                nodesOverview={nodesOverview}
-
-                height="100%"
-
-              />
-
-            </div>
-
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <ApprovalFlowPreview
+              graph={process?.nodes}
+              nodesOverview={nodesOverview}
+              height="100%"
+            />
           </div>
 
           {!process?.nodes?.nodes?.length && (

@@ -1,5 +1,6 @@
-import React, { useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { theme } from 'antd';
+import { useNodesState, useEdgesState } from '@ant-design/pro-flow';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -41,10 +42,7 @@ function nodeTypesFactory() {
 
 const NODE_TYPES = nodeTypesFactory();
 
-/**
- * 弹窗打开后容器才有尺寸；节点测量完成且容器变化时再 fitView。
- * 预览只读：缩放到完整图，禁止内部 overflow 改写导致连线坐标系错乱。
- */
+/** 弹窗首次有尺寸后再 fitView；只适配一次，避免冲掉滚轮缩放。 */
 function PreviewFitView({
   hostRef,
   layoutKey,
@@ -65,7 +63,7 @@ function PreviewFitView({
       const { width, height } = host.getBoundingClientRect();
       if (width < 48 || height < 48) return;
       fitView({
-        padding: 0.14,
+        padding: 0.2,
         minZoom: 0.05,
         maxZoom: 1,
         duration: 0,
@@ -75,7 +73,6 @@ function PreviewFitView({
     };
 
     run();
-    // 仅等容器首次有尺寸；适配成功后不再 fit，避免冲掉滚轮缩放
     const observer = new ResizeObserver(run);
     observer.observe(host);
     return () => observer.disconnect();
@@ -84,6 +81,12 @@ function PreviewFitView({
   return null;
 }
 
+/**
+ * 与审批流设计器同一挂载方式：
+ * - useNodesState / useEdgesState（@ant-design/pro-flow，与设计器同源）
+ * - onNodesChange 回写测量宽高（设计器有、旧预览没有）
+ * - enrichApprovalFlowGraph(relayout) 出画布节点/边
+ */
 function ApprovalFlowPreviewCanvas({
   graph,
   nodesOverview = [],
@@ -92,6 +95,8 @@ function ApprovalFlowPreviewCanvas({
 }: ApprovalFlowPreviewProps) {
   const { token } = useToken();
   const hostRef = useRef<HTMLDivElement>(null);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   const statusByNodeId = useMemo(() => {
     const map = new Map<string, ApprovalNodeOverview>();
@@ -101,26 +106,25 @@ function ApprovalFlowPreviewCanvas({
     return map;
   }, [nodesOverview]);
 
-  const { nodes, edges } = useMemo(() => {
+  const graphKey = useMemo(() => {
+    const rawNodes = graph?.nodes ?? [];
+    const rawEdges = graph?.edges ?? [];
+    return [
+      rawNodes.map((n) => n.id).join(','),
+      rawEdges.map((e) => `${e.source}->${e.target}`).join(','),
+    ].join('|');
+  }, [graph]);
+
+  useEffect(() => {
     const rawNodes = graph?.nodes ?? [];
     const rawEdges = graph?.edges ?? [];
     const nodeIdSet = new Set(rawNodes.map((n) => String(n.id)));
-    const baseNodes: Node[] = rawNodes.map((n) => {
-      const overview = statusByNodeId.get(String(n.id));
-      const isCurrent = overview?.is_current;
-      const status = overview?.status;
-      return {
-        id: String(n.id),
-        type: String(n.type || 'approval'),
-        position: n.position ?? { x: 0, y: 0 },
-        data: {
-          ...(n.data || {}),
-          flowStatus: status,
-        },
-        selected: isCurrent,
-      };
-    });
-    // 与设计器一致：悬空边丢掉后走同一套 enrichApprovalFlowGraph，勿另写 handle/线型
+    const baseNodes: Node[] = rawNodes.map((n) => ({
+      id: String(n.id),
+      type: String(n.type || 'approval'),
+      position: n.position ?? { x: 0, y: 0 },
+      data: { ...(n.data || {}) },
+    }));
     const baseEdges: Edge[] = rawEdges
       .filter((e) => nodeIdSet.has(String(e.source)) && nodeIdSet.has(String(e.target)))
       .map((e, idx) => ({
@@ -131,22 +135,44 @@ function ApprovalFlowPreviewCanvas({
         type: e.type || 'default',
       }));
     const laidOut = enrichApprovalFlowGraph(baseNodes, baseEdges, { relayout: true });
+    setNodes(laidOut.nodes as any);
+    setEdges(laidOut.edges as any);
+  }, [graphKey, graph, setNodes, setEdges]);
+
+  // 与设计器 flowNodes/flowEdges 同一路径：state → enrich → 交给 ReactFlow
+  const { flowNodes, flowEdges } = useMemo(() => {
+    const merged = (nodes as Node[]).map((n) => {
+      const overview = statusByNodeId.get(String(n.id));
+      return {
+        ...n,
+        selected: Boolean(overview?.is_current),
+        data: {
+          ...(n.data || {}),
+          flowStatus: overview?.status,
+        },
+      };
+    });
+    const { nodes: laid, edges: enriched } = enrichApprovalFlowGraph(
+      merged,
+      edges as Edge[],
+      { relayout: true },
+    );
     return {
-      nodes: laidOut.nodes,
-      edges: laidOut.edges.map((e) => ({
+      flowNodes: laid,
+      flowEdges: enriched.map((e) => ({
         ...e,
         type: 'default' as const,
         style: { ...APPROVAL_FLOW_EDGE_STYLE, ...(e.style || {}) },
       })),
     };
-  }, [graph, statusByNodeId]);
+  }, [nodes, edges, statusByNodeId]);
 
   const layoutKey = useMemo(
-    () => nodes.map((n) => `${n.id}:${n.position?.x}:${n.position?.y}`).join('|'),
-    [nodes],
+    () => flowNodes.map((n) => `${n.id}:${n.position?.x}:${n.position?.y}`).join('|'),
+    [flowNodes],
   );
 
-  if (!nodes.length) {
+  if (!flowNodes.length) {
     return null;
   }
 
@@ -165,7 +191,6 @@ function ApprovalFlowPreviewCanvas({
         ...style,
       }}
     >
-      {/* 只藏宿主滚动条；禁止改 .react-flow__viewport，否则连线与节点错位 */}
       <style>{`
         .uni-audit-flow-preview {
           scrollbar-width: none;
@@ -181,11 +206,13 @@ function ApprovalFlowPreviewCanvas({
         }
       `}</style>
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={flowNodes as any}
+        edges={flowEdges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         nodeTypes={NODE_TYPES}
         defaultEdgeOptions={{ type: 'default', style: { ...APPROVAL_FLOW_EDGE_STYLE } }}
-        fitViewOptions={{ padding: 0.14, maxZoom: 1 }}
+        fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
         minZoom={0.05}
         maxZoom={2}
         nodesDraggable={false}
@@ -211,7 +238,7 @@ function ApprovalFlowPreviewCanvas({
   );
 }
 
-/** 审核弹窗流程图预览：布局与连线与审批流设计器一致。 */
+/** 审核弹窗流程图预览：挂载方式与审批流设计器一致。 */
 export const ApprovalFlowPreview: React.FC<ApprovalFlowPreviewProps> = (props) => (
   <ReactFlowProvider>
     <ApprovalFlowPreviewCanvas {...props} />
