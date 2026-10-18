@@ -372,7 +372,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     if (showRecallOwn && channelByAction.recall_own) {
       items.push({
         action: 'recall_own',
-        title: '撤回本级',
+        title: '撤销审核',
         canExecute: canExecuteByAction.recall_own,
         rbacAllowed: canReview,
       });
@@ -489,7 +489,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     if (action === 'delegate') return '委托';
     if (action === 'urge') return '催办';
     if (action === 'withdraw') return '撤回提交';
-    if (action === 'recall_own') return '撤回本级';
+    if (action === 'recall_own') return '撤销审核';
     return '操作';
   };
 

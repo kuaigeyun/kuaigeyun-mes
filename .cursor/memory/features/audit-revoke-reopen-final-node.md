@@ -40,6 +40,7 @@ standard: 反审核有已通过实例时重开终审节点 pending；单据落 p
 1. 旧契约「revoke 一律 draft」导致重提后条件节点再待办（尤达盛），终审人（付娇红）审核按钮置灰。
 2. 未声明 `reopened` 的旧 `flow_revoke` 仍走 cancel+草稿，避免其它单据硬编码 DRAFT 时留下 orphan pending 实例。
 3. 重开须**保留** `__branch_true_*`；`cancel_approval` / 撤回提交才 strip。
+4. 重开实例 `data.reopened_from_instance_id`；`get_approval_status` 合并上一已通过实例在终审节点**之外**的 tasks/history，前序节点仍显示已通过。
 
 ## 关联
 

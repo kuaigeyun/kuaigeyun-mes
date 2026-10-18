@@ -181,6 +181,16 @@ def build_flow_viewer_actions(
             "block_reason": "您已审核，等待后续节点",
         }
 
+    submitter_id = getattr(instance, "submitter_id", None)
+    if submitter_id is not None and int(submitter_id) == int(viewer_id):
+        return {
+            "has_my_pending_task": False,
+            "approve": False,
+            "reject": False,
+            "my_acted": False,
+            "block_reason": "您为发起人，请等待当前节点审批人处理",
+        }
+
     pending_ids = current_node_pending_approver_ids(instance=instance, tasks=tasks)
     eligible_ids = current_node_eligible_user_ids(nodes_overview)
     pending_names = _pending_assignee_display_names(

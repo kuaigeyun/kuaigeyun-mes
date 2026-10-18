@@ -181,6 +181,79 @@ async def resolve_final_approval_context(
     return last_node_id, approvers
 
 
+def next_approval_node_id_on_instance_path(
+    process_nodes: Any,
+    from_node_id: str,
+    instance: ApprovalInstance,
+) -> Optional[str]:
+    """沿实例已选分支，取 from 之后第一个 approval 节点 id。"""
+    from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+    graph = ApprovalInstanceService._normalize_process_graph(process_nodes or {})
+    cursor = str(from_node_id or "").strip()
+    if not cursor:
+        return None
+    seen: Set[str] = set()
+    for _ in range(64):
+        if cursor in seen:
+            return None
+        seen.add(cursor)
+        nxt = ApprovalInstanceService._get_next_node(graph, cursor, instance=instance)
+        if not nxt:
+            return None
+        ntype = str(nxt.get("type") or "")
+        nid = str(nxt.get("id") or "").strip()
+        if not nid:
+            return None
+        if ntype == "approval":
+            return nid
+        if ntype == "end":
+            return None
+        cursor = nid
+    return None
+
+
+async def viewer_may_recall_own_on_instance(
+    tenant_id: int,
+    instance: ApprovalInstance,
+    viewer_id: int,
+    process_nodes: Any,
+) -> bool:
+    """本级已通过且下一审批节点尚未通过时可撤回本级。"""
+    graph = normalize_flow_graph(process_nodes or {})
+    vid = int(viewer_id)
+    for node in _approval_nodes_in_graph(graph):
+        data = node.get("data") if isinstance(node.get("data"), dict) else {}
+        if not _node_data_bool(data, "allowApproverRecall", True):
+            continue
+        nid = str(node.get("id") or "")
+        if not nid:
+            continue
+        approved_task = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            node_id=nid,
+            approver_id=vid,
+            status="approved",
+        ).first()
+        if not approved_task or str(instance.current_node or "") == nid:
+            continue
+        next_approval = next_approval_node_id_on_instance_path(process_nodes, nid, instance)
+        if not next_approval:
+            continue
+        if str(instance.current_node or "") != next_approval:
+            continue
+        has_next_approved = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            node_id=next_approval,
+            status="approved",
+        ).exists()
+        if not has_next_approved:
+            return True
+    return False
+
+
 def instance_has_any_approve(history: List[ApprovalHistory]) -> bool:
     from core.services.approval.approval_instance_service import ApprovalInstanceService
 
@@ -229,23 +302,10 @@ async def compute_viewer_flow_withdraw_revoke(
             else:
                 out["viewer_can_withdraw_submit"] = True
 
-        for node in _approval_nodes_in_graph(graph):
-            data = node.get("data") if isinstance(node.get("data"), dict) else {}
-            if not _node_data_bool(data, "allowApproverRecall", False):
-                continue
-            nid = str(node.get("id") or "")
-            if not nid:
-                continue
-            approved_task = await ApprovalTask.filter(
-                tenant_id=tenant_id,
-                approval_instance_id=instance.id,
-                node_id=nid,
-                approver_id=vid,
-                status="approved",
-            ).first()
-            if approved_task and str(instance.current_node or "") != nid:
-                out["viewer_can_recall_own"] = True
-                break
+        if await viewer_may_recall_own_on_instance(
+            tenant_id, instance, vid, process_nodes
+        ):
+            out["viewer_can_recall_own"] = True
 
     if instance.status == "approved":
         last_node_id, final_approvers = await resolve_final_approval_context(tenant_id, instance)

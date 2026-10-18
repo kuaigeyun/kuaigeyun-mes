@@ -48,3 +48,5 @@ standard: allowed_actions 管可见；viewer_actions/capabilities 管可执行�
 条件节点 `routeMode`（`previous_approver` / `initiator` / `formula` 三选一）：人工模式只配分支名称；选边真源 `__branch_index_{条件节点id}`（0 起），兼容读 `__branch_true_*`（true→0，false→最后一条）。`previous_approver` 时上一审批节点审核页 `current_node_decision` 多分支单选，未选禁止通过；`initiator` 时提交弹窗必选分支；`formula` 到达节点自动求值，支持最后一条「其余」，未命中且无其余则 ValidationError。禁止无选边默认走第一条。
 
 撤回提交后重提：`cancel_approval` 须 `_strip_branch_decision_keys`；`get_approval_status` 的 `nodes_overview` 只认当前活跃实例的 tasks/history（时间线仍可跨实例），禁止上一轮「条件分支已通过」污染本轮流程图，否则审核人看不见再选是/否。
+
+制单人 pending 无本级待办：`build_flow_viewer_actions` 须 `approve/reject=false`；弹窗 `submitterAwaitingOthers` 禁止抬升审核/驳回。节点级「撤销审核」= `recall_own`（`allowApproverRecall` 默认 true）；`viewer_may_recall_own_on_instance` 要求下一审批节点尚未通过。

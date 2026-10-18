@@ -96,7 +96,10 @@ def derive_quotation_capabilities(
     linked_review = _has_live_sales_review_link(quotation, sales_review_downstream_missing)
 
     # update — 草稿，或已发送且待审核（撤回审核后可编辑）
-    update_allowed = st in ("草稿", "draft") or (st == "已发送" and _is_pending_review(rs))
+    update_allowed = (
+        st in ("草稿", "draft", "已拒绝", "rejected")
+        or (st == "已发送" and _is_pending_review(rs))
+    )
     update_cap = _cap(
         update_allowed,
         None if update_allowed else "quotation.update.not_draft",

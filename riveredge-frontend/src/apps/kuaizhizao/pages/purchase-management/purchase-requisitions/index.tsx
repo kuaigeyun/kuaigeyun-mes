@@ -1705,14 +1705,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
-        const s = (record.status ?? '').toString().trim();
-        const isDraft = ['草稿', 'draft', 'DRAFT'].includes(s);
         const parts: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail(record)}>
             {t('common.detail')}
           </Button>,
         ];
-        if (isDraft) {
+        if (record.capabilities?.update?.allowed === true && purchaseRequisitionPerms.canUpdate) {
           parts.push(
             <Button {...rowActionKind('update')} key="e" onClick={() => handleEdit(record)}>
               {t('common.edit')}
