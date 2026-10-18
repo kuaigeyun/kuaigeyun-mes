@@ -32174,6 +32174,10 @@ export default {
     '无工作台权限的账号登录后不再整页重载',
   'pages.dashboard.updateLog.entries.haoligo-home-permission-reload-loop-r01.description':
     '首页指向工作台但账号没有该页查看权限时，不再在应用根与站点根之间来回跳转；无权限时停在当前页提示，避免反复卸载布局并重拉菜单与配置。',
+  'pages.dashboard.updateLog.entries.attendance-fill-bottom-gap-r01.title':
+    '月度考勤填报表底只留一档间距',
+  'pages.dashboard.updateLog.entries.attendance-fill-bottom-gap-r01.description':
+    '月度考勤填报不再按普通列表的分页占位扣高，表体底边贴齐内容区，页面底部只保留 16px 留白。',
   'pages.dashboard.updateLog.entries.leave-attendance-employee-match-r01.title':
     '请假回写考勤优先按档案员工匹配',
   'pages.dashboard.updateLog.entries.leave-attendance-employee-match-r01.description':
