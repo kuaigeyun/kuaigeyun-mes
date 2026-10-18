@@ -44111,6 +44111,10 @@ export default {
   'components.uniAudit.urge': '催办',
   'components.uniAudit.recallOwnAction': '撤销审核',
   'components.uniAudit.submitterAwaitingOthers': '您为发起人，请等待当前节点审批人处理',
+  'pages.dashboard.updateLog.entries.menu-sync-prompt-version-bump-r01.title':
+    '菜单同步提示不再反复弹出',
+  'pages.dashboard.updateLog.entries.menu-sync-prompt-version-bump-r01.description':
+    '库内菜单与磁盘清单内容不一致但版本号相同时，一键同步会自动升补丁版本以通过门禁；「稍后」按发版指纹记住，刷新后不再同版本反复打扰。',
   'pages.dashboard.updateLog.entries.audit-reject-targets-r01.title': '审批驳回可选落点',
   'pages.dashboard.updateLog.entries.audit-reject-targets-r01.description':
     '驳回时可选择驳回到上一级审批节点或驳回到制单人；流程设计器可配置允许范围与默认项，PC 与移动审核弹窗同步展示。',

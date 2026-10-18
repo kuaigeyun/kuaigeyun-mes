@@ -8,9 +8,10 @@
 import hashlib
 import json
 import os
+import re
 from copy import deepcopy
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Set
+from typing import Optional, List, Dict, Any, Set, Tuple
 from uuid import UUID, uuid4
 from datetime import datetime
 import asyncpg
@@ -1926,12 +1927,63 @@ class ApplicationService:
         }
 
     @staticmethod
+    def _parse_semver_parts(version: Any) -> Optional[Tuple[int, int, int]]:
+        raw = str(version or "").strip()
+        if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", raw):
+            return None
+        major, minor, patch = (int(part) for part in raw.split("."))
+        return major, minor, patch
+
+    @staticmethod
+    def _bump_semver_patch(version: Any) -> str:
+        parts = ApplicationService._parse_semver_parts(version)
+        if not parts:
+            return "1.0.1"
+        major, minor, patch = parts
+        return f"{major}.{minor}.{patch + 1}"
+
+    @staticmethod
+    def _resolve_menu_config_sync_version(
+        *,
+        db_version: Any,
+        disk_version: Any,
+        db_menu_config: Any,
+        disk_menu_config: Any,
+    ) -> str:
+        """菜单同步写库版本：磁盘为结构真源；若内容变了但版本未升高，升 patch 以通过 DB 门禁。
+
+        ``core_guard_application_menu_config_version`` 要求改 menu_config 时 NEW.version > OLD.version。
+        磁盘与库同版本但 JSON 残留不一致时，若不升版会永久 stale，登录弹窗无法消除。
+        """
+        disk_ver = str(disk_version or "").strip() or "1.0.0"
+        db_ver = str(db_version or "").strip()
+        if (
+            ApplicationService.stable_menu_config_digest(db_menu_config)
+            == ApplicationService.stable_menu_config_digest(disk_menu_config)
+        ):
+            return disk_ver
+
+        disk_parts = ApplicationService._parse_semver_parts(disk_ver)
+        db_parts = ApplicationService._parse_semver_parts(db_ver)
+        if disk_parts and db_parts and disk_parts > db_parts:
+            return disk_ver
+        baseline = disk_ver if disk_parts else (db_ver if db_parts else "1.0.0")
+        if db_parts and (not disk_parts or db_parts >= disk_parts):
+            baseline = db_ver
+        return ApplicationService._bump_semver_patch(baseline)
+
+    @staticmethod
     def _build_manifest_sync_update(app: ApplicationDict, manifest: Dict[str, Any]) -> ApplicationUpdate:
         app_code = str(app.get("code") or "").strip()
         if app_code:
             manifest = ApplicationService._materialize_takeover_manifest(app_code, manifest)
         menu_config = manifest.get("menu_config")
-        version = manifest.get("version", app.get("version", "1.0.0"))
+        version = ApplicationService._resolve_menu_config_sync_version(
+            db_version=app.get("version"),
+            disk_version=manifest.get("version", app.get("version", "1.0.0")),
+            db_menu_config=app.get("menu_config"),
+            disk_menu_config=menu_config,
+        )
         app_name = app.get("name")
         if not app.get("is_custom_name"):
             app_name = manifest.get("name", app_name)
@@ -1978,11 +2030,20 @@ class ApplicationService:
         disk_menu = ApplicationService._normalize_menu_config_field(manifest.get("menu_config"))
         if not disk_menu:
             return ApplicationService._normalize_menu_config_field(menu_config)
-        disk_version = str(manifest.get("version") or "").strip()
-        if not disk_version:
+        disk_version_raw = str(manifest.get("version") or "").strip()
+        if not disk_version_raw:
             raise ValidationError(f"应用 {code} 的 manifest 缺少 version，不能同步菜单")
 
         incoming = ApplicationService._normalize_menu_config_field(menu_config)
+        app_row = await ApplicationService.get_application_by_uuid_optional(
+            tenant_id, str(application_uuid)
+        )
+        disk_version = ApplicationService._resolve_menu_config_sync_version(
+            db_version=(app_row or {}).get("version"),
+            disk_version=disk_version_raw,
+            db_menu_config=(app_row or {}).get("menu_config"),
+            disk_menu_config=disk_menu,
+        )
 
         # 行业包壳：磁盘 menu_config.children 恒为空占位；子菜单由
         # IndustryPackMenuService 运行时聚合后传入。禁止用空 children 冲掉聚合结果。
