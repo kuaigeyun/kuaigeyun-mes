@@ -105,3 +105,39 @@ export interface PartnerPriceResolveBatchRequest {
 export interface PartnerPriceResolveBatchResponse {
   items: PartnerPriceResolveResult[];
 }
+
+export interface PartnerPriceBookBulkLine {
+  materialId: number;
+  unitPrice: number;
+  unit?: string;
+}
+
+export type PartnerPriceBookBulkConflictPolicy = 'skip' | 'overwrite';
+
+export interface PartnerPriceBookBulkCreate {
+  partnerIds: number[];
+  lines: PartnerPriceBookBulkLine[];
+  priceType?: 'tax_inclusive' | 'tax_exclusive';
+  taxRate?: number;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+  remark?: string;
+  isActive?: boolean;
+  conflictPolicy?: PartnerPriceBookBulkConflictPolicy | null;
+}
+
+export interface PartnerPriceBookBulkConflictItem {
+  partnerId: number;
+  partnerCode?: string;
+  partnerName?: string;
+  materialId: number;
+  materialCode?: string;
+  materialName?: string;
+  existingUuid: string;
+}
+
+export interface PartnerPriceBookBulkResponse {
+  createdCount: number;
+  skippedCount: number;
+  overwrittenCount: number;
+}

@@ -2640,6 +2640,7 @@ export default {
 
   // DocumentAttachments
   'components.documentAttachments.label': '附件',
+  'components.documentAttachments.count': '{{count}} 个附件',
   'components.documentAttachments.dragHint': '点击或拖拽文件到此处上传',
   'components.documentAttachments.dragSubHint': '支持多文件上传，最多 {{max}} 个',
   'components.documentAttachments.openFailed': '附件打开失败，请稍后重试',
@@ -4184,6 +4185,7 @@ export default {
   'app.kuaioa.attendance.nightCount': '夜班次数',
   'app.kuaioa.attendance.mark.normal': '正常',
   'app.kuaioa.attendance.mark.leave': '请假',
+  'app.kuaioa.attendance.partialLeaveHint': '请假扣{{hours}}h',
   'app.kuaioa.attendance.mark.rest': '休息',
   'app.kuaioa.attendance.restRegister': '休息登记',
   'app.kuaioa.attendance.nightRegister': '夜班登记',
@@ -6910,6 +6912,7 @@ export default {
 
   // 好力 GO（haoligo）— 应用名与菜单（与 manifest menu_config.title / children 对齐）
   'app.haoligo.name': '好力 GO',
+  'app.haoligo.noPageAccess': '当前账号没有此页面的查看权限。请联系管理员授权，或从菜单进入已授权的页面。',
   'app.haoligo.menu.salesTracking': '销售跟踪',
   'app.haoligo.menu.orderTracking': '订单跟踪',
   'app.haoligo.menu.monthlyFactoryLedger': '月度工厂台账',
@@ -12169,6 +12172,8 @@ export default {
   'app.kuaizhizao.purchaseRequisition.form.namePlaceholder': '请输入申请名称',
   'app.kuaizhizao.purchaseRequisition.form.date': '申请日期',
   'app.kuaizhizao.purchaseRequisition.form.requiredDate': '要求到货日期',
+  'app.kuaizhizao.purchaseRequisition.form.lineDeliveryRequired': '请选择行到货日',
+  'app.kuaizhizao.purchaseRequisition.lineRequiredDateMissing': '第 {{row}} 行：请选择行到货日',
   'app.kuaizhizao.purchaseRequisition.form.applicant': '申请人',
   'app.kuaizhizao.purchaseRequisition.form.applicantHint': '保存后写入为当前登录用户',
   'app.kuaizhizao.purchaseRequisition.form.itemsTitle': '申请明细',
@@ -22604,6 +22609,25 @@ export default {
   'app.master-data.priceBook.effectiveFrom': '生效起始',
   'app.master-data.priceBook.createCustomer': '新建客户价格本',
   'app.master-data.priceBook.createSupplier': '新建供应商价格本',
+  'app.master-data.priceBook.bulkRegister': '批量登记',
+  'app.master-data.priceBook.bulkRegisterCustomer': '批量登记客户价格本',
+  'app.master-data.priceBook.bulkRegisterSupplier': '批量登记供应商价格本',
+  'app.master-data.priceBook.bulkSelectPartnersCustomer': '选择一个或多个客户',
+  'app.master-data.priceBook.bulkSelectPartnersSupplier': '选择一个或多个供应商',
+  'app.master-data.priceBook.bulkSharedPriceType': '共用价类',
+  'app.master-data.priceBook.bulkMaterialLines': '物料明细',
+  'app.master-data.priceBook.bulkAddLine': '添加明细',
+  'app.master-data.priceBook.bulkPartnerRequired': '请至少选择一个客户或供应商',
+  'app.master-data.priceBook.bulkLinesRequired': '请至少添加一行物料并填写标准价',
+  'app.master-data.priceBook.bulkDuplicateMaterial': '物料明细中不能重复选择同一物料',
+  'app.master-data.priceBook.unitPriceMin': '标准价须大于 0',
+  'app.master-data.priceBook.bulkResultSummary':
+    '批量登记完成：新建 {{created}} 条，跳过 {{skipped}} 条，覆盖 {{overwritten}} 条',
+  'app.master-data.priceBook.bulkConflictTitle': '发现重叠的价格本记录',
+  'app.master-data.priceBook.bulkConflictHint': '以下 {{count}} 条在相同有效期内已存在记录，请选择处理方式',
+  'app.master-data.priceBook.bulkConflictApplyAll': '对全部冲突使用相同操作',
+  'app.master-data.priceBook.bulkConflictSkip': '跳过冲突',
+  'app.master-data.priceBook.bulkConflictOverwrite': '覆盖标准价',
   'app.master-data.priceBook.effectiveTo': '生效截止',
   'app.master-data.priceBook.noAliasHint': '未维护伙伴料号/品名，请先在物料主数据的编号映射中维护',
   'app.master-data.priceBook.aliasReadonlyHint': '已在物料主数据维护，此处只读',
@@ -32138,10 +32162,42 @@ export default {
     '审核按钮待办人提示与当前节点一致',
   'pages.dashboard.updateLog.entries.audit-block-reason-current-node-r01.description':
     '节点推进后取消上一节点残留待办；不可审提示优先按当前节点待办/可审名单展示，不再出现流程图已到节点2、按钮仍提示节点1的情况。',
+  'pages.dashboard.updateLog.entries.partner-price-book-bulk-register-r01.title':
+    '客户/供应商价格本支持批量登记',
+  'pages.dashboard.updateLog.entries.partner-price-book-bulk-register-r01.description':
+    '价格本列表新增批量登记：多选伙伴、明细多物料标准价一次提交；有效期重叠时可选择跳过或覆盖标准价（保留已有 SKU 价）。',
   'pages.dashboard.updateLog.entries.business-board-visit-mode-r01.title':
     '运营看板支持参观模式手填指标',
   'pages.dashboard.updateLog.entries.business-board-visit-mode-r01.description':
     '看板设置中新增参观模式，开启后可对手填指标覆盖展示，未填项仍用实时数据；该配置仅系统管理员可见并可保存。',
+  'pages.dashboard.updateLog.entries.haoligo-home-permission-reload-loop-r01.title':
+    '无工作台权限的账号登录后不再整页重载',
+  'pages.dashboard.updateLog.entries.haoligo-home-permission-reload-loop-r01.description':
+    '首页指向工作台但账号没有该页查看权限时，不再在应用根与站点根之间来回跳转；无权限时停在当前页提示，避免反复卸载布局并重拉菜单与配置。',
+  'pages.dashboard.updateLog.entries.leave-attendance-employee-match-r01.title':
+    '请假回写考勤优先按档案员工匹配',
+  'pages.dashboard.updateLog.entries.leave-attendance-employee-match-r01.description':
+    'HR 代录请假时不再误按申请人账号匹配员工，改为优先档案员工；已通过单据改期或更新后会重新回写未提交考勤。不足一天的请假保留「正常」并扣减正班工时，填报格显示请假扣减提示。',
+  'pages.dashboard.updateLog.entries.attendance-fill-table-scroll-sticky-r01.title':
+    '月度考勤填报表限高并固定表头',
+  'pages.dashboard.updateLog.entries.attendance-fill-table-scroll-sticky-r01.description':
+    '月度考勤填表支持表体限高：纵向滚动人员时日期表头保持可见，横向可拖动对照各日填写；姓名与加班合计列仍左固定。',
+  'pages.dashboard.updateLog.entries.equipment-attachment-online-preview-r01.title':
+    '设备管理计量证书与附件支持在线预览',
+  'pages.dashboard.updateLog.entries.equipment-attachment-online-preview-r01.description':
+    '计量器具校准记录的计量证书（PDF/图片）可点击「N 个附件」在线预览；设备/模具/工装校准及设备管理其它附件只读区同步走统一预览，无需先下载。',
+  'pages.dashboard.updateLog.entries.approval-flow-withdraw-revoke-policy-r01.title':
+    '审批流撤回与反审按流程配置与身份门控',
+  'pages.dashboard.updateLog.entries.approval-flow-withdraw-revoke-policy-r01.description':
+    '审批节点设计器新增撤回（发起人/审批人）与反审（已通过）配置；反审默认仅终审实际通过人且持有反审权限可见可点（管理员可旁路），关闭后 API 同步拒绝；支持审批人撤回本级；采购订单反审可对齐重开终审待审。',
+  'pages.dashboard.updateLog.entries.inbound-confirm-preview-warehouse-display-r01.title':
+    '采购入库确认预览不再因仓库仅回显而失败',
+  'pages.dashboard.updateLog.entries.inbound-confirm-preview-warehouse-display-r01.description':
+    '确认入库预览改走仓库回显取数（与取单一致），库位列表无权限时不再整单失败；失败时展示真实接口原因，避免只提示「加载确认预览失败」。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-line-delivery-carry-r01.title':
+    '采购申请要求到货日可带入行到货日',
+  'pages.dashboard.updateLog.entries.purchase-requisition-line-delivery-carry-r01.description':
+    '新建/编辑采购申请时，表头要求到货日期会同步到明细行到货日（对齐采购订单与销售订单）；行到货日改为必填，添加/导入/多选物料时默认带入表头日期。',
   'pages.dashboard.updateLog.entries.modal-portal-click-isolation-r01.title':
     '弹出层打开后点击不再穿透到底层页面',
   'pages.dashboard.updateLog.entries.modal-portal-click-isolation-r01.description':
@@ -41090,6 +41146,15 @@ export default {
   'pages.approval.designer.refreshContextOnEdit': '改单后刷新条件上下文',
   'pages.approval.designer.allowTransfer': '允许转交',
   'pages.approval.designer.allowAddSign': '允许加签',
+  'pages.approval.designer.withdrawSection': '撤回（审批中）',
+  'pages.approval.designer.allowSubmitterWithdraw': '允许发起人撤回提交',
+  'pages.approval.designer.submitterWithdrawOnlyBeforeAnyApprove': '仅无人审批时可撤回',
+  'pages.approval.designer.allowApproverRecall': '允许审批人撤回本级同意',
+  'pages.approval.designer.revokeSection': '反审（已通过）',
+  'pages.approval.designer.allowRevokeAfterApproved': '允许反审',
+  'pages.approval.designer.revokeLanding': '反审落点',
+  'pages.approval.designer.revokeLandingReopenFinal': '重开终审节点待审',
+  'pages.approval.designer.revokeLandingToDraft': '退回草稿须重提',
   'pages.approval.designer.timeoutHours': '限时审批（小时）',
   'pages.approval.designer.timeoutHoursTip': '超时后自动催办并记录升级；0 或不填表示不限时',
   'pages.approval.designer.ccTargetType': '抄送对象类型',

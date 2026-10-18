@@ -59,6 +59,7 @@ standard: 主仓记跨端总表；client/pro 薄入口指路；AOCI 分仓不合
 | KU-AI 信任中心下线 | 同上组装态 | - | 无 trust 菜单/路由/页面；无 act 能力矩阵项；`act:execute` 可留 | `kuaiai:act:execute` | `features/kuaiai-trust-offline.md` |
 | 产线 MQTT 清零 | BE：`LineClearService` + `ind_relay` 自动报工钩子；迁移 `855_..._auto_clear`；PC 自动报工页 | - | kuaiiot 接入配置方向 + 设备指令下发清零 UI | `kuaiiot:device:update` / `ind-relay:auto-report:update`；发送型 MQTT publish | `features/iot-line-clear-mqtt.md` |
 | 主仓↔client 组装 | `riveredge-app/`（gitignore）+ Junction | `riveredge-app-{mobile,station,tv,mini-program}/`（四端源码默认一并入库，见 client `client-terminals-checkin.mdc`） | - | 部署 H5 见 fast-deploy | `features/riveredge-app-client-junctions.md` |
+| 请假回写月度考勤 | 组装态 `kuaioa` `AttendanceService.apply_leave_to_attendance`；i18n/更新日志在主仓 | - | BE/FE 真源 `kuaigeyun-pro/.../kuaioa/`；haoligo 填报表真源 `kuaigeyun-custom/.../attendance/fill.tsx` | 请假模块审批/更新权限 | `features/leave-attendance-employee-match.md` |
 | 移动 H5 构建部署 | `fast-deploy/build.mobile.web.sh`、`deploy.sh install-h5` | 构建产物 `riveredge-app-mobile/web-dist`（默认不进主仓） | - | Caddy `/mobile` | `features/fast-deploy-scripts.md` |
 
 ## 交付时回写

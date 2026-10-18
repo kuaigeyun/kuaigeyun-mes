@@ -51,7 +51,6 @@ import {
 import { LinkedIqcPanel, LinkedFqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
 import {
-  warehouseApi as masterWarehouseApi,
   storageAreaApi,
   storageLocationApi,
 } from '../../../../master-data/services/warehouse';
@@ -63,6 +62,7 @@ import {
 } from '../../../../master-data/services/material';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
+import { loadPullWarehouseReferenceOptions } from '../../../../../components/uni-pull-query';
 import {
   loadConfirmPreviewMaterialMeta,
   type ConfirmPreviewMaterialMeta,
@@ -79,6 +79,9 @@ import { formatBusinessDateOnly, formatQuantity } from '../../../../../utils/for
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { renderWarehouseLineQuantity, renderWarehouseHeaderQuantity } from '../shared/warehouseListQuantity';
 import { formatApiErrorDetail } from '../../../../../services/api';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+
+const INBOUND_HOST_RESOURCE = 'kuaizhizao:inbound';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import {
   DocumentPushProgressBar,
@@ -363,36 +366,44 @@ function formatStorageAreaOrLocationLabel(code?: string, name?: string): string 
   return [c, n].filter(Boolean).join(' ').trim();
 }
 
-/** 按仓库拉取库区下全部库位，供确认入库预览行内选择；展示为「库区 - 库位」 */
+/** 按仓库拉取库区下全部库位，供确认入库预览行内选择；展示为「库区 - 库位」。无查看权时返回空，不阻断确认预览。 */
 async function fetchStorageLocationsForWarehouse(
   warehouseId: number
 ): Promise<{ value: number; label: string; code: string }[]> {
-  const saRes = await storageAreaApi.list({
-    warehouse_id: warehouseId,
-    limit: 500,
-    is_active: true,
-  } as any);
-  const areas = (saRes as { items?: { id: number; code?: string; name?: string }[] })?.items ?? [];
-  const parts = await Promise.all(
-    areas.map(async (a) => {
-      const locRes = await storageLocationApi.list({
-        storage_area_id: a.id,
-        limit: 500,
-        is_active: true,
-      } as any);
-      const locs = (locRes as { items?: { id: number; code?: string; name?: string }[] })?.items ?? [];
-      const areaLabel = formatStorageAreaOrLocationLabel(a.code, a.name) || `库区${a.id}`;
-      return locs.map((l) => {
-        const locLabel = formatStorageAreaOrLocationLabel(l.code, l.name) || String(l.id);
-        return {
-          value: l.id,
-          label: `${areaLabel} - ${locLabel}`,
-          code: String(l.code || ''),
-        };
-      });
-    })
-  );
-  return parts.flat().sort((a, b) => a.label.localeCompare(b.label));
+  try {
+    const saRes = await storageAreaApi.list({
+      warehouse_id: warehouseId,
+      limit: 500,
+      is_active: true,
+    } as any);
+    const areas = (saRes as { items?: { id: number; code?: string; name?: string }[] })?.items ?? [];
+    const parts = await Promise.all(
+      areas.map(async (a) => {
+        try {
+          const locRes = await storageLocationApi.list({
+            storage_area_id: a.id,
+            limit: 500,
+            is_active: true,
+          } as any);
+          const locs = (locRes as { items?: { id: number; code?: string; name?: string }[] })?.items ?? [];
+          const areaLabel = formatStorageAreaOrLocationLabel(a.code, a.name) || `库区${a.id}`;
+          return locs.map((l) => {
+            const locLabel = formatStorageAreaOrLocationLabel(l.code, l.name) || String(l.id);
+            return {
+              value: l.id,
+              label: `${areaLabel} - ${locLabel}`,
+              code: String(l.code || ''),
+            };
+          });
+        } catch {
+          return [];
+        }
+      }),
+    );
+    return parts.flat().sort((a, b) => a.label.localeCompare(b.label));
+  } catch {
+    return [];
+  }
 }
 
 const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1480;
@@ -912,18 +923,18 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         return warehouseApi.purchaseReceipt.get(idStr);
       };
 
-      const [whRes, detailData] = await Promise.all([
-        masterWarehouseApi.list({ is_active: true, limit: 500 }),
+      const [whOptions, detailData] = await Promise.all([
+        // 与取单一致：仓库走 reference-display（read|display），禁止直调 warehouses list 要求 :read
+        loadPullWarehouseReferenceOptions(INBOUND_HOST_RESOURCE),
         fetchDetail(),
       ]);
-      const whList = Array.isArray(whRes) ? whRes : (whRes as any)?.data ?? (whRes as any)?.items ?? whRes ?? [];
       const materialById = await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
       setPurchaseConfirmWarehouseOptions(
-        (Array.isArray(whList) ? whList : []).map((w: any) => ({
-          label: `${w.code || ''} ${w.name || ''}`.trim() || String(w.id),
-          value: w.id,
-          name: w.name || '',
-        }))
+        whOptions.map((w) => ({
+          label: w.label,
+          value: w.value,
+          name: w.label,
+        })),
       );
       const qty: Record<number, number> = {};
       const batch: Record<number, string> = {};
@@ -1032,8 +1043,10 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         const fieldFormValues = await loadProductionReturnFormFieldValues(record.id);
         productionReturnConfirmFormRef.current?.setFieldsValue(fieldFormValues);
       }
-    } catch {
-      messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadConfirmPreviewFailed'));
+    } catch (error: unknown) {
+      messageApi.error(
+        getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.msg.loadConfirmPreviewFailed')),
+      );
       resetPurchaseConfirmPreview();
     } finally {
       setPurchaseConfirmPreviewLoading(false);

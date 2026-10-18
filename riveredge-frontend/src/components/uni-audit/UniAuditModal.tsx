@@ -931,6 +931,23 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
           return item;
         });
       }
+      items = items.map((item) => {
+        if (item.action === 'withdraw' && flowStatus?.viewer_can_withdraw_submit === false) {
+          return {
+            ...item,
+            canExecute: false,
+            disabledReason: t('components.uniAudit.noPermission'),
+          };
+        }
+        if (item.action === 'recall_own' && !flowStatus?.viewer_can_recall_own) {
+          return {
+            ...item,
+            canExecute: false,
+            disabledReason: t('components.uniAudit.noPermission'),
+          };
+        }
+        return item;
+      });
       if ((hasMyPendingTask || adminOpen) && caps.allow_transfer) {
         items.push({ action: 'transfer', title: t('components.uniAudit.transfer'), canExecute: true });
       }

@@ -1609,7 +1609,7 @@ const BusinessBoardPage: React.FC = () => {
                       step={field.max === 100 ? 0.1 : 1}
                       value={visitMetricsDraft[field.key] ?? null}
                       onChange={(v) => patchVisitMetricDraft(field.key, typeof v === 'number' ? v : null)}
-                      placeholder="0"
+                      placeholder={t('dashboard.businessBoard.visitMetricUseLive')}
                     />
                   </div>
                 ))}
@@ -1812,28 +1812,44 @@ const BusinessBoardPage: React.FC = () => {
             <HudHero
               centerTextureUrl={heroTextureUrl}
               todayOutput={Number(
-                visitMode ? (visitMetrics.today_output ?? 0) : (manufacturing?.today_output ?? 0),
+                visitMode && visitMetrics.today_output != null
+                  ? visitMetrics.today_output
+                  : (manufacturing?.today_output ?? 0),
               )}
               qualifiedRate={Number(
-                visitMode ? (visitMetrics.qualified_rate ?? 0) : (manufacturing?.qualified_rate ?? 0),
+                visitMode && visitMetrics.qualified_rate != null
+                  ? visitMetrics.qualified_rate
+                  : (manufacturing?.qualified_rate ?? 0),
               )}
               inProgressWo={Number(
-                visitMode ? (visitMetrics.in_progress_wo ?? 0) : (manufacturing?.in_progress_count ?? 0),
+                visitMode && visitMetrics.in_progress_wo != null
+                  ? visitMetrics.in_progress_wo
+                  : (manufacturing?.in_progress_count ?? 0),
               )}
               pendingSchedule={Number(
-                visitMode ? (visitMetrics.pending_schedule ?? 0) : (manufacturing?.pending_scheduling ?? 0),
+                visitMode && visitMetrics.pending_schedule != null
+                  ? visitMetrics.pending_schedule
+                  : (manufacturing?.pending_scheduling ?? 0),
               )}
               avgCycle={Number(
-                visitMode ? (visitMetrics.avg_cycle ?? 0) : (metrics?.average_production_cycle ?? 0),
+                visitMode && visitMetrics.avg_cycle != null
+                  ? visitMetrics.avg_cycle
+                  : (metrics?.average_production_cycle ?? 0),
               )}
               onTimeDelivery={Number(
-                visitMode ? (visitMetrics.on_time_delivery ?? 0) : (metrics?.on_time_delivery_rate ?? 0),
+                visitMode && visitMetrics.on_time_delivery != null
+                  ? visitMetrics.on_time_delivery
+                  : (metrics?.on_time_delivery_rate ?? 0),
               )}
               reworkCount={Number(
-                visitMode ? (visitMetrics.rework_count ?? 0) : (manufacturing?.rework_count ?? 0),
+                visitMode && visitMetrics.rework_count != null
+                  ? visitMetrics.rework_count
+                  : (manufacturing?.rework_count ?? 0),
               )}
               repairingCount={Number(
-                visitMode ? (visitMetrics.repairing_count ?? 0) : (equipment?.repairing_count ?? 0),
+                visitMode && visitMetrics.repairing_count != null
+                  ? visitMetrics.repairing_count
+                  : (equipment?.repairing_count ?? 0),
               )}
               siteLogoUrl={siteLogoUrl}
               labels={heroLabels}

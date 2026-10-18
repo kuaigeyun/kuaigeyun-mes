@@ -18,7 +18,18 @@ from core.config.audit_registry import all_entries, entry_by_entity_type
 from core.services.approval.uni_audit_handlers import HANDLERS
 from infra.exceptions.exceptions import ValidationError
 
-UNI_AUDIT_ACTIONS = ("submit", "approve", "reject", "revoke", "withdraw", "transfer", "add_sign", "delegate", "urge")
+UNI_AUDIT_ACTIONS = (
+    "submit",
+    "approve",
+    "reject",
+    "revoke",
+    "withdraw",
+    "recall_own",
+    "transfer",
+    "add_sign",
+    "delegate",
+    "urge",
+)
 
 # 动作 → 标准权限 action（withdraw/urge 与提交同权；高级动作走 review）
 _ACTION_PERMISSION = {
@@ -27,6 +38,7 @@ _ACTION_PERMISSION = {
     "reject": "reject",
     "revoke": "revoke",
     "withdraw": "submit",
+    "recall_own": "approve",
     "transfer": "approve",
     "add_sign": "approve",
     "delegate": "approve",
@@ -456,6 +468,51 @@ async def execute_uni_audit(
         branches = parse_submit_branch_selection(body)
         if branches:
             branch_token = set_submit_branch_by_node(branches)
+
+    if act == "recall_own":
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        await ApprovalInstanceService.recall_own_approval(
+            tenant_id=tenant_id,
+            entity_type=entry.entity_type,
+            entity_id=entity_id,
+            operator_id=user_id,
+        )
+        return {"success": True}
+
+    if act in ("withdraw", "revoke"):
+        from infra.models.user import User
+        from core.services.approval.approval_flow_policy import (
+            assert_revoke_allowed_for_viewer,
+            assert_submitter_withdraw_allowed,
+        )
+        from core.services.authorization.user_permission_service import UserPermissionService
+
+        user = await User.get_or_none(id=user_id)
+        admin_bypass = False
+        if user:
+            admin_bypass = await UserPermissionService.is_admin_bypass(user, tenant_id)
+        if act == "withdraw":
+            await assert_submitter_withdraw_allowed(
+                tenant_id=tenant_id,
+                entity_type=entry.entity_type,
+                entity_id=entity_id,
+                operator_id=user_id,
+                admin_bypass=admin_bypass,
+            )
+        else:
+            revoke_code = f"{entry.resource}:revoke"
+            has_revoke = await UserPermissionService.has_permission(
+                user_id, tenant_id, revoke_code
+            )
+            await assert_revoke_allowed_for_viewer(
+                tenant_id=tenant_id,
+                entity_type=entry.entity_type,
+                entity_id=entity_id,
+                operator_id=user_id,
+                admin_bypass=admin_bypass,
+                has_revoke_permission=has_revoke or admin_bypass,
+            )
 
     if act in ("transfer", "add_sign", "delegate", "urge"):
         return await _dispatch_advanced(

@@ -8,7 +8,7 @@ import {
   ProFormText,
   ProFormTreeSelect,
 } from '@ant-design/pro-components';
-import { theme } from 'antd';
+import { Divider, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { searchUserDisplay } from '../../../../../services/user';
 import { formatUserDisplayLabel } from '../../../../../utils/userDisplay';
@@ -166,6 +166,39 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
       </ProFormDependency>
       <ProFormSwitch name="allowTransfer" label={t('pages.approval.designer.allowTransfer')} />
       <ProFormSwitch name="allowAddSign" label={t('pages.approval.designer.allowAddSign')} />
+      <Divider orientation="left" plain style={{ margin: '8px 0 4px' }}>
+        {t('pages.approval.designer.withdrawSection')}
+      </Divider>
+      <ProFormSwitch
+        name="allowSubmitterWithdraw"
+        label={t('pages.approval.designer.allowSubmitterWithdraw')}
+        initialValue
+      />
+      <ProFormSwitch
+        name="submitterWithdrawOnlyBeforeAnyApprove"
+        label={t('pages.approval.designer.submitterWithdrawOnlyBeforeAnyApprove')}
+      />
+      <ProFormSwitch
+        name="allowApproverRecall"
+        label={t('pages.approval.designer.allowApproverRecall')}
+      />
+      <Divider orientation="left" plain style={{ margin: '8px 0 4px' }}>
+        {t('pages.approval.designer.revokeSection')}
+      </Divider>
+      <ProFormSwitch
+        name="allowRevokeAfterApproved"
+        label={t('pages.approval.designer.allowRevokeAfterApproved')}
+        initialValue
+      />
+      <ProFormSelect
+        name="revokeLanding"
+        label={t('pages.approval.designer.revokeLanding')}
+        initialValue="reopen_final"
+        options={[
+          { label: t('pages.approval.designer.revokeLandingReopenFinal'), value: 'reopen_final' },
+          { label: t('pages.approval.designer.revokeLandingToDraft'), value: 'to_draft' },
+        ]}
+      />
       <ProFormSelect
         name="emptyApproverPolicy"
         label={t('pages.approval.designer.emptyApproverPolicy')}

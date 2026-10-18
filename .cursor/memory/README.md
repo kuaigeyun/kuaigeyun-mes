@@ -73,6 +73,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 委外检验、质量巡检、OSQC、plan_type outsource/patrol | `features/quality-outsource-patrol.md` |
 | 图纸气泡标注、drawing_balloon、FAI 导入特性、PRO OCR | `features/drawing-balloon-sheet-pro.md` |
 | 定制图纸详情、主文件附加文件、afterBasic、FilePreviewModal | `features/funide-oa-drawing-detail-files-section.md` |
+| 设备管理附件预览、计量证书、校准记录「N 个附件」、DocumentAttachmentsReadonly | `features/equipment-attachment-online-preview.md` |
 | 客诉 8D、工作台跳系统首页、eight-d-reports/:id、host-mirror | `features/funide-oa-eight-d-workbench-route.md` |
 | 研发电子/结构菜单、2D/3D/模具交付物、试验委托 general | `features/funide-oa-rd-electronics-structure-menu.md` |
 | 构建 dist、deploy、H5、launch.dev、fast-deploy、开机自启 install-service | `features/fast-deploy-scripts.md` |
@@ -90,6 +91,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 个性化主题保存后又暗、偏好与标签互相冲掉、jsonb merge | `features/user-preference-atomic-merge.md` |
 | 回显权限、display、reference_resources、轻办公人事选人/车间回显、预设角色物料回显 | `features/permission-display-echo.md` |
 | 轻办公报销单、费用报销、kuaioa_expense、报销明细 | `features/kuaioa-expense-reimbursement.md` |
+| 请假考勤没扣、代录请假、apply_leave_to_attendance、半天假仍正常 | `features/leave-attendance-employee-match.md` |
 | 取单 403、pull-lines 要不要开查看、来源筛选项直调 list | `features/pull-source-display-echo.md` |
 | 采购合计取舍、单价 0.195 合计 0.20、DocumentAmountSummary | `features/document-amount-summary-precision.md` |
 | 数值精度、数量/单价/金额小数位、0–6、configTree max | `features/numeric-precision-decimal-places-6.md` |
@@ -119,6 +121,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | Modal 点击穿透、portal 冒泡、遮罩点到列表、maskProps | `features/modal-portal-click-isolation.md` |
 | 工作台更新说明、platformUpdateLog、版本卡 | `features/platform-update-log.md` |
 | 运营看板、参观模式、visit_mode、手填指标 | `features/business-board-visit-mode.md` |
+| 价格本批量登记、bulk、partner-price-book | `features/partner-price-book-bulk-register.md` |
 | 简易/加强密码、password_mode、强制改密、站点登录密码策略 | `features/tenant-password-policy.md` |
 | 流程造数、操作用户、单项跳过、采购/工单失败继续、工序流转间隔、造数进度条、flow-generate job | `features/flow-data-generate-operator-modes.md` |
 | 设备点检造数、保养执行造数、点检单导入 | `features/equipment-ops-data-generate.md` |
@@ -128,7 +131,10 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 移动/工位点检跟绑定、保养执行带计划方案 | `features/equip-ops-scheme-bind-clients.md` |
 | 审核反审核、空壳待审、writeback_failure、revoke_noop | `features/pc-audit-unreview-empty-pending.md` |
 | 终审撤销回到上一级、终审人无审核按钮、撤销应留终审人待办可再审 | `features/audit-revoke-reopen-final-node.md` |
+| 审批流撤回反审、viewer_can_revoke、allowSubmitterWithdraw、recall_own | `features/approval-flow-withdraw-revoke-policy.md` |
 | 采购订单采购员空白、不含税金额不能改、金额单价互算 | `features/purchase-order-buyer-amount-edit.md` |
+| 采购申请到货日带入行、行到货日必填、required_date | `features/purchase-requisition-line-delivery-carry.md` |
+| 确认入库加载确认预览失败、仓库回显、loadConfirmPreviewFailed | `features/inbound-confirm-preview-warehouse-display.md` |
 | 可审人有委托无审核按钮、点审核误报没有权限、列表态未补齐待办、按钮提示待办人仍是上一节点、条件分支未确认就进特批 | `features/audit-hub-approve-button-visible.md` |
 | 多级审核第二级要点两次、列表分不清已审未审、待我审核、您已审核 | `features/audit-multilevel-second-click.md` |
 | 其他费用收支类别接口不存在、finance-misc-categories | `features/finance-other-misc-vouchers.md` |
@@ -169,6 +175,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/app-enable-disable-perf.md` | 应用启用/禁用增量权限同步 | core-platform | 已交付 |
 | `features/funide-oa-rd-electronics-structure-menu.md` | 定制研发电子/结构菜单 | funide-oa | 已交付 |
 | `features/funide-oa-drawing-detail-files-section.md` | 定制工程图纸详情图纸文件板块 | funide-oa | 已交付 |
+| `features/equipment-attachment-online-preview.md` | 设备管理计量证书与附件在线预览 | kuaizhizao-ops | 已交付 |
 | `features/funide-oa-eight-d-workbench-route.md` | 客诉 8D 工作台路由须手挂 | funide-oa | 已交付 |
 | `features/kuaiai-insights-in-hub.md` | KU-AI 调用分析并入能力矩阵 | kuaiai | 已交付 |
 | `features/kuaiai-pulse-offline.md` | KU-AI 异常感知下线 | kuaiai | 已交付 |
@@ -254,15 +261,20 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/sop-shopfloor-match-domain.md` | SOP 现场匹配与分域隔离 | master-data | 已交付 |
 | `features/platform-update-log.md` | 平台更新日志每次交付补一条 | system | 有效 |
 | `features/business-board-visit-mode.md` | 运营看板参观模式与手填指标 | system | 有效 |
+| `features/partner-price-book-bulk-register.md` | 价格本批量登记与冲突策略 | master-data | 有效 |
 | `features/tenant-password-policy.md` | 租户简易/加强登录密码策略 | core-platform | 有效 |
 | `features/pc-audit-unreview-empty-pending.md` | PC 审核反审核空壳待审与补齐写回 | approval | 已交付 |
 | `features/audit-revoke-reopen-final-node.md` | 撤销审核重开终审节点待再审 | approval | 已交付 |
+| `features/approval-flow-withdraw-revoke-policy.md` | 审批流撤回/反审设计器与身份门控 | approval | 已交付 |
 | `features/purchase-order-buyer-amount-edit.md` | 采购订单采购员默认与金额单价互算 | mes-purchase | 已交付 |
+| `features/purchase-requisition-line-delivery-carry.md` | 采购申请表头到货日带入行且行必填 | mes-purchase | 已交付 |
+| `features/inbound-confirm-preview-warehouse-display.md` | 入库确认预览仓库走回显不拦确认 | mes-warehouse | 已交付 |
 | `features/modal-portal-click-isolation.md` | Modal Portal 点击不穿透底层 | modal / portal | 已交付 |
 | `features/audit-hub-approve-button-visible.md` | 审核弹窗可审人须有审核按钮 | approval | 已交付 |
 | `features/audit-multilevel-second-click.md` | 多级审核一次点击，列表待我审核/您已审核 | approval | 已交付 |
 | `features/downstream-revoke-delete-original-path.md` | 下推下游原路反审/删除门禁 | mes-production | 已交付 |
 | `features/payment-require-voucher.md` | 付款申请要求付款单上传凭证 | finance | 已交付 |
 | `features/kuaioa-expense-reimbursement.md` | 轻办公费用报销单与独立审核流 | kuaioa | 已交付 |
+| `features/leave-attendance-employee-match.md` | 请假回写考勤优先档案员工匹配 | kuaioa | 已交付 |
 
 Obsidian 镜像可用 wikilink，Agent 检索请用上表路径，不要只依赖 `[[...]]`。

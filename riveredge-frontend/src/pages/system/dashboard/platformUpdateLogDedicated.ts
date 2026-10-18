@@ -9,6 +9,16 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'haoligo-home-permission-reload-loop-r01',
+    date: '2026-10-18',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-home-permission-reload-loop-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-home-permission-reload-loop-r01.description',
+  },
+  {
     id: 'funide-oa-eight-d-workbench-route-r01',
     date: '2026-10-16',
     type: 'fix',

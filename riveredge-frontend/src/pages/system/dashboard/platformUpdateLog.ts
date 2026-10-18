@@ -44,6 +44,54 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'leave-attendance-employee-match-r01',
+    date: '2026-10-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.leave-attendance-employee-match-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.leave-attendance-employee-match-r01.description',
+  },
+  {
+    id: 'attendance-fill-table-scroll-sticky-r01',
+    date: '2026-10-18',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.attendance-fill-table-scroll-sticky-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.attendance-fill-table-scroll-sticky-r01.description',
+  },
+  {
+    id: 'approval-flow-withdraw-revoke-policy-r01',
+    date: '2026-10-18',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-flow-withdraw-revoke-policy-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-flow-withdraw-revoke-policy-r01.description',
+  },
+  {
+    id: 'inbound-confirm-preview-warehouse-display-r01',
+    date: '2026-10-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inbound-confirm-preview-warehouse-display-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inbound-confirm-preview-warehouse-display-r01.description',
+  },
+  {
+    id: 'equipment-attachment-online-preview-r01',
+    date: '2026-10-18',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-attachment-online-preview-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equipment-attachment-online-preview-r01.description',
+  },
+  {
+    id: 'purchase-requisition-line-delivery-carry-r01',
+    date: '2026-10-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-line-delivery-carry-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-line-delivery-carry-r01.description',
+  },
+  {
     id: 'modal-portal-click-isolation-r01',
     date: '2026-10-17',
     type: 'fix',
@@ -94,6 +142,13 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.approval-flow-branch-fanout-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.approval-flow-branch-fanout-r01.description',
+  },
+  {
+    id: 'partner-price-book-bulk-register-r01',
+    date: '2026-10-17',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-price-book-bulk-register-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.partner-price-book-bulk-register-r01.description',
   },
   {
     id: 'business-board-visit-mode-r01',

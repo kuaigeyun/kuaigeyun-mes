@@ -136,7 +136,12 @@ export interface ApprovalStatusResponse {
     allow_transfer?: boolean;
     allow_add_sign?: boolean;
     allow_edit_during_approval?: boolean;
+    allow_submitter_withdraw?: boolean;
+    allow_approver_recall?: boolean;
   };
+  viewer_can_revoke?: boolean;
+  viewer_can_withdraw_submit?: boolean;
+  viewer_can_recall_own?: boolean;
   /** 下一节点为 previous_approver 条件时，审核前须按下标选边 */
   current_node_decision?: {
     field: string;

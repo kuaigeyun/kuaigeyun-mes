@@ -92,6 +92,8 @@ class ApprovalInstanceService:
             return "transfer"
         if raw in {"withdraw", "withdrawn"}:
             return "withdraw"
+        if raw in {"recall_own", "recallown"}:
+            return "recall_own"
         if raw in {"revoke", "revoked", "unapprove"}:
             return "revoke"
         if raw in {"submit", "submitted"}:
@@ -118,6 +120,7 @@ class ApprovalInstanceService:
             "reject": "驳回",
             "cancel": "已取消",
             "withdraw": "撤回",
+            "recall_own": "撤回本级",
             "revoke": "撤销审核",
             "transfer": "转交",
             "submit": "提交",
@@ -861,6 +864,9 @@ class ApprovalInstanceService:
                 "process": None,
                 "instance": None,
                 "nodes_overview": [],
+                "viewer_can_revoke": False,
+                "viewer_can_withdraw_submit": False,
+                "viewer_can_recall_own": False,
             }
 
         tasks: List[ApprovalTask] = []
@@ -947,7 +953,12 @@ class ApprovalInstanceService:
             "allow_transfer": False,
             "allow_add_sign": False,
             "allow_edit_during_approval": False,
+            "allow_submitter_withdraw": True,
+            "allow_approver_recall": False,
         }
+        viewer_can_revoke = False
+        viewer_can_withdraw_submit = False
+        viewer_can_recall_own = False
         editable_fields: List[Any] = []
         can_edit_during_approval = False
         if instance and instance.status == "pending" and process:
@@ -1032,11 +1043,45 @@ class ApprovalInstanceService:
             node = get_node_config(graph, instance.current_node)
             if node and node.get("type") == "approval":
                 nd = node.get("data") or {}
+                from core.services.approval.approval_flow_policy import resolve_submitter_withdraw_policy
+
+                withdraw_policy = resolve_submitter_withdraw_policy(graph)
                 node_capabilities = {
                     "allow_transfer": bool(nd.get("allowTransfer")),
                     "allow_add_sign": bool(nd.get("allowAddSign")),
                     "allow_edit_during_approval": bool(nd.get("allowEditDuringApproval")),
+                    "allow_submitter_withdraw": bool(withdraw_policy["allowSubmitterWithdraw"]),
+                    "allow_approver_recall": bool(nd.get("allowApproverRecall")),
                 }
+
+        if process and viewer_id is not None:
+            from core.config.audit_registry import entry_by_entity_type
+            from core.services.approval.approval_flow_policy import compute_viewer_flow_withdraw_revoke
+            from core.services.authorization.user_permission_service import UserPermissionService
+
+            admin_bypass = False
+            has_revoke = False
+            user = await User.get_or_none(id=int(viewer_id))
+            if user:
+                admin_bypass = await UserPermissionService.is_admin_bypass(user, tenant_id)
+            entry = entry_by_entity_type(entity_type)
+            if entry and user:
+                revoke_code = f"{entry.resource}:revoke"
+                has_revoke = await UserPermissionService.has_permission(
+                    int(viewer_id), tenant_id, revoke_code
+                )
+            flow_flags = await compute_viewer_flow_withdraw_revoke(
+                tenant_id=tenant_id,
+                viewer_id=int(viewer_id),
+                instance=instance,
+                process_nodes=process.nodes if process else {},
+                history=history,
+                admin_bypass=admin_bypass,
+                has_revoke_permission=has_revoke or admin_bypass,
+            )
+            viewer_can_revoke = bool(flow_flags["viewer_can_revoke"])
+            viewer_can_withdraw_submit = bool(flow_flags["viewer_can_withdraw_submit"])
+            viewer_can_recall_own = bool(flow_flags["viewer_can_recall_own"])
 
         current_node_decision = None
         if instance and instance.status == "pending" and process:
@@ -1102,6 +1147,9 @@ class ApprovalInstanceService:
             "editable_fields": editable_fields,
             "has_my_pending_task": bool(viewer_actions.get("has_my_pending_task")),
             "viewer_actions": viewer_actions,
+            "viewer_can_revoke": viewer_can_revoke,
+            "viewer_can_withdraw_submit": viewer_can_withdraw_submit,
+            "viewer_can_recall_own": viewer_can_recall_own,
             "current_node_decision": current_node_decision,
         }
 
@@ -1181,6 +1229,93 @@ class ApprovalInstanceService:
                 nodes_overview=nodes_overview,
             )
             out[eid] = viewer_actions
+        return out
+
+    @staticmethod
+    async def batch_flow_withdraw_revoke_flags_for_entities(
+        tenant_id: int,
+        entity_type: str,
+        entity_ids: list[int],
+        viewer_id: Optional[int],
+    ) -> Dict[int, Dict[str, bool]]:
+        """列表批量填充撤回/反审身份门控（与 get_approval_status 同源，只读）。"""
+        from core.config.audit_registry import entry_by_entity_type
+        from core.services.approval.approval_flow_policy import compute_viewer_flow_withdraw_revoke
+        from core.services.authorization.user_permission_service import UserPermissionService
+
+        out: Dict[int, Dict[str, bool]] = {}
+        if viewer_id is None or not entity_ids:
+            return out
+
+        id_set = {int(x) for x in entity_ids if x is not None}
+        if not id_set:
+            return out
+
+        instances = await ApprovalInstance.filter(
+            tenant_id=tenant_id,
+            status__in=["pending", "approved"],
+            deleted_at__isnull=True,
+        ).prefetch_related("process").all()
+
+        active_by_entity: Dict[int, ApprovalInstance] = {}
+        entity_instances_map: Dict[int, list] = {}
+        for inst in instances:
+            data = inst.data or {}
+            if data.get("entity_type") != entity_type:
+                continue
+            try:
+                eid = int(data.get("entity_id"))
+            except (TypeError, ValueError):
+                continue
+            if eid not in id_set:
+                continue
+            entity_instances_map.setdefault(eid, []).append(inst)
+
+        for eid, entity_instances in entity_instances_map.items():
+            active = await ApprovalInstanceService._resolve_active_instance(entity_instances)
+            if active is None:
+                active = next((i for i in entity_instances if i.status == "approved"), None)
+            if active is not None:
+                active_by_entity[eid] = active
+
+        if not active_by_entity:
+            return out
+
+        inst_ids = [int(i.id) for i in active_by_entity.values()]
+        history_rows = await ApprovalHistory.filter(
+            tenant_id=tenant_id,
+            approval_instance_id__in=inst_ids,
+        ).order_by("action_at").all()
+        history_by_inst: Dict[int, list] = {}
+        for h in history_rows:
+            history_by_inst.setdefault(int(h.approval_instance_id), []).append(h)
+
+        user = await User.get_or_none(id=int(viewer_id))
+        admin_bypass = False
+        has_revoke = False
+        if user:
+            admin_bypass = await UserPermissionService.is_admin_bypass(user, tenant_id)
+        entry = entry_by_entity_type(entity_type)
+        if entry and user:
+            has_revoke = await UserPermissionService.has_permission(
+                int(viewer_id), tenant_id, f"{entry.resource}:revoke"
+            )
+
+        for eid, instance in active_by_entity.items():
+            process = instance.process
+            if not process:
+                await instance.fetch_related("process")
+                process = instance.process
+            flags = await compute_viewer_flow_withdraw_revoke(
+                tenant_id=tenant_id,
+                viewer_id=int(viewer_id),
+                instance=instance,
+                process_nodes=process.nodes if process else {},
+                history=history_by_inst.get(int(instance.id), []),
+                admin_bypass=admin_bypass,
+                has_revoke_permission=has_revoke or admin_bypass,
+            )
+            out[eid] = flags
         return out
 
     @staticmethod
@@ -1541,6 +1676,121 @@ class ApprovalInstanceService:
         instance.current_approver_id = None
         await instance.save()
         logger.info(f"审批流程已取消: {entity_type}:{entity_id}")
+        return True
+
+    @staticmethod
+    async def recall_own_approval(
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int,
+        operator_id: int,
+    ) -> bool:
+        """审批人撤回本级同意：流程退回该节点重审。"""
+        from core.schemas.approval_flow_schema import get_node_config, normalize_flow_graph
+        from core.services.approval.approval_flow_policy import _node_data_bool
+        from infra.exceptions.exceptions import AuthorizationError
+
+        instance = await ApprovalInstanceService.get_instance_by_entity(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+        )
+        if not instance or instance.status != "pending":
+            raise ValidationError("当前没有可撤回本级审批的流程")
+
+        process = instance.process
+        if not process:
+            await instance.fetch_related("process")
+            process = instance.process
+        if not process:
+            raise ValidationError("未绑定审批流程")
+
+        graph = normalize_flow_graph(process.nodes or {})
+        approved_tasks = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            approver_id=int(operator_id),
+            status="approved",
+        ).order_by("-action_at", "-id").all()
+
+        recall_node_id: Optional[str] = None
+        for task in approved_tasks:
+            nid = str(task.node_id or "").strip()
+            if not nid or str(instance.current_node or "") == nid:
+                continue
+            node = get_node_config(graph, nid)
+            data = node.get("data") if node and isinstance(node.get("data"), dict) else {}
+            if not _node_data_bool(data, "allowApproverRecall", False):
+                continue
+            recall_node_id = nid
+            break
+
+        if not recall_node_id:
+            raise AuthorizationError("流程未开启撤回本级或未满足条件")
+
+        await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+        ).exclude(node_id=recall_node_id).update(status="cancelled")
+
+        own_task = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            node_id=recall_node_id,
+            approver_id=int(operator_id),
+        ).first()
+        if own_task:
+            own_task.status = "pending"
+            own_task.action_at = None
+            own_task.comment = None
+            await own_task.save()
+        else:
+            await ApprovalTask.create(
+                tenant_id=tenant_id,
+                approval_instance_id=instance.id,
+                node_id=recall_node_id,
+                approver_id=int(operator_id),
+                status="pending",
+            )
+
+        previous_node = instance.current_node
+        instance.current_node = recall_node_id
+        instance.current_approver_id = int(operator_id)
+        await instance.save()
+
+        recall_node = get_node_config(graph, recall_node_id)
+        if recall_node:
+            try:
+                approvers = await ApprovalInstanceService._resolve_node_approvers(
+                    recall_node, instance
+                )
+                await ApprovalInstanceService._sync_node_approver_tasks(
+                    tenant_id, instance, recall_node, approvers=approvers
+                )
+            except Exception as exc:
+                logger.warning(
+                    "recall_own_approval sync tasks skipped {}:{} — {}",
+                    entity_type,
+                    entity_id,
+                    exc,
+                )
+
+        await ApprovalInstanceService._create_approval_history(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            action="recall_own",
+            action_by=int(operator_id),
+            comment="撤回本级审批",
+            from_node=str(previous_node or ""),
+            to_node=recall_node_id,
+        )
+        logger.info(
+            "审批人撤回本级: {}:{} node={} operator={}",
+            entity_type,
+            entity_id,
+            recall_node_id,
+            operator_id,
+        )
         return True
 
     @staticmethod

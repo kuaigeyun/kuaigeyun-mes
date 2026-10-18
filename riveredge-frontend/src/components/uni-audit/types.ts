@@ -8,6 +8,7 @@ export type UniAuditAction =
   | 'add_sign'
   | 'delegate'
   | 'urge'
+  | 'recall_own'
   | 'edit';
 
 export type UniAuditActionsMap = {

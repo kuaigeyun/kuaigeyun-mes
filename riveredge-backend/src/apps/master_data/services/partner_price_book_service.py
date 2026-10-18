@@ -16,6 +16,9 @@ from apps.master_data.models.material_code_alias import MaterialCodeAlias
 from apps.master_data.models.partner_price_book import PartnerPriceBook
 from apps.master_data.models.supplier import Supplier
 from apps.master_data.schemas.partner_price_book_schemas import (
+    PartnerPriceBookBulkConflictItem,
+    PartnerPriceBookBulkCreate,
+    PartnerPriceBookBulkResponse,
     PartnerPriceBookCreate,
     PartnerPriceBookResponse,
     PartnerPriceBookUpdate,
@@ -30,7 +33,7 @@ from apps.master_data.services.master_data_list_core import (
     resolve_master_crud_order_clause,
 )
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import ConflictError, NotFoundError, ValidationError
 from infra.models.user import User
 from core.utils.timezone_utils import resolve_business_datetime
 
@@ -248,7 +251,7 @@ class PartnerPriceBookService:
         return material
 
     @classmethod
-    async def _validate_no_overlap(
+    async def _find_overlapping_row(
         cls,
         tenant_id: int,
         partner_type: str,
@@ -257,7 +260,7 @@ class PartnerPriceBookService:
         effective_from: Optional[date],
         effective_to: Optional[date],
         exclude_id: Optional[int] = None,
-    ) -> None:
+    ) -> Optional[PartnerPriceBook]:
         query = PartnerPriceBook.filter(
             tenant_id=tenant_id,
             partner_type=partner_type,
@@ -270,9 +273,33 @@ class PartnerPriceBookService:
         rows = await query.all()
         for row in rows:
             if cls._ranges_overlap(effective_from, effective_to, row.effective_from, row.effective_to):
-                raise ValidationError(
-                    "同一客户/供应商与物料在重叠的有效期内已存在价格本记录"
-                )
+                return row
+        return None
+
+    @classmethod
+    async def _validate_no_overlap(
+        cls,
+        tenant_id: int,
+        partner_type: str,
+        partner_id: int,
+        material_id: int,
+        effective_from: Optional[date],
+        effective_to: Optional[date],
+        exclude_id: Optional[int] = None,
+    ) -> None:
+        overlap = await cls._find_overlapping_row(
+            tenant_id,
+            partner_type,
+            partner_id,
+            material_id,
+            effective_from,
+            effective_to,
+            exclude_id=exclude_id,
+        )
+        if overlap:
+            raise ValidationError(
+                "同一客户/供应商与物料在重叠的有效期内已存在价格本记录"
+            )
 
     @classmethod
     async def _get_partner_alias(
@@ -454,6 +481,138 @@ class PartnerPriceBookService:
                 tenant_id, partner_type, partner_id, material_id, alias_code, alias_name, sync_alias
             )
         return await cls._enrich_response(tenant_id, row)
+
+    @classmethod
+    async def bulk_register(
+        cls,
+        tenant_id: int,
+        partner_type: str,
+        data: PartnerPriceBookBulkCreate,
+        current_user: Optional[User] = None,
+    ) -> PartnerPriceBookBulkResponse:
+        if partner_type not in cls.PARTNER_TYPES:
+            raise ValidationError(f"无效的伙伴类型: {partner_type}")
+
+        partner_ids = list(dict.fromkeys(data.partner_ids))
+        lines = data.lines
+        effective_from = data.effective_from
+        effective_to = data.effective_to
+        price_type = (data.price_type or "tax_inclusive").strip() or "tax_inclusive"
+        is_active = True if data.is_active is None else bool(data.is_active)
+        policy = data.conflict_policy
+
+        for partner_id in partner_ids:
+            await cls._validate_partner_exists(tenant_id, partner_type, partner_id)
+
+        material_cache: Dict[int, Material] = {}
+        for line in lines:
+            material_cache[line.material_id] = await cls._validate_material_exists(
+                tenant_id, line.material_id
+            )
+
+        partner_cache: Dict[int, Any] = {}
+        if partner_type == "customer":
+            for p in await Customer.filter(tenant_id=tenant_id, id__in=partner_ids, deleted_at__isnull=True):
+                partner_cache[p.id] = p
+        else:
+            for p in await Supplier.filter(tenant_id=tenant_id, id__in=partner_ids, deleted_at__isnull=True):
+                partner_cache[p.id] = p
+
+        pairs: List[Tuple[int, Any]] = [(pid, line) for pid in partner_ids for line in lines]
+        conflicts: List[PartnerPriceBookBulkConflictItem] = []
+        overlap_map: Dict[Tuple[int, int], PartnerPriceBook] = {}
+
+        for partner_id, line in pairs:
+            overlap = await cls._find_overlapping_row(
+                tenant_id,
+                partner_type,
+                partner_id,
+                line.material_id,
+                effective_from,
+                effective_to,
+            )
+            if not overlap:
+                continue
+            overlap_map[(partner_id, line.material_id)] = overlap
+            partner = partner_cache.get(partner_id)
+            material = material_cache[line.material_id]
+            conflicts.append(
+                PartnerPriceBookBulkConflictItem(
+                    partner_id=partner_id,
+                    partner_code=getattr(partner, "code", None),
+                    partner_name=getattr(partner, "name", None),
+                    material_id=line.material_id,
+                    material_code=material.main_code,
+                    material_name=material.name,
+                    existing_uuid=str(overlap.uuid),
+                )
+            )
+
+        if conflicts and not policy:
+            raise ConflictError(
+                "存在有效期重叠的价格本记录",
+                details={
+                    "conflicts": [
+                        c.model_dump(by_alias=True) for c in conflicts
+                    ]
+                },
+            )
+
+        created_count = 0
+        skipped_count = 0
+        overwritten_count = 0
+
+        async with in_transaction():
+            for partner_id, line in pairs:
+                key = (partner_id, line.material_id)
+                overlap = overlap_map.get(key)
+                if overlap:
+                    if policy == "skip":
+                        skipped_count += 1
+                        continue
+                    material = material_cache[line.material_id]
+                    unit = (line.unit or "").strip() or material.base_unit
+                    overlap.unit_price = line.unit_price
+                    overlap.price_type = price_type
+                    overlap.tax_rate = data.tax_rate
+                    overlap.unit = unit
+                    overlap.effective_from = effective_from
+                    overlap.effective_to = effective_to
+                    overlap.remark = data.remark
+                    overlap.is_active = is_active
+                    apply_update_audit(overlap, current_user)
+                    await overlap.save()
+                    overwritten_count += 1
+                    continue
+
+                material = material_cache[line.material_id]
+                unit = (line.unit or "").strip() or material.base_unit
+                payload: Dict[str, Any] = {
+                    "partner_id": partner_id,
+                    "material_id": line.material_id,
+                    "unit_price": line.unit_price,
+                    "price_type": price_type,
+                    "tax_rate": data.tax_rate,
+                    "unit": unit,
+                    "effective_from": effective_from,
+                    "effective_to": effective_to,
+                    "remark": data.remark,
+                    "is_active": is_active,
+                    "variant_prices": None,
+                }
+                apply_create_audit(payload, current_user)
+                await PartnerPriceBook.create(
+                    tenant_id=tenant_id,
+                    partner_type=partner_type,
+                    **payload,
+                )
+                created_count += 1
+
+        return PartnerPriceBookBulkResponse(
+            created_count=created_count,
+            skipped_count=skipped_count,
+            overwritten_count=overwritten_count,
+        )
 
     @classmethod
     async def get_by_uuid(

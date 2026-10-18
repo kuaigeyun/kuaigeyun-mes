@@ -128,22 +128,54 @@ class UniAuditService:
         entity_id: int,
         operator_id: int,
         flow_revoke: ActionCallback,
+        admin_bypass: bool = False,
+        has_revoke_permission: bool = True,
     ) -> Any:
         """反审核统一入口。
 
         回调若声明 ``reopened``：有已通过流程则重开终审节点，并把是否成功传给回调
         （采购申请/销售订单据此落 pending）。其余单据仍只取消 pending 后走原草稿落点。
         """
+        from core.services.approval.approval_flow_policy import (
+            assert_revoke_allowed_for_viewer,
+            resolve_final_approval_context,
+            should_reopen_on_revoke,
+        )
+
+        await assert_revoke_allowed_for_viewer(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            operator_id=operator_id,
+            admin_bypass=admin_bypass,
+            has_revoke_permission=has_revoke_permission,
+        )
+
         accepts_reopened = _callback_accepts_kwarg(flow_revoke, "reopened")
         reopened = False
         if accepts_reopened:
-            reopened_inst = await ApprovalInstanceService.reopen_at_last_approval_node(
-                tenant_id=tenant_id,
-                entity_type=entity_type,
-                entity_id=entity_id,
-                operator_id=operator_id,
+            entity_instances = await ApprovalInstanceService._list_instances_by_entity(
+                tenant_id, entity_type, entity_id
             )
-            reopened = bool(reopened_inst)
+            approved = next((i for i in entity_instances if i.status == "approved"), None)
+            last_node_id = None
+            process_nodes = {}
+            if approved:
+                process = approved.process
+                if not process:
+                    await approved.fetch_related("process")
+                    process = approved.process
+                if process:
+                    process_nodes = process.nodes or {}
+                last_node_id, _ = await resolve_final_approval_context(tenant_id, approved)
+            if should_reopen_on_revoke(process_nodes, last_node_id):
+                reopened_inst = await ApprovalInstanceService.reopen_at_last_approval_node(
+                    tenant_id=tenant_id,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    operator_id=operator_id,
+                )
+                reopened = bool(reopened_inst)
         if not reopened:
             await ApprovalInstanceService.cancel_approval(
                 tenant_id=tenant_id,
@@ -163,8 +195,18 @@ class UniAuditService:
         entity_id: int,
         operator_id: int,
         flow_withdraw: ActionCallback,
+        admin_bypass: bool = False,
     ) -> Any:
         """提交撤回统一入口。"""
+        from core.services.approval.approval_flow_policy import assert_submitter_withdraw_allowed
+
+        await assert_submitter_withdraw_allowed(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            operator_id=operator_id,
+            admin_bypass=admin_bypass,
+        )
         await ApprovalInstanceService.cancel_approval(
             tenant_id=tenant_id,
             entity_type=entity_type,

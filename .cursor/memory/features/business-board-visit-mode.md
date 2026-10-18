@@ -26,7 +26,7 @@ date: 2026-10-17
 ## 行为
 
 - 看板设置弹窗内「参观模式」仅 `is_tenant_admin || is_infra_admin` 可见。
-- 开启后 `HudHero` 八项指标用手填 `visit_metrics`，不再用制造/管理实时接口。
+- 开启后 `HudHero` 仅覆盖已填写的 `visit_metrics` 项；`null`/未填项仍走制造/管理实时接口。
 - GET 全员可读（开启后参观者也能看到演示数）；PUT 写 `visit_mode` / `visit_metrics` 须系统管理员，否则 403。
 
 ## 禁止

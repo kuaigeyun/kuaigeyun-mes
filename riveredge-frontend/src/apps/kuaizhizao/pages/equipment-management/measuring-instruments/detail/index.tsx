@@ -40,6 +40,7 @@ import { useResourcePermissions } from '../../../../../../hooks/useResourcePermi
 import { MarkerTag } from '../../../../../../constants/statusBadges';
 import { formatDateBySiteSetting, formatDateTime } from '../../../../../../utils/format';
 import { normalizeDocumentAttachments } from '../../../../utils/documentAttachments';
+import { DocumentAttachmentsReadonly } from '../../../../components/DocumentAttachmentsReadonly';
 import { uploadMultipleFiles } from '../../../../../../services/file';
 import { FutureDatePicker } from '../../../../../../utils/futureDatePickerShortcuts';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
@@ -340,8 +341,13 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
                 {
                   title: t(`${P}.fieldCertificate`),
                   dataIndex: 'attachments',
-                  render: (files: CalibrationRecord['attachments']) =>
-                    files?.length ? t(`${P}.certificateCount`, { count: files.length }) : '-',
+                  render: (files: CalibrationRecord['attachments']) => (
+                    <DocumentAttachmentsReadonly
+                      attachments={files}
+                      variant="count"
+                      showEmpty
+                    />
+                  ),
                 },
                 { title: t('common.remark'), dataIndex: 'remark', ellipsis: true },
                 { title: t('common.createdBy'), dataIndex: 'created_by_name' },

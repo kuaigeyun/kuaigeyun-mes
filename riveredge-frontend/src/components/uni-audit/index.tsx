@@ -24,12 +24,13 @@ import { getApprovalStatus } from '../../services/approvalInstance';
 import type { UniAuditAction, UniAuditActionsMap, UniAuditEndpointMap, WorkflowStatus } from './types';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
-const DEFAULT_ENDPOINTS: Record<UniAuditAction, string> = {
+const DEFAULT_ENDPOINTS: Partial<Record<UniAuditAction, string>> = {
   submit: 'submit',
   withdraw: 'withdraw',
   approve: 'approve',
   reject: 'reject',
   revoke: 'unapprove',
+  recall_own: 'recall_own',
 };
 
 export interface UniAuditActionsProps {
@@ -267,6 +268,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     showApprove,
     showReject,
     showRevoke,
+    showRecallOwn,
     showAuditHub,
   } = actionVisibility;
 
@@ -305,6 +307,14 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
       || (auditAuthoritative && Boolean(resolvedEntityType))
       || Boolean(actions.revoke)
       || Boolean(apiPrefix),
+    recall_own:
+      routeViaUnified('recall_own')
+      || (auditAuthoritative && Boolean(resolvedEntityType)),
+    transfer: false,
+    add_sign: false,
+    delegate: false,
+    urge: false,
+    edit: false,
   };
   const recordViewerActions = readAuditViewerActions(auditState);
   const flowApprove = resolveAuditFlowExecutePermission('approve', {
@@ -320,12 +330,21 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     liveViewerActions: recordViewerActions,
   });
 
+  const viewerCanRevoke = auditState?.viewer_can_revoke;
+  const viewerCanWithdraw = auditState?.viewer_can_withdraw_submit;
+
   const canExecuteByAction: Record<UniAuditAction, boolean> = {
     submit: canSubmit,
-    withdraw: canSubmit,
+    withdraw: canSubmit && viewerCanWithdraw !== false,
     approve: flowApprove.canExecute,
     reject: flowReject.canExecute,
-    revoke: canRevoke,
+    revoke: canRevoke && viewerCanRevoke !== false,
+    recall_own: canReview,
+    transfer: canReview,
+    add_sign: canReview,
+    delegate: canReview,
+    urge: canSubmit,
+    edit: canReview,
   };
 
   const enabledForLabels = auditFeatureEnabled;
@@ -349,6 +368,14 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     const items: UniAuditHubAction[] = [];
     if (showWithdraw && channelByAction.withdraw) {
       items.push({ action: 'withdraw', title: '撤回提交', canExecute: canExecuteByAction.withdraw });
+    }
+    if (showRecallOwn && channelByAction.recall_own) {
+      items.push({
+        action: 'recall_own',
+        title: '撤回本级',
+        canExecute: canExecuteByAction.recall_own,
+        rbacAllowed: canReview,
+      });
     }
     if (showApprove && channelByAction.approve) {
       items.push({
@@ -374,9 +401,11 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     return items;
   }, [
     showWithdraw,
+    showRecallOwn,
     showApprove,
     showReject,
     channelByAction.withdraw,
+    channelByAction.recall_own,
     channelByAction.approve,
     channelByAction.reject,
     canExecuteByAction.withdraw,
@@ -460,6 +489,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     if (action === 'delegate') return '委托';
     if (action === 'urge') return '催办';
     if (action === 'withdraw') return '撤回提交';
+    if (action === 'recall_own') return '撤回本级';
     return '操作';
   };
 

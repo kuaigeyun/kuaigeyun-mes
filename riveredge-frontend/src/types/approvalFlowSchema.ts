@@ -82,6 +82,14 @@ export interface ApprovalNodeData {
   refreshContextOnEdit?: boolean;
   allowTransfer?: boolean;
   allowAddSign?: boolean;
+  /** 审批中：发起人撤回整单 */
+  allowSubmitterWithdraw?: boolean;
+  submitterWithdrawOnlyBeforeAnyApprove?: boolean;
+  /** 审批中：审批人撤回本级同意 */
+  allowApproverRecall?: boolean;
+  /** 已通过：是否允许反审 */
+  allowRevokeAfterApproved?: boolean;
+  revokeLanding?: 'reopen_final' | 'to_draft';
   emptyApproverPolicy?: 'block' | 'auto_pass' | 'fallback_user' | 'escalate_admin';
   /** multi_level_manager：沿部门树向上第 N 个负责人（≥2） */
   managerLevel?: number;
@@ -159,6 +167,13 @@ export function normalizeNodeData(nodeType: string, data: ApprovalNodeData = {})
       out.refreshContextOnEdit = out.refreshContextOnEdit !== false;
       out.allowTransfer = Boolean(out.allowTransfer);
       out.allowAddSign = Boolean(out.allowAddSign);
+      out.allowSubmitterWithdraw = out.allowSubmitterWithdraw !== false;
+      out.submitterWithdrawOnlyBeforeAnyApprove = Boolean(out.submitterWithdrawOnlyBeforeAnyApprove);
+      out.allowApproverRecall = Boolean(out.allowApproverRecall);
+      out.allowRevokeAfterApproved = out.allowRevokeAfterApproved !== false;
+      const landing = String(out.revokeLanding || out.revoke_landing || 'reopen_final').toLowerCase();
+      out.revokeLanding = landing === 'to_draft' ? 'to_draft' : 'reopen_final';
+      delete out.revoke_landing;
       if (!out.emptyApproverPolicy) out.emptyApproverPolicy = 'block';
     }
   }
