@@ -44111,6 +44111,14 @@ export default {
   'components.uniAudit.urge': '催办',
   'components.uniAudit.recallOwnAction': '撤销审核',
   'components.uniAudit.submitterAwaitingOthers': '您为发起人，请等待当前节点审批人处理',
+  'pages.dashboard.updateLog.entries.audit-approve-btn-no-admin-fake-r01.title':
+    '已审过不再显示可点的审核按钮',
+  'pages.dashboard.updateLog.entries.audit-approve-btn-no-admin-fake-r01.description':
+    '无当前节点待办时（含租户管理员）审核弹窗不再把「审核/驳回」抬成可点；避免一点就报没有审批任务。已审账号应走撤销本级或等待后续节点。',
+  'pages.dashboard.updateLog.entries.audit-recall-own-after-auto-pass-r01.title':
+    '误审后可按下一道控制撤销',
+  'pages.dashboard.updateLog.entries.audit-recall-own-after-auto-pass-r01.description':
+    '审批人通过本级后，只要后续审批节点还没有人审过，即可撤销本级；下一道因空审批人自动跳过时不再把撤销按钮吃掉。',
   'pages.dashboard.updateLog.entries.menu-sync-prompt-version-bump-r01.title':
     '菜单同步提示不再反复弹出',
   'pages.dashboard.updateLog.entries.menu-sync-prompt-version-bump-r01.description':

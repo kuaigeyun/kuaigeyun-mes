@@ -49,4 +49,6 @@ standard: allowed_actions 管可见；viewer_actions/capabilities 管可执行�
 
 撤回提交后重提：`cancel_approval` 须 `_strip_branch_decision_keys`；`get_approval_status` 的 `nodes_overview` 只认当前活跃实例的 tasks/history（时间线仍可跨实例），禁止上一轮「条件分支已通过」污染本轮流程图，否则审核人看不见再选是/否。
 
-制单人 pending 无本级待办：`build_flow_viewer_actions` 须 `approve/reject=false`；弹窗 `submitterAwaitingOthers` 禁止抬升审核/驳回。节点级「撤销审核」= `recall_own`（`allowApproverRecall` 默认 true）；`viewer_may_recall_own_on_instance` 要求下一审批节点尚未通过。
+制单人 pending 无本级待办：`build_flow_viewer_actions` 须 `approve/reject=false`；弹窗 `submitterAwaitingOthers` 禁止抬升审核/驳回。节点级「撤销审核」= `recall_own`（`allowApproverRecall` 默认 true）；`viewer_may_recall_own_on_instance` 要求后续审批节点尚无人审过（空审批人 auto_pass 不阻断；禁止再用 `current_node == 下一审批节点` 卡死）。
+
+管理员旁路只跳过 RBAC：`resolveAuditFlowExecutePermission` / 弹窗 `liveCanApprove` **禁止**因 `adminOpen` 把审核/驳回抬成可执行；已有 `viewer_actions` 时必须认 `approve/reject`。否则已审账号（尤其租户管理员）仍见蓝色「审核」，一点就「没有该审批任务」。转交/加签/委托同理须 `has_my_pending_task`。

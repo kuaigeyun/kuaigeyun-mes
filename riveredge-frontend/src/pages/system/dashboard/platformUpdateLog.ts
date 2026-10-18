@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'audit-approve-btn-no-admin-fake-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-approve-btn-no-admin-fake-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-approve-btn-no-admin-fake-r01.description',
+  },
+  {
+    id: 'audit-recall-own-after-auto-pass-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-recall-own-after-auto-pass-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-recall-own-after-auto-pass-r01.description',
+  },
+  {
     id: 'menu-sync-prompt-version-bump-r01',
     date: '2026-10-18',
     type: 'fix',

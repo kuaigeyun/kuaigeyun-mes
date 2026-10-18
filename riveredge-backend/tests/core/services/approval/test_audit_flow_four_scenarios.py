@@ -7,6 +7,8 @@
 | 当前节点待办 | 待办人 → approve/reject=true |
 | 节点撤销 下一节点未审 | viewer_may_recall_own=true |
 | 节点撤销 下一节点已审 | viewer_may_recall_own=false |
+| 节点撤销 下一道 auto_pass 后仍无人审 | viewer_may_recall_own=true |
+| 节点撤销 更后节点已审 | viewer_may_recall_own=false |
 | 图2 终审重开 overview | 前序节点 approved，终审 pending |
 | 图3 驳回重提 | capabilities submit/update + gate submit |
 """
@@ -99,7 +101,12 @@ class TestScenarioRecallOwn:
     """第四条：节点级撤销审核（recall_own）。"""
 
     @staticmethod
-    def _mock_approval_task_filter(*, n1_has_approved: bool, n2_has_approved: bool):
+    def _mock_approval_task_filter(
+        *,
+        n1_has_approved: bool,
+        n2_has_approved: bool,
+        n3_has_approved: bool = False,
+    ):
         def _filter(**kwargs):
             qs = MagicMock()
             node_id = kwargs.get("node_id")
@@ -112,6 +119,8 @@ class TestScenarioRecallOwn:
                 )
             elif status == "approved" and node_id == "n2":
                 qs.exists = AsyncMock(return_value=n2_has_approved)
+            elif status == "approved" and node_id == "n3":
+                qs.exists = AsyncMock(return_value=n3_has_approved)
             else:
                 qs.first = AsyncMock(return_value=None)
                 qs.exists = AsyncMock(return_value=False)
@@ -147,6 +156,44 @@ class TestScenarioRecallOwn:
             "core.services.approval.approval_flow_policy.ApprovalTask.filter",
             side_effect=self._mock_approval_task_filter(
                 n1_has_approved=True, n2_has_approved=True
+            ),
+        ):
+            ok = await viewer_may_recall_own_on_instance(
+                tenant_id=1,
+                instance=instance,
+                viewer_id=10,
+                process_nodes=graph,
+            )
+        assert ok is False
+
+    @pytest.mark.asyncio
+    async def test_recall_allowed_when_next_auto_passed_and_later_pending(self):
+        """n2 空审批人 auto_pass（无 approved 任务）后流程已到 n3 → n1 仍可撤回。"""
+        graph = _linear_three_approval_graph()
+        instance = SimpleNamespace(id=1, current_node="n3", status="pending")
+        with patch(
+            "core.services.approval.approval_flow_policy.ApprovalTask.filter",
+            side_effect=self._mock_approval_task_filter(
+                n1_has_approved=True, n2_has_approved=False, n3_has_approved=False
+            ),
+        ):
+            ok = await viewer_may_recall_own_on_instance(
+                tenant_id=1,
+                instance=instance,
+                viewer_id=10,
+                process_nodes=graph,
+            )
+        assert ok is True
+
+    @pytest.mark.asyncio
+    async def test_recall_blocked_when_later_approval_already_approved(self):
+        """n2 被跳过但 n3 已人工通过 → 不可撤回 n1。"""
+        graph = _linear_three_approval_graph()
+        instance = SimpleNamespace(id=1, current_node="n3", status="pending")
+        with patch(
+            "core.services.approval.approval_flow_policy.ApprovalTask.filter",
+            side_effect=self._mock_approval_task_filter(
+                n1_has_approved=True, n2_has_approved=False, n3_has_approved=True
             ),
         ):
             ok = await viewer_may_recall_own_on_instance(

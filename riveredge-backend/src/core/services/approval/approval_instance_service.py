@@ -1795,7 +1795,7 @@ class ApprovalInstanceService:
         if not await viewer_may_recall_own_on_instance(
             tenant_id, instance, int(operator_id), process.nodes if process else {}
         ):
-            raise AuthorizationError("下一审批节点已处理，不可撤回本级")
+            raise AuthorizationError("后续审批节点已处理，不可撤回本级")
 
         await ApprovalTask.filter(
             tenant_id=tenant_id,
@@ -1825,6 +1825,8 @@ class ApprovalInstanceService:
         previous_node = instance.current_node
         instance.current_node = recall_node_id
         instance.current_approver_id = int(operator_id)
+        # 撤回越过条件/空审批人跳过节点后须清选边，避免再审仍沿用旧分支
+        instance.data = ApprovalInstanceService._strip_branch_decision_keys(instance.data)
         await instance.save()
 
         recall_node = get_node_config(graph, recall_node_id)
