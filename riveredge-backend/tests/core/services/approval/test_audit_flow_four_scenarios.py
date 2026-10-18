@@ -23,6 +23,9 @@ from apps.kuaizhizao.services.document_action_policy.purchase_requisition import
 )
 from core.services.approval.approval_flow_policy import (
     compute_viewer_flow_withdraw_revoke,
+    previous_approval_node_id_on_instance_path,
+    resolve_reject_policy_for_node_data,
+    resolve_reject_policy_from_graph,
     viewer_may_recall_own_on_instance,
 )
 from core.services.approval.approval_instance_service import ApprovalInstanceService
@@ -281,3 +284,89 @@ class TestScenarioRejectedResubmit:
                 history=mixed_history,
             )
         assert flags["viewer_can_withdraw_submit"] is True
+
+
+class TestRejectTargetPolicy:
+    """驳回落点：上一级 / 制单人。"""
+
+    def test_previous_node_on_linear_three_level_path(self):
+        graph = _linear_three_approval_graph()
+        instance = SimpleNamespace(data={})
+        assert previous_approval_node_id_on_instance_path(graph, "n1", instance) is None
+        assert previous_approval_node_id_on_instance_path(graph, "n2", instance) == "n1"
+        assert previous_approval_node_id_on_instance_path(graph, "n3", instance) == "n2"
+
+    def test_graph_reject_policy_intersection(self):
+        graph = {
+            "nodes": [
+                {"id": "start", "type": "start"},
+                {
+                    "id": "n1",
+                    "type": "approval",
+                    "data": {"rejectAllowedTargets": ["previous", "submitter"]},
+                },
+                {
+                    "id": "n2",
+                    "type": "approval",
+                    "data": {"rejectAllowedTargets": ["previous"]},
+                },
+                {"id": "end", "type": "end"},
+            ],
+            "edges": [
+                {"source": "start", "target": "n1"},
+                {"source": "n1", "target": "n2"},
+                {"source": "n2", "target": "end"},
+            ],
+        }
+        pol = resolve_reject_policy_from_graph(graph)
+        assert pol["allowedTargets"] == ["previous"]
+
+    def test_node_default_reject_target(self):
+        data = {"rejectAllowedTargets": ["submitter"], "rejectDefaultTarget": "submitter"}
+        pol = resolve_reject_policy_for_node_data(data)
+        assert pol["allowedTargets"] == ["submitter"]
+        assert pol["defaultTarget"] == "submitter"
+
+    @pytest.mark.asyncio
+    async def test_resolve_reject_options_first_node_only_submitter(self):
+        from core.services.approval.approval_flow_policy import resolve_reject_options_for_instance
+
+        graph = _linear_three_approval_graph()
+        process = SimpleNamespace(nodes=graph)
+        instance = SimpleNamespace(
+            id=1,
+            status="pending",
+            current_node="n1",
+            process=process,
+            data={},
+        )
+        opts = await resolve_reject_options_for_instance(
+            tenant_id=1,
+            instance=instance,
+            process_nodes=graph,
+        )
+        assert opts["allowed_targets"] == ["submitter"]
+        assert opts["default_target"] == "submitter"
+        assert opts["previous_node_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_resolve_reject_options_second_node_both_targets(self):
+        from core.services.approval.approval_flow_policy import resolve_reject_options_for_instance
+
+        graph = _linear_three_approval_graph()
+        process = SimpleNamespace(nodes=graph)
+        instance = SimpleNamespace(
+            id=1,
+            status="pending",
+            current_node="n2",
+            process=process,
+            data={},
+        )
+        opts = await resolve_reject_options_for_instance(
+            tenant_id=1,
+            instance=instance,
+            process_nodes=graph,
+        )
+        assert "previous" in opts["allowed_targets"]
+        assert "submitter" in opts["allowed_targets"]
+        assert opts["previous_node_id"] == "n1"

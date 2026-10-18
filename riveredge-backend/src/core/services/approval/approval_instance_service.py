@@ -871,6 +871,7 @@ class ApprovalInstanceService:
                 "viewer_can_revoke": False,
                 "viewer_can_withdraw_submit": False,
                 "viewer_can_recall_own": False,
+                "reject_options": None,
                 "audit_resource": audit_entry.resource if audit_entry else None,
             }
 
@@ -1135,6 +1136,22 @@ class ApprovalInstanceService:
                         "defaultValue": spec.get("defaultValue"),
                     }
 
+        reject_options_payload = None
+        if (
+            instance
+            and instance.status == "pending"
+            and process
+            and viewer_id is not None
+            and viewer_actions.get("reject")
+        ):
+            from core.services.approval.approval_flow_policy import resolve_reject_options_for_instance
+
+            reject_options_payload = await resolve_reject_options_for_instance(
+                tenant_id=tenant_id,
+                instance=instance,
+                process_nodes=process.nodes if process else {},
+            )
+
         return {
             "has_flow": bool(process or instance),
             "has_instance": bool(instance),
@@ -1183,6 +1200,7 @@ class ApprovalInstanceService:
             "viewer_can_withdraw_submit": viewer_can_withdraw_submit,
             "viewer_can_recall_own": viewer_can_recall_own,
             "current_node_decision": current_node_decision,
+            "reject_options": reject_options_payload,
             "audit_resource": audit_entry.resource if audit_entry else None,
         }
 
@@ -1360,6 +1378,7 @@ class ApprovalInstanceService:
         approved: bool,
         comment: Optional[str] = None,
         instance_data_patch: Optional[Dict[str, Any]] = None,
+        reject_target: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         按 entity 执行审批（统一入口）
@@ -1449,10 +1468,20 @@ class ApprovalInstanceService:
         if not task:
             raise ValidationError("您没有该审批任务或任务已处理")
 
+        reject_target_norm = None
+        if not approved:
+            from core.services.approval.audit_reject_context import (
+                get_reject_target,
+                normalize_reject_target,
+            )
+
+            reject_target_norm = normalize_reject_target(reject_target) or get_reject_target()
+
         action = ApprovalInstanceAction(
             action="approve" if approved else "reject",
             comment=comment,
             instance_data_patch=instance_data_patch,
+            reject_target=reject_target_norm,
         )
         updated = await ApprovalInstanceService.perform_task_action(
             tenant_id=tenant_id,
@@ -2315,6 +2344,32 @@ class ApprovalInstanceService:
         if action_data.action not in ("approve", "reject"):
             raise ValidationError(f"任务操作不支持: {action_data.action}")
 
+        reject_target_resolved: Optional[str] = None
+        reject_options: Optional[Dict[str, Any]] = None
+        if action_data.action == "reject":
+            from core.services.approval.approval_flow_policy import resolve_reject_options_for_instance
+
+            process_for_reject = instance.process
+            if not process_for_reject:
+                await instance.fetch_related("process")
+                process_for_reject = instance.process
+            if not process_for_reject:
+                raise ValidationError("未绑定审批流程")
+            reject_options = await resolve_reject_options_for_instance(
+                tenant_id=tenant_id,
+                instance=instance,
+                process_nodes=process_for_reject.nodes if process_for_reject else {},
+            )
+            allowed = reject_options.get("allowed_targets") or ["submitter"]
+            default_target = reject_options.get("default_target") or allowed[0]
+            reject_target_resolved = (
+                str(action_data.reject_target or "").strip().lower() or default_target
+            )
+            if reject_target_resolved not in allowed:
+                raise ValidationError("当前节点不允许所选驳回落点")
+            if reject_target_resolved == "previous" and not reject_options.get("previous_node_id"):
+                raise ValidationError("当前为首审节点，无法驳回到上一级")
+
         process = instance.process if instance else None
         if process and action_data.action == "approve":
             await ApprovalInstanceService._apply_decision_on_approve(
@@ -2345,13 +2400,96 @@ class ApprovalInstanceService:
             instance
         )
         if node_completed:
-            await ApprovalInstanceService._advance_instance_after_node_completion(
-                tenant_id,
-                instance,
-                instance_status,
-                route_action_by=user_id if action_data.action == "approve" else None,
-            )
+            if (
+                action_data.action == "reject"
+                and reject_target_resolved == "previous"
+                and instance_status == "rejected"
+            ):
+                await ApprovalInstanceService.reject_to_previous_approval_node(
+                    tenant_id=tenant_id,
+                    instance=instance,
+                    operator_id=user_id,
+                    comment=action_data.comment,
+                    previous_node_id=str((reject_options or {}).get("previous_node_id") or ""),
+                )
+            else:
+                await ApprovalInstanceService._advance_instance_after_node_completion(
+                    tenant_id,
+                    instance,
+                    instance_status,
+                    route_action_by=user_id if action_data.action == "approve" else None,
+                )
 
+        return instance
+
+    @staticmethod
+    async def reject_to_previous_approval_node(
+        tenant_id: int,
+        instance: ApprovalInstance,
+        operator_id: int,
+        *,
+        comment: Optional[str],
+        previous_node_id: str,
+    ) -> ApprovalInstance:
+        """驳回至上一级 approval 节点：实例保持 pending，重建上一节点待办。"""
+        from core.schemas.approval_flow_schema import get_node_config, normalize_flow_graph
+        from core.services.approval.approval_flow_policy import (
+            previous_approval_node_id_on_instance_path,
+        )
+
+        prev_node_id = str(previous_node_id or "").strip()
+        if not prev_node_id:
+            raise ValidationError("无法定位上一级审批节点")
+
+        if not instance.process:
+            await instance.fetch_related("process")
+        process = instance.process
+        if not process:
+            raise ValidationError("未绑定审批流程")
+
+        graph = normalize_flow_graph(process.nodes or {})
+        computed_prev = previous_approval_node_id_on_instance_path(
+            process.nodes, str(instance.current_node or ""), instance
+        )
+        if computed_prev != prev_node_id:
+            raise ValidationError("驳回到上一级与流程路径不一致")
+
+        prev_node = get_node_config(graph, prev_node_id)
+        if not prev_node or str(prev_node.get("type") or "") != "approval":
+            raise ValidationError("上一级节点不是审批节点")
+
+        completed_node_id = instance.current_node
+        await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            status__in=["pending", "suspended"],
+        ).update(status="cancelled")
+
+        await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            node_id=prev_node_id,
+        ).update(status="cancelled")
+
+        instance.current_node = prev_node_id
+        instance.status = "pending"
+        instance.completed_at = None
+        await instance.save()
+
+        await ApprovalInstanceService._create_node_tasks(
+            tenant_id, instance, prev_node, route_action_by=operator_id
+        )
+
+        await ApprovalInstanceService._create_approval_history(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            action="reject",
+            action_by=int(operator_id),
+            comment=comment,
+            from_node=str(completed_node_id or ""),
+            to_node=prev_node_id,
+            change_payload={"reject_target": "previous"},
+        )
         return instance
 
     @staticmethod

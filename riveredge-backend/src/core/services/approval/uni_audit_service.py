@@ -101,6 +101,7 @@ class UniAuditService:
         approver_id: int,
         reason: Optional[str],
         flow_reject: ActionCallback,
+        reject_target: Optional[str] = None,
     ) -> Any:
         """驳回统一入口。"""
         if await UniAuditService._has_pending_flow_instance(
@@ -108,7 +109,13 @@ class UniAuditService:
             entity_type=entity_type,
             entity_id=entity_id,
         ):
-            # 同 approve：完成回调为单一写回路径，避免双写。
+            from core.services.approval.audit_reject_context import (
+                get_reject_target,
+                normalize_reject_target,
+            )
+
+            target = normalize_reject_target(reject_target) or get_reject_target()
+            # 同 approve：终态驳回时完成回调为单一写回路径；驳回到上一级不写回业务终态。
             await ApprovalInstanceService.execute_approval(
                 tenant_id=tenant_id,
                 entity_type=entity_type,
@@ -116,6 +123,7 @@ class UniAuditService:
                 approver_id=approver_id,
                 approved=False,
                 comment=reason,
+                reject_target=target,
             )
             return None
         return await flow_reject(reason)

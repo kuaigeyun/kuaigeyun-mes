@@ -155,6 +155,12 @@ export interface ApprovalStatusResponse {
     requireExplicit?: boolean;
     defaultValue?: boolean | number | null;
   } | null;
+  reject_options?: {
+    allowed_targets: Array<'previous' | 'submitter'>;
+    default_target: 'previous' | 'submitter';
+    previous_node_id?: string | null;
+    previous_node_label?: string | null;
+  } | null;
   tasks?: Array<{
     uuid: string;
     node_id?: string;

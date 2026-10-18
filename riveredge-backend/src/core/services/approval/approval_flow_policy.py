@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple
+
+RejectTarget = Literal["previous", "submitter"]
+_DEFAULT_REJECT_TARGETS: List[RejectTarget] = ["previous", "submitter"]
 
 from core.models.approval_history import ApprovalHistory
 from core.models.approval_instance import ApprovalInstance
@@ -60,6 +63,144 @@ def resolve_revoke_policy_for_node_data(data: Dict[str, Any]) -> Dict[str, Any]:
     if landing not in ("reopen_final", "to_draft"):
         landing = "reopen_final"
     return {"allowRevokeAfterApproved": allow, "revokeLanding": landing}
+
+
+def _parse_reject_allowed_targets(raw: Any) -> List[RejectTarget]:
+    if raw is None:
+        return list(_DEFAULT_REJECT_TARGETS)
+    items = raw if isinstance(raw, list) else [raw]
+    out: List[RejectTarget] = []
+    for item in items:
+        val = str(item or "").strip().lower()
+        if val in ("previous", "submitter") and val not in out:
+            out.append(val)  # type: ignore[arg-type]
+    return out if out else list(_DEFAULT_REJECT_TARGETS)
+
+
+def resolve_reject_policy_for_node_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    raw_allowed = data.get("rejectAllowedTargets")
+    if raw_allowed is None:
+        raw_allowed = data.get("reject_allowed_targets")
+    allowed = _parse_reject_allowed_targets(raw_allowed)
+    default_raw = data.get("rejectDefaultTarget") or data.get("reject_default_target") or "previous"
+    default_val = str(default_raw).strip().lower()
+    default_target: RejectTarget = "submitter" if default_val == "submitter" else "previous"
+    if default_target not in allowed:
+        default_target = allowed[0]
+    return {"allowedTargets": allowed, "defaultTarget": default_target}
+
+
+def resolve_reject_policy_from_graph(graph: Dict[str, Any]) -> Dict[str, Any]:
+    nodes = _approval_nodes_in_graph(graph)
+    if not nodes:
+        return {"allowedTargets": list(_DEFAULT_REJECT_TARGETS), "defaultTarget": "previous"}
+    allowed_set: Set[RejectTarget] = set(_DEFAULT_REJECT_TARGETS)
+    for node in nodes:
+        data = node.get("data") if isinstance(node.get("data"), dict) else {}
+        pol = resolve_reject_policy_for_node_data(data)
+        allowed_set &= set(pol["allowedTargets"])
+    if not allowed_set:
+        allowed_set = set(_DEFAULT_REJECT_TARGETS)
+    allowed = [t for t in _DEFAULT_REJECT_TARGETS if t in allowed_set]
+    return {"allowedTargets": allowed, "defaultTarget": allowed[0]}
+
+
+def previous_approval_node_id_on_instance_path(
+    process_nodes: Any,
+    current_node_id: str,
+    instance: ApprovalInstance,
+) -> Optional[str]:
+    """沿实例已选分支，取当前 approval 节点之前的上一个 approval 节点 id。"""
+    from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+    graph = ApprovalInstanceService._normalize_process_graph(process_nodes or {})
+    current = str(current_node_id or "").strip()
+    if not current:
+        return None
+    start_id: Optional[str] = None
+    for node in graph.get("nodes") or []:
+        if isinstance(node, dict) and str(node.get("type") or "") == "start":
+            start_id = str(node.get("id") or "").strip()
+            break
+    if not start_id:
+        return None
+
+    cursor = start_id
+    prev_approval: Optional[str] = None
+    seen: Set[str] = set()
+    for _ in range(64):
+        if not cursor or cursor in seen:
+            return None
+        seen.add(cursor)
+        if cursor == current:
+            return prev_approval
+        node = get_node_config(graph, cursor)
+        ntype = str((node or {}).get("type") or "")
+        nxt = ApprovalInstanceService._get_next_node(graph, cursor, instance=instance)
+        if not nxt:
+            return None
+        nxt_id = str(nxt.get("id") or "").strip()
+        if not nxt_id:
+            return None
+        if nxt_id == current:
+            cur_node = get_node_config(graph, current)
+            if str((cur_node or {}).get("type") or "") == "approval":
+                if ntype == "approval":
+                    return cursor
+                return prev_approval
+        if ntype == "approval":
+            prev_approval = cursor
+        cursor = nxt_id
+    return None
+
+
+async def resolve_reject_options_for_instance(
+    *,
+    tenant_id: int,
+    instance: ApprovalInstance,
+    process_nodes: Any,
+) -> Dict[str, Any]:
+    """运行时驳回可选项（当前节点策略 ∩ 图级允许集，再按是否有上一级过滤）。"""
+    from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+    graph = normalize_flow_graph(process_nodes or {})
+    graph_policy = resolve_reject_policy_from_graph(graph)
+    allowed: List[RejectTarget] = list(graph_policy["allowedTargets"])
+
+    current_node_id = str(instance.current_node or "").strip()
+    current_node = get_node_config(graph, current_node_id) if current_node_id else None
+    default_target: RejectTarget = graph_policy["defaultTarget"]
+    if current_node and str(current_node.get("type") or "") == "approval":
+        nd = current_node.get("data") if isinstance(current_node.get("data"), dict) else {}
+        node_policy = resolve_reject_policy_for_node_data(nd)
+        allowed = [t for t in allowed if t in node_policy["allowedTargets"]]
+        default_target = node_policy["defaultTarget"]
+        if default_target not in allowed and allowed:
+            default_target = allowed[0]
+
+    prev_id = previous_approval_node_id_on_instance_path(
+        process_nodes, current_node_id, instance
+    )
+    if not prev_id:
+        allowed = [t for t in allowed if t != "previous"]
+    if not allowed:
+        allowed = ["submitter"]
+        default_target = "submitter"
+    if default_target not in allowed:
+        default_target = allowed[0]
+
+    prev_label = None
+    if prev_id:
+        prev_node = get_node_config(graph, prev_id)
+        if prev_node:
+            prev_label = ApprovalInstanceService._node_display_label(prev_node)
+
+    return {
+        "allowed_targets": allowed,
+        "default_target": default_target,
+        "previous_node_id": prev_id,
+        "previous_node_label": prev_label,
+    }
 
 
 def graph_last_approval_node_id(graph: Dict[str, Any]) -> Optional[str]:

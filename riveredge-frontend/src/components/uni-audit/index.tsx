@@ -558,9 +558,9 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     }
   };
 
-  const handleConfirm = async (reason?: string) => {
+  const handleConfirm = async (reason?: string, payload?: Record<string, unknown>) => {
     if (!activeAction) return;
-    await runAction(activeAction, reason);
+    await runAction(activeAction, reason, payload);
   };
 
   const handleHubAction = async (

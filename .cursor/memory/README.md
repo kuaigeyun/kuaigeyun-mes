@@ -136,6 +136,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 终审撤销回到上一级、终审人无审核按钮、撤销应留终审人待办可再审 | `features/audit-revoke-reopen-final-node.md` |
 | 审批流撤回反审、viewer_can_revoke、allowSubmitterWithdraw、recall_own | `features/approval-flow-withdraw-revoke-policy.md` |
 | 手机待我审批、UniAudit 门控、executeUniAuditAction | `features/mobile-approval-uni-audit-parity.md` |
+| 驳回上一级、驳回到制单人、reject_target、reject_options | `features/audit-reject-targets.md` |
 | 采购订单采购员空白、不含税金额不能改、金额单价互算 | `features/purchase-order-buyer-amount-edit.md` |
 | 采购申请到货日带入行、行到货日必填、required_date | `features/purchase-requisition-line-delivery-carry.md` |
 | 确认入库加载确认预览失败、仓库回显、loadConfirmPreviewFailed | `features/inbound-confirm-preview-warehouse-display.md` |
@@ -274,6 +275,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/audit-revoke-reopen-final-node.md` | 撤销审核重开终审节点待再审 | approval | 已交付 |
 | `features/approval-flow-withdraw-revoke-policy.md` | 审批流撤回/反审设计器与身份门控 | approval | 已交付 |
 | `features/mobile-approval-uni-audit-parity.md` | 手机审批中心与 PC getApprovalStatus/uni-audit | mobile, approval | 已交付 |
+| `features/audit-reject-targets.md` | 驳回上一级/制单人 reject_target | approval, UniAudit | 已交付 |
 | `features/purchase-order-buyer-amount-edit.md` | 采购订单采购员默认与金额单价互算 | mes-purchase | 已交付 |
 | `features/purchase-requisition-line-delivery-carry.md` | 采购申请表头到货日带入行且行必填 | mes-purchase | 已交付 |
 | `features/inbound-confirm-preview-warehouse-display.md` | 入库确认预览仓库走回显不拦确认 | mes-warehouse | 已交付 |
