@@ -1,1 +1,0 @@
-import{j as d}from"./vendor-tojn5jC9.js";import{ak as s,J as i}from"./main-l-E_kH6W.js";function x({sourceType:e,sourceId:o,sourceCode:t,emptyText:n="-",copyable:r=!0,ellipsis:m=!0,style:u}){const c=s(e);return d.jsx(i,{documentType:c,documentId:o,code:t,emptyText:n,copyable:r,ellipsis:m,style:u})}export{x as S};

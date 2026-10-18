@@ -1,0 +1,1 @@
+import{j as a}from"./vendor-B6_j8WKg.js";import{bi as r,N as t}from"./clientRelease-YzkPP0xH.js";const i=()=>{const{id:e}=r();return e?a.jsx(t,{to:`/apps/funide-oa/knowledge-base?articleId=${e}`,replace:!0}):a.jsx(t,{to:"/apps/funide-oa/knowledge-base",replace:!0})};export{i as default};

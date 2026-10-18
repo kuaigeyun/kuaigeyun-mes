@@ -1,0 +1,1 @@
+import{j as a}from"./vendor-B6_j8WKg.js";import{M as m}from"./main-DcYWl28V.js";function t(r,e,o="common.enabled",n="common.disabled"){return a.jsx(m,{color:e?"success":"default",children:r(e?o:n)})}export{t as r};
