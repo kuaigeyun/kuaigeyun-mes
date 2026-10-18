@@ -1,1 +1,0 @@
-import{E as a}from"./clientRelease-CRywIODM.js";async function e(t=7){return a(`/apps/kuaiai/catalog/capabilities?days=${t}`,{method:"GET"})}async function o(){return a("/apps/kuaiai/catalog/agents",{method:"GET"})}export{o as a,e as f};
