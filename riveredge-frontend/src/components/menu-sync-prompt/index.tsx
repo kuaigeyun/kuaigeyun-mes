@@ -68,7 +68,8 @@ const MenuSyncPrompt: React.FC = () => {
     }
 
     const dismissKey = buildDismissStorageKey(tenantId, fingerprint);
-    if (sessionStorage.getItem(dismissKey) === '1') {
+    // 用 localStorage：同一指纹下「稍后」跨刷新不再烦扰；指纹随发版 manifest 变才会再提示
+    if (localStorage.getItem(dismissKey) === '1') {
       shownFingerprintRef.current = fingerprint;
       return;
     }
@@ -78,7 +79,7 @@ const MenuSyncPrompt: React.FC = () => {
     const staleCount = syncStatus.stale_app_count;
 
     const dismiss = () => {
-      sessionStorage.setItem(dismissKey, '1');
+      localStorage.setItem(dismissKey, '1');
       notification.destroy(notificationKey);
     };
 

@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'menu-sync-prompt-version-bump-r01',
+    date: '2026-10-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.menu-sync-prompt-version-bump-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.menu-sync-prompt-version-bump-r01.description',
+  },
+  {
     id: 'audit-reject-targets-r01',
     date: '2026-10-18',
     type: 'improvement',
