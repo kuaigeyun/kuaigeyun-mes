@@ -1,0 +1,1 @@
+import{R as n}from"./clientRelease-B0TG6xka.js";function o(a,r){const t=n(a);if(t==="—")return t;const i=String(r??"").trim();return i?`${t} ${i}`:t}function s(){return Promise.resolve({})}function u(){}export{o as f,s as g,u as i};

@@ -1,0 +1,1 @@
+import{Q as i}from"./clientRelease-B0TG6xka.js";import{n as a}from"./drawing-DvV-7MzW.js";function s(e){return{...e,file:a(e.file)??e.file??null}}const o={query:async e=>{const r=await i.get("/apps/master-data/process/drawing-where-used",{params:e});return{direction:r.direction,drawings:(r.drawings??[]).map(s),usages:r.usages??[]}}};export{o as d};
