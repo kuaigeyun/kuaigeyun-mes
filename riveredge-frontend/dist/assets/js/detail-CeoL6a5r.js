@@ -1,1 +1,0 @@
-import{j as a}from"./vendor-DhtNAC-B.js";import{bi as r,N as t}from"./clientRelease-CDgJgYZn.js";const i=()=>{const{id:e}=r();return e?a.jsx(t,{to:`/apps/kuaiplm/knowledge-base?articleId=${e}`,replace:!0}):a.jsx(t,{to:"/apps/kuaiplm/knowledge-base",replace:!0})};export{i as default};
