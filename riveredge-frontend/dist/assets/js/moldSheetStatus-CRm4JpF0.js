@@ -1,0 +1,1 @@
+import{r as n}from"./documentLifecycleStatusTag-Q8fQiKxf.js";import{h as o}from"./permissionContract-CO8szXki.js";function r(e){const t=(e||"待审核").trim();return t==="已通过"||t==="已驳回"||t==="待审核"?t:"待审核"}function u(e){const t=r(e);return n(t)}function a(e,t){return o(e,t)}function m(e){return r(e)==="已通过"}export{a as c,m as i,u as m,r as n};
