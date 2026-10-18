@@ -1,1 +1,0 @@
-import{E as a}from"./clientRelease-B0TG6xka.js";const o="/apps/kuaizhizao/quality-complaint-batch-months",i={list:async t=>a(o,{method:"GET",params:t}),upsert:async t=>a(o,{method:"PUT",data:t})};export{i as q};
