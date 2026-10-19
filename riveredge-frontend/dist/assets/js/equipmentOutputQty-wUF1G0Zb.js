@@ -1,0 +1,1 @@
+function u(t){if(t==null||t==="")return"—";const n=Number(t);return Number.isFinite(n)?String(Math.round(n)):String(t)}function r(t){if(t==null||t==="")return;const n=Number(t);if(Number.isFinite(n))return Math.round(n)}export{u as f,r};
