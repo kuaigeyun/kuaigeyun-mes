@@ -1214,6 +1214,20 @@ class ApprovalInstanceService:
                 process_nodes=process.nodes if process else {},
             )
 
+        # 卡在 initiator 条件节点且无选边：覆盖误导性的「您已审核，等待后续」
+        if instance and instance.status == "pending" and process:
+            stuck_hint = ApprovalInstanceService._initiator_condition_stuck_hint(
+                instance, process.nodes or {}
+            )
+            if stuck_hint:
+                viewer_actions = {
+                    **viewer_actions,
+                    "approve": False,
+                    "reject": False,
+                    "has_my_pending_task": False,
+                    "block_reason": stuck_hint,
+                }
+
         return {
             "has_flow": bool(process or instance),
             "has_instance": bool(instance),
@@ -3232,6 +3246,49 @@ class ApprovalInstanceService:
         return out
 
     @staticmethod
+    def _initiator_condition_stuck_hint(
+        instance: ApprovalInstance,
+        process_nodes: Any,
+    ) -> Optional[str]:
+        """当前钉在 initiator 条件节点且缺选边时，返回面向用户的处置说明。"""
+        current_id = str(instance.current_node or "").strip()
+        if not current_id:
+            return None
+        graph = ApprovalInstanceService._normalize_process_graph(process_nodes or {})
+        node = next(
+            (
+                n
+                for n in (graph.get("nodes") or [])
+                if isinstance(n, dict) and str(n.get("id") or "") == current_id
+            ),
+            None,
+        )
+        if not node or str(node.get("type") or "") != "condition":
+            return None
+        edges = [
+            e
+            for e in (graph.get("edges") or [])
+            if isinstance(e, dict) and str(e.get("source") or "") == current_id
+        ]
+        if not edges:
+            return None
+        route_mode = ApprovalInstanceService._condition_node_route_mode(
+            node, out_edge_count=len(edges)
+        )
+        if route_mode != "initiator":
+            return None
+        data = instance.data if isinstance(instance.data, dict) else {}
+        index_key = ApprovalInstanceService._condition_branch_index_key(current_id)
+        legacy_key = ApprovalInstanceService._condition_branch_route_key(current_id)
+        if index_key in data or legacy_key in data:
+            return None
+        label = ApprovalInstanceService._node_display_label(node) or "条件分支"
+        return (
+            f"流程卡在「{label}」：该分支应在提交时选定并自动分流，当前选边已丢失，无人可在此节点操作。"
+            f"请发起人撤回提交后重新提交并选择「{label}」。"
+        )
+
+    @staticmethod
     async def _restore_missing_initiator_branches_from_history(
         tenant_id: int,
         instance: ApprovalInstance,
@@ -3845,6 +3902,16 @@ class ApprovalInstanceService:
                     instance.current_node = None
                     instance.current_approver_id = None
                     await instance.save()
+                elif next_type in {"condition", "cc"}:
+                    # 禁止先把 current 钉在条件/抄送上再选边：缺发起人选边时 save 后 raise
+                    # 会留下「当前=是否总经理特批、无待办、无人可操作」的死结。
+                    # 由 _create_node_tasks 选边成功后再落到真实审批节点；失败则 current 仍停在已完成节点，错误可回传。
+                    await ApprovalInstanceService._create_node_tasks(
+                        tenant_id,
+                        instance,
+                        next_node,
+                        route_action_by=route_action_by,
+                    )
                 else:
                     instance.current_node = next_node.get("id")
                     await instance.save()

@@ -44,6 +44,15 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'approval-condition-advance-not-pinned-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.approval-condition-advance-not-pinned-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-condition-advance-not-pinned-r01.description',
+  },
+  {
     id: 'approval-recall-gm-branch-disconnect-r01',
     date: '2026-10-19',
     type: 'fix',

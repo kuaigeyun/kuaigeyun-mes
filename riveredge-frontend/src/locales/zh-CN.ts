@@ -44144,10 +44144,14 @@ export default {
     '试流单研发项目支持关联或手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.description':
     '新建试流单时研发项目与产品固件、样品加工一致：可从列表选择项目，也可直接手填项目代号（无需先建项目档案）。',
+  'pages.dashboard.updateLog.entries.approval-condition-advance-not-pinned-r01.title':
+    '是否总经理特批按提交时决定自动分流',
+  'pages.dashboard.updateLog.entries.approval-condition-advance-not-pinned-r01.description':
+    '「是否总经理特批」在提交时选定；二级上级通过后按该决定自动走总经理或采购副总。总经理节点撤回本级后仍保留提交选边并本级重审；缺选边不再卡死在条件节点。',
   'pages.dashboard.updateLog.entries.approval-recall-gm-branch-disconnect-r01.title':
     '条件分支节点撤回本级后流程不再断开',
   'pages.dashboard.updateLog.entries.approval-recall-gm-branch-disconnect-r01.description':
-    '在「总经理(特殊情况)」等条件分支后的节点撤回本级时，保留发起人选边并用履历回写；审核概况缺选边不再报错成未绑定，流程退回本级重审。',
+    '在「总经理(特殊情况)」撤回本级时保留提交时的「是否总经理特批」选边，按原决定继续；审核概况缺选边不再报错成未绑定。',
   'pages.dashboard.updateLog.entries.approval-nodes-overview-passed-not-waiting-r01.title':
     '审核执行记录已过节点不再显示待到达',
   'pages.dashboard.updateLog.entries.approval-nodes-overview-passed-not-waiting-r01.description':

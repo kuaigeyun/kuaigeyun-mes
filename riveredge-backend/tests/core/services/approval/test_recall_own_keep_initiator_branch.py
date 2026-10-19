@@ -73,6 +73,32 @@ def test_recall_at_gm_keeps_initiator_branch():
     assert out.get("__branch_index_cond") == 0
 
 
+def test_after_gm_recall_condition_still_routes_by_submit_decision():
+    """总经理撤回后仍按提交时选边：是→总经理支，否→采购副总支。"""
+    graph = _graph_with_initiator_condition()
+    # 提交选「是」→ n3 总经理
+    yes_inst = SimpleNamespace(data={"__branch_index_cond": 0})
+    kept = ApprovalInstanceService._strip_branch_keys_after_recall(
+        yes_inst.data, graph, "n3"
+    )
+    yes_inst.data = kept
+    nxt_yes = ApprovalInstanceService._get_next_node(
+        graph, "cond", instance=yes_inst, on_missing_branch="raise"
+    )
+    assert nxt_yes and nxt_yes.get("id") == "n3"
+
+    # 提交选「否」→ n4 采购副总
+    no_inst = SimpleNamespace(data={"__branch_index_cond": 1})
+    kept_no = ApprovalInstanceService._strip_branch_keys_after_recall(
+        no_inst.data, graph, "n3"
+    )
+    no_inst.data = kept_no
+    nxt_no = ApprovalInstanceService._get_next_node(
+        graph, "cond", instance=no_inst, on_missing_branch="raise"
+    )
+    assert nxt_no and nxt_no.get("id") == "n4"
+
+
 def test_recall_strips_previous_approver_branch_downstream():
     graph = _graph_with_initiator_condition()
     # 改成 previous_approver

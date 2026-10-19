@@ -33,9 +33,11 @@ keywords:
 - **撤回本级**：节点 `allowApproverRecall`；动作 `POST .../recall_own`（review 权限）。
 - **撤回门禁**：`viewer_may_recall_own_on_instance` — 本级已通过且**后续审批节点尚无人审过**（看路径上后续节点的 `approved` 任务）。空审批人 `auto_pass` 不建任务、不阻断；流程已越过下一道仍可撤。执行时清 `__branch_*` 选边。
 - **撤回本级落库**：`recall_own_approval` 须**取消实例全部任务后**再为撤回节点新建一条 pending（禁止只把某一行 approved→pending 却残留另一行 approved）。否则 `bootstrap`/`_reconcile_current_node_completion` 按或签「已有通过」再次推进并清掉待办 → 报「您没有该审批任务」。
-- **撤回清选边**：用 `_strip_branch_keys_after_recall`——**保留** `routeMode=initiator` 的提交选边；只清撤回点之后需重选的边。禁止一律 `_strip_branch_decision_keys`，否则概况 bootstrap 撞条件节点报「发起人须选定…」，弹窗显示成未绑定。在「总经理(特殊情况)」撤回同理：落点仍是本级重审，不是二级上级。
-- **概况缺选边不得 422**：`previous_approval_node_id_on_instance_path` / `next_approval_node_id_on_instance_path` 只读路径须 `on_missing_branch="stop"`；`_subsequent_approval_has_human_pass` 用图可达集查后续 approved，禁止依赖选边键 path walk（缺键 raise → 弹窗未绑定）。
-- **选边履历回写**：`get_approval_status` 对缺失的 initiator `__branch_index_*` 用本实例 `condition_route` 履历 `to_node` 回写真源（`_restore_missing_initiator_branches_from_history`）。
+- **initiator 条件分支（如是否总经理特批）**：真源是**提交时**写入的 `__branch_index_*`；二级上级通过后按该键自动分流，**禁止**在条件节点再等人选。在「总经理(特殊情况)」撤回本级：落点仍是本级重审，且**必须保留**提交选边，再审后仍按原决定往下走。
+- **撤回清选边**：用 `_strip_branch_keys_after_recall`——**保留** `routeMode=initiator` 的提交选边；只清撤回点之后需重选的边。禁止一律 `_strip_branch_decision_keys`。
+- **概况缺选边不得 422**：路径辅助只读须 `on_missing_branch="stop"`；后续是否已审用图可达集，不依赖选边键 path walk。
+- **选边履历回写**：缺 initiator 键时用本实例 `condition_route.to_node` 回写真源。
+- **推进勿钉条件节点**：下一站是 `condition`/`cc` 时禁止先 `save(current=条件)`；缺选边会卡死。卡死时提示发起人撤回重提（正常路径不应出现）。
 - **概况残留清理**：`get_approval_status` 清「不在可审名单」的 pending 时须保留 `current_approver_id`（撤回人），禁止误删后再报「没有审批任务」。
 - **bootstrap 缺选边**：`_create_node_tasks(..., on_missing_branch="stop")`，不得把概况接口打成 500。
 - **门禁任务范围**：`viewer_has_pending_task_on_instance` / `current_node_pending_approver_ids` 只认**当前活跃实例**的任务；`get_approval_status` 混入的同单据旧实例 pending 不得冒充可审。
