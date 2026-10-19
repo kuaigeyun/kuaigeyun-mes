@@ -44,6 +44,15 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaiplm-design-docs-optional-project-title-first-r01',
+    date: '2026-10-19',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-design-docs-optional-project-title-first-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-design-docs-optional-project-title-first-r01.description',
+  },
+  {
     id: 'kuaiplm-trial-flow-optional-project-title-first-r01',
     date: '2026-10-19',
     type: 'improvement',
@@ -59,6 +68,14 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.description',
+  },
+  {
+    id: 'audit-recall-keep-initiator-branch-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-recall-keep-initiator-branch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-recall-keep-initiator-branch-r01.description',
   },
   {
     id: 'audit-revoke-reopen-keep-nodes-r01',
