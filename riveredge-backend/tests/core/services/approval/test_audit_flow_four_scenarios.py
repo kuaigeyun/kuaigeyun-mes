@@ -59,12 +59,16 @@ class TestScenarioSubmitterAndAssignee:
     def test_submitter_only_withdraw_semantics_via_viewer_actions(self):
         """制单人陈超：流程在 n1，待办是审核节点2 → 本人不可审/驳。"""
         instance = SimpleNamespace(
-            current_node="n1", status="pending", submitter_id=100
+            id=1, current_node="n1", status="pending", submitter_id=100
         )
         actions = build_flow_viewer_actions(
             viewer_id=100,
             instance=instance,
-            tasks=[SimpleNamespace(node_id="n1", approver_id=200, status="pending")],
+            tasks=[
+                SimpleNamespace(
+                    approval_instance_id=1, node_id="n1", approver_id=200, status="pending"
+                )
+            ],
             nodes_overview=[
                 {
                     "is_current": True,
@@ -79,12 +83,16 @@ class TestScenarioSubmitterAndAssignee:
     def test_current_node_assignee_can_approve_reject(self):
         """当前节点待办人：审核、驳回可点（尚未通过本级，无 recall）。"""
         instance = SimpleNamespace(
-            current_node="n1", status="pending", submitter_id=100
+            id=1, current_node="n1", status="pending", submitter_id=100
         )
         actions = build_flow_viewer_actions(
             viewer_id=200,
             instance=instance,
-            tasks=[SimpleNamespace(node_id="n1", approver_id=200, status="pending")],
+            tasks=[
+                SimpleNamespace(
+                    approval_instance_id=1, node_id="n1", approver_id=200, status="pending"
+                )
+            ],
             nodes_overview=[
                 {
                     "is_current": True,
@@ -99,6 +107,113 @@ class TestScenarioSubmitterAndAssignee:
 
 class TestScenarioRecallOwn:
     """第四条：节点级撤销审核（recall_own）。"""
+
+    @pytest.mark.asyncio
+    async def test_overview_after_recall_future_nodes_are_waiting(self):
+        """撤回本级后，当前节点之后的历史 auto_pass/条件路由不得再标已跳过/已通过。"""
+        graph = {
+            "nodes": [
+                {"id": "start", "type": "start"},
+                {"id": "n1", "type": "approval", "data": {"label": "直接上级"}},
+                {"id": "n2", "type": "approval", "data": {"label": "二级上级"}},
+                {"id": "cond", "type": "condition", "data": {"label": "是否总经理特批"}},
+                {"id": "end", "type": "end"},
+            ],
+            "edges": [
+                {"source": "start", "target": "n1"},
+                {"source": "n1", "target": "n2"},
+                {"source": "n2", "target": "cond"},
+                {"source": "cond", "target": "end"},
+            ],
+        }
+        process = SimpleNamespace(nodes=graph)
+        instance = SimpleNamespace(
+            id=50,
+            status="pending",
+            current_node="n1",
+            submitter_id=1,
+            data={},
+        )
+        tasks = [
+            SimpleNamespace(
+                approval_instance_id=50,
+                node_id="n1",
+                approver_id=10,
+                status="pending",
+                action_at=None,
+                comment=None,
+            ),
+            SimpleNamespace(
+                approval_instance_id=50,
+                node_id="n2",
+                approver_id=10,
+                status="cancelled",
+                action_at=None,
+                comment=None,
+            ),
+        ]
+        history = [
+            SimpleNamespace(
+                approval_instance_id=50,
+                action="approve",
+                action_by=0,
+                from_node="n2",
+                to_node="cond",
+                comment="空审批人自动通过（emptyApproverPolicy=auto_pass）",
+                action_at=None,
+                change_payload=None,
+            ),
+            SimpleNamespace(
+                approval_instance_id=50,
+                action="condition_route",
+                action_by=10,
+                from_node="cond",
+                to_node="end",
+                comment="条件分支进入：采购副总",
+                action_at=None,
+                change_payload=None,
+            ),
+            SimpleNamespace(
+                approval_instance_id=50,
+                action="recall_own",
+                action_by=10,
+                from_node="cond",
+                to_node="n1",
+                comment="撤回本级审批",
+                action_at=None,
+                change_payload=None,
+            ),
+        ]
+
+        async def _empty_map(_tid, _uids):
+            return {u: str(u) for u in _uids}
+
+        with patch.object(
+            ApprovalInstanceService,
+            "_resolve_node_approvers",
+            new=AsyncMock(return_value=[10]),
+        ), patch.object(
+            ApprovalInstanceService,
+            "_user_display_map",
+            new=AsyncMock(side_effect=_empty_map),
+        ), patch.object(
+            ApprovalInstanceService,
+            "_heal_condition_route_history_actors",
+            new=AsyncMock(return_value=None),
+        ):
+            overview = await ApprovalInstanceService._build_nodes_overview(
+                tenant_id=1,
+                process=process,
+                instance=instance,
+                tasks=tasks,
+                history=history,
+            )
+
+        by_id = {row["node_id"]: row for row in overview}
+        assert by_id["n1"]["status"] == "pending"
+        assert by_id["n1"]["is_current"] is True
+        assert by_id["n2"]["status"] == "waiting"
+        assert by_id["cond"]["status"] == "waiting"
 
     @staticmethod
     def _mock_approval_task_filter(

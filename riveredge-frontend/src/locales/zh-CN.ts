@@ -44111,6 +44111,22 @@ export default {
   'components.uniAudit.urge': '催办',
   'components.uniAudit.recallOwnAction': '撤销审核',
   'components.uniAudit.submitterAwaitingOthers': '您为发起人，请等待当前节点审批人处理',
+  'pages.dashboard.updateLog.entries.audit-exec-action-badge-color-r01.title':
+    '审核节点执行记录动作徽章颜色对齐语义',
+  'pages.dashboard.updateLog.entries.audit-exec-action-badge-color-r01.description':
+    '「审核通过/驳回」等结果动作改用实心语义色徽章；补齐任务来源执行记录的 action，避免单号旁动作徽章落成默认灰字。',
+  'pages.dashboard.updateLog.entries.audit-hub-document-no-r01.title':
+    '审核弹窗单据标题带上业务单号',
+  'pages.dashboard.updateLog.entries.audit-hub-document-no-r01.description':
+    '审核弹窗右侧单据标题改为「单据类型 + 单号」（如采购申请 CGSQ…），各单据从行记录编码字段统一解析。',
+  'pages.dashboard.updateLog.entries.audit-recall-own-reapprove-r01.title':
+    '撤回本级后可再次审核',
+  'pages.dashboard.updateLog.entries.audit-recall-own-reapprove-r01.description':
+    '审批人撤回本级后整批重建当前节点待办，避免残留已通过任务被自动推进清掉待办；门禁只认当前实例任务，撤回后后续节点不再误标已跳过。',
+  'pages.dashboard.updateLog.entries.audit-flow-preview-modal-transform-r01.title':
+    '审核弹窗流程图生产环境连线不再偏移',
+  'pages.dashboard.updateLog.entries.audit-flow-preview-modal-transform-r01.description':
+    '审核弹窗关闭 zoom 进场动画，并在打开完成后再挂载流程预览；fitView 前刷新节点手柄坐标，避免父级 transform 导致生产环境连线与节点错位。',
   'pages.dashboard.updateLog.entries.audit-approve-btn-no-admin-fake-r01.title':
     '已审过不再显示可点的审核按钮',
   'pages.dashboard.updateLog.entries.audit-approve-btn-no-admin-fake-r01.description':

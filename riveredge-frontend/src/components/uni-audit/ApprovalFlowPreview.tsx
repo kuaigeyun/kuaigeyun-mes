@@ -8,6 +8,7 @@ import {
   BackgroundVariant,
   useReactFlow,
   useNodesInitialized,
+  useUpdateNodeInternals,
   type Node,
   type Edge,
 } from 'reactflow';
@@ -42,7 +43,10 @@ function nodeTypesFactory() {
 
 const NODE_TYPES = nodeTypesFactory();
 
-/** 弹窗首次有尺寸后再 fitView；只适配一次，避免冲掉滚轮缩放。 */
+/**
+ * 弹窗首次有尺寸后再 fitView；只适配一次，避免冲掉滚轮缩放。
+ * fit 前 updateNodeInternals：父级曾带 transform（antd Modal zoom）时刷新手柄坐标，避免连线偏移。
+ */
 function PreviewFitView({
   hostRef,
   layoutKey,
@@ -50,7 +54,8 @@ function PreviewFitView({
   hostRef: React.RefObject<HTMLDivElement | null>;
   layoutKey: string;
 }) {
-  const { fitView } = useReactFlow();
+  const { fitView, getNodes } = useReactFlow();
+  const updateNodeInternals = useUpdateNodeInternals();
   const ready = useNodesInitialized();
 
   useLayoutEffect(() => {
@@ -62,6 +67,7 @@ function PreviewFitView({
       if (fitted) return;
       const { width, height } = host.getBoundingClientRect();
       if (width < 48 || height < 48) return;
+      updateNodeInternals(getNodes().map((n) => n.id));
       fitView({
         padding: 0.2,
         minZoom: 0.05,
@@ -76,7 +82,7 @@ function PreviewFitView({
     const observer = new ResizeObserver(run);
     observer.observe(host);
     return () => observer.disconnect();
-  }, [ready, fitView, hostRef, layoutKey]);
+  }, [ready, fitView, getNodes, updateNodeInternals, hostRef, layoutKey]);
 
   return null;
 }

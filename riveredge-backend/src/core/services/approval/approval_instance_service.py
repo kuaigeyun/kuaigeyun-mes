@@ -687,6 +687,14 @@ class ApprovalInstanceService:
                 and instance.status == "pending"
                 and instance.current_node == node_id
             )
+            # 撤回本级后 current 回退：当前节点之后仍可能重走，不得沿用历史 auto_pass/route 标已跳过/已通过
+            is_future_after_current = bool(
+                instance
+                and instance.status == "pending"
+                and reachable_from_current
+                and node_id in reachable_from_current
+                and not is_current
+            )
             # 仍停在本节点时一律 pending（会签部分通过 / 或签后加签等），避免流程图误显示「已通过」但未到结束
             if any(t.status == "rejected" for t in node_tasks):
                 node_status = "rejected"
@@ -698,6 +706,8 @@ class ApprovalInstanceService:
                 node_status = "approved"
             elif instance and instance.status in {"rejected", "cancelled"}:
                 node_status = "skipped"
+            elif is_future_after_current:
+                node_status = "waiting"
             elif any(
                 h.from_node == node_id
                 and (
@@ -796,6 +806,7 @@ class ApprovalInstanceService:
                 user_ids.append(t.approver_id)
                 executions.append(
                     {
+                        "action": norm_action,
                         "action_label": ApprovalInstanceService._execution_action_label(t.status),
                         "action_by": t.approver_id,
                         "action_at": ApprovalInstanceService._format_dt_for_api(t.action_at),
@@ -1797,32 +1808,24 @@ class ApprovalInstanceService:
         ):
             raise AuthorizationError("后续审批节点已处理，不可撤回本级")
 
+        previous_node = instance.current_node
+
+        # 其它节点任务一律取消；本节点也先整批取消再重建 pending。
+        # 禁止只把某一行 approved→pending 却残留另一行 approved：
+        # bootstrap/_reconcile 会按或签「已有通过」再次推进并清掉待办，导致无法再审。
         await ApprovalTask.filter(
             tenant_id=tenant_id,
             approval_instance_id=instance.id,
-        ).exclude(node_id=recall_node_id).update(status="cancelled")
+        ).update(status="cancelled")
 
-        own_task = await ApprovalTask.filter(
+        await ApprovalTask.create(
             tenant_id=tenant_id,
             approval_instance_id=instance.id,
             node_id=recall_node_id,
             approver_id=int(operator_id),
-        ).first()
-        if own_task:
-            own_task.status = "pending"
-            own_task.action_at = None
-            own_task.comment = None
-            await own_task.save()
-        else:
-            await ApprovalTask.create(
-                tenant_id=tenant_id,
-                approval_instance_id=instance.id,
-                node_id=recall_node_id,
-                approver_id=int(operator_id),
-                status="pending",
-            )
+            status="pending",
+        )
 
-        previous_node = instance.current_node
         instance.current_node = recall_node_id
         instance.current_approver_id = int(operator_id)
         # 撤回越过条件/空审批人跳过节点后须清选边，避免再审仍沿用旧分支
@@ -1835,6 +1838,9 @@ class ApprovalInstanceService:
                 approvers = await ApprovalInstanceService._resolve_node_approvers(
                     recall_node, instance
                 )
+                # 确保撤回人一定在可审名单里，避免 sync 后仅有空名单、待办被后续 stale 清理
+                if int(operator_id) not in {int(x) for x in (approvers or [])}:
+                    approvers = list(approvers or []) + [int(operator_id)]
                 await ApprovalInstanceService._sync_node_approver_tasks(
                     tenant_id, instance, recall_node, approvers=approvers
                 )
