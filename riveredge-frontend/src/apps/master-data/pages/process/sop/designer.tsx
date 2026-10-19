@@ -30,7 +30,10 @@ import 'reactflow/dist/style.css';
 
 import { sopApi } from '../../../services/process';
 import { CanvasPageTemplate } from '../../../../../components/layout-templates/CanvasPageTemplate';
-import { CANVAS_GRID_REACTFLOW } from '../../../../../components/layout-templates/constants';
+import {
+  CANVAS_GRID_REACTFLOW,
+  CANVAS_GRID_REACTFLOW_FRAMED_INNER,
+} from '../../../../../components/layout-templates/constants';
 import FormSchemaEditor from './FormSchemaEditor';
 import type { ISchema } from '@formily/json-schema';
 import UniFlowNode from '../../../../../components/common/uni-flow-node';
@@ -404,7 +407,7 @@ const SOPDesignerPage: React.FC = () => {
   );
 
   const canvas = (
-    <div style={{ width: '100%', height: '100%', ...CANVAS_GRID_REACTFLOW.style }}>
+    <div style={{ width: '100%', height: '100%', ...CANVAS_GRID_REACTFLOW_FRAMED_INNER }}>
       <ReactFlow
         nodes={nodes.map((n) => ({ 
           ...n, selected: selectedNode?.id === n.id, 

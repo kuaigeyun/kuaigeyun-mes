@@ -44,6 +44,38 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'approval-reject-previous-history-payload-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-reject-previous-history-payload-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-reject-previous-history-payload-r01.description',
+  },
+  {
+    id: 'canvas-page-template-single-border-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.canvas-page-template-single-border-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.canvas-page-template-single-border-r01.description',
+  },
+  {
+    id: 'approval-designer-node-config-tabs-r01',
+    date: '2026-10-19',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-designer-node-config-tabs-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-designer-node-config-tabs-r01.description',
+  },
+  {
+    id: 'plm-change-toolbar-perm-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.plm-change-toolbar-perm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.plm-change-toolbar-perm-r01.description',
+  },
+  {
     id: 'audit-exec-action-badge-color-r01',
     date: '2026-10-19',
     type: 'fix',
