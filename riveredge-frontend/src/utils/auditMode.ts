@@ -20,6 +20,13 @@ export interface AuditViewerActionsLike {
   block_reason?: string | null;
 }
 
+export interface AuditViewerActionsLike {
+  has_my_pending_task?: boolean;
+  approve?: boolean;
+  reject?: boolean;
+  block_reason?: string | null;
+}
+
 export interface AuditStateLike {
   phase?: string;
   enabled?: boolean;
