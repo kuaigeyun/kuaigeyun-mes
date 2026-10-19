@@ -161,6 +161,19 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
     [canResolveLabels, ingestDisplayItems, mergePresets, searchUsers, syncOptionsFromLabelMap],
   );
 
+  const applySearchOptions = useCallback(
+    (next: Array<{ label: string; value: number }>) => {
+      const wid = watchedId != null ? Number(watchedId) : NaN;
+      const opts = [...next];
+      if (Number.isFinite(wid) && !opts.some((o) => o.value === wid)) {
+        const lbl = labelByIdRef.current.get(wid);
+        if (lbl) opts.unshift({ label: lbl, value: wid });
+      }
+      setOptions(opts);
+    },
+    [watchedId],
+  );
+
   const fetchUsers = async (searchText: string = '') => {
     if (!canInteract) {
       mergePresets();
@@ -180,6 +193,8 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
             label: o.label,
           })),
         );
+        // 按关键字结果缩小选项，勿用历史 label 全量冒充搜索结果
+        applySearchOptions(opts);
         return;
       }
       if (useFullList) {
@@ -194,6 +209,7 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
         const labelMap = new Map(labelByIdRef.current);
         const deptMap = new Map(deptByUserIdRef.current);
         const cache = new Map(displayCacheRef.current);
+        const nextOpts: Array<{ label: string; value: number }> = [];
         for (const u of items) {
           const lbl = formatUserDisplayLabel(u);
           labelMap.set(u.id, lbl);
@@ -207,11 +223,12 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
             label: lbl,
             department_uuid: du,
           });
+          nextOpts.push({ label: lbl, value: u.id });
         }
         labelByIdRef.current = labelMap;
         deptByUserIdRef.current = deptMap;
         displayCacheRef.current = cache;
-        syncOptionsFromLabelMap();
+        applySearchOptions(nextOpts);
       } else {
         const response = await searchUserDisplay({
           page: 1,
@@ -220,7 +237,14 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
           ...(activeOnly ? { is_active: true } : {}),
           ...(departmentUuid ? { department_uuid: departmentUuid } : {}),
         });
-        ingestDisplayItems(response.items || []);
+        const items = response.items || [];
+        ingestDisplayItems(items);
+        applySearchOptions(
+          items.map((u) => ({
+            label: u.label || formatUserDisplayLabel(u),
+            value: u.id,
+          })),
+        );
       }
     } catch {
       if (!isReadonlyMode) {

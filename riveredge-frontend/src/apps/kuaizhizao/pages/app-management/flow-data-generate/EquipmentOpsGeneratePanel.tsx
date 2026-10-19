@@ -4,6 +4,7 @@
 
 import React, { lazy, Suspense, useMemo, useState } from 'react';
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -33,6 +34,7 @@ import { maintenancePlanApi } from '../../../services/equipment';
 import { spotChecksApi } from '../../../services/equipmentOps';
 import {
   executeEquipmentOpsGenerate,
+  listEquipmentOpsBoundEquipment,
   previewEquipmentOpsGenerate,
   type EquipmentOpsCreatedDoc,
   type EquipmentOpsExecuteResult,
@@ -188,68 +190,47 @@ export default function EquipmentOpsGeneratePanel({
     [maintPlansQuery.data],
   );
 
-  const planBoundEquipmentOptions = useMemo(() => {
-    const spotIdSet = new Set(
+  const spotIdsForBound = useMemo(
+    () =>
       (selectedSpotCheckIds || [])
         .map((x) => Number(x))
         .filter((n) => Number.isFinite(n) && n > 0),
-    );
-    const maintIdSet = new Set(
+    [selectedSpotCheckIds],
+  );
+  const maintIdsForBound = useMemo(
+    () =>
       (selectedMaintPlanIds || [])
         .map((x) => Number(x))
         .filter((n) => Number.isFinite(n) && n > 0),
-    );
-    const byId = new Map<number, string>();
-    const pushItems = (items: unknown) => {
-      if (!Array.isArray(items)) return;
-      for (const it of items) {
-        if (!it || typeof it !== 'object') continue;
-        const id = Number((it as { id?: unknown }).id);
-        if (!(Number.isFinite(id) && id > 0)) continue;
-        const code = String((it as { code?: unknown }).code || '').trim();
-        const name = String((it as { name?: unknown }).name || '').trim();
-        const label = `${code || id} ${name}`.trim();
-        if (!byId.has(id)) byId.set(id, label);
-      }
-    };
-    for (const p of spotChecksQuery.data || []) {
-      if (!spotIdSet.has(Number(p.id))) continue;
-      const eid = Number(p.equipment_id);
-      if (Number.isFinite(eid) && eid > 0) {
-        pushItems([
-          {
-            id: eid,
-            code: p.equipment_code,
-            name: p.equipment_name,
-          },
-        ]);
-      }
-    }
-    for (const p of maintPlansQuery.data || []) {
-      if (!maintIdSet.has(Number(p.id))) continue;
-      pushItems(p.equipment_items);
-      if (!Array.isArray(p.equipment_items) || p.equipment_items.length === 0) {
-        const eid = Number(p.equipment_id);
-        if (Number.isFinite(eid) && eid > 0) {
-          pushItems([
-            {
-              id: eid,
-              code: p.equipment_code || p.equipment_uuid,
-              name: p.equipment_name,
-            },
-          ]);
-        }
-      }
-    }
-    return Array.from(byId.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([value, label]) => ({ value, label }));
-  }, [
-    selectedSpotCheckIds,
-    selectedMaintPlanIds,
-    spotChecksQuery.data,
-    maintPlansQuery.data,
-  ]);
+    [selectedMaintPlanIds],
+  );
+
+  const boundEquipmentQuery = useQuery({
+    queryKey: [
+      'kuaizhizao',
+      'equipment-ops-generate',
+      'bound-equipment',
+      selectedTenantId,
+      spotIdsForBound,
+      maintIdsForBound,
+    ],
+    queryFn: async () =>
+      listEquipmentOpsBoundEquipment({
+        spot_check_ids: spotIdsForBound,
+        maintenance_plan_ids: maintIdsForBound,
+      }),
+    enabled: ready && (spotIdsForBound.length > 0 || maintIdsForBound.length > 0),
+    retry: 1,
+  });
+
+  const planBoundEquipmentOptions = useMemo(
+    () =>
+      (boundEquipmentQuery.data?.equipment || []).map((e) => ({
+        value: Number(e.id),
+        label: `${e.code || e.id} ${e.name || ''}`.trim(),
+      })),
+    [boundEquipmentQuery.data],
+  );
 
   const planBoundEquipmentIds = useMemo(
     () => planBoundEquipmentOptions.map((o) => o.value),
@@ -389,7 +370,14 @@ export default function EquipmentOpsGeneratePanel({
       const payload = await buildPayload();
       const data = await previewEquipmentOpsGenerate(payload);
       setPreview(data);
-      message.success(t('app.kuaizhizao.equipmentOpsGenerate.previewOk'));
+      if (data.ok === false) {
+        message.error(
+          (data.errors || []).join('；') ||
+            t('app.kuaizhizao.equipmentOpsGenerate.precheckBlockExecute'),
+        );
+      } else {
+        message.success(t('app.kuaizhizao.equipmentOpsGenerate.previewOk'));
+      }
     } catch (e) {
       message.error(getApiErrorMessage(e, t('app.kuaizhizao.equipmentOpsGenerate.previewFail')));
     } finally {
@@ -398,31 +386,39 @@ export default function EquipmentOpsGeneratePanel({
   };
 
   const handleExecute = async () => {
+    if (preview && preview.ok === false) {
+      message.error(t('app.kuaizhizao.equipmentOpsGenerate.precheckBlockExecute'));
+      return;
+    }
     modal.confirm({
       title: t('app.kuaizhizao.equipmentOpsGenerate.confirmTitle'),
       content: t('app.kuaizhizao.equipmentOpsGenerate.confirmContent'),
       okText: t('common.confirm'),
       cancelText: t('common.cancel'),
-      onOk: async () => {
-        setLoadingExecute(true);
-        setResult(null);
-        try {
-          const payload = await buildPayload();
-          const data = await executeEquipmentOpsGenerate(payload);
-          if (!data.success) {
+      onOk: () => {
+        void (async () => {
+          setLoadingExecute(true);
+          setResult(null);
+          try {
+            const payload = await buildPayload();
+            const data = await executeEquipmentOpsGenerate(payload);
+            if (!data.success) {
+              message.error(
+                (data.errors || []).join('；') ||
+                  t('app.kuaizhizao.equipmentOpsGenerate.executeFail'),
+              );
+              return;
+            }
+            setResult(data);
+            message.success(t('app.kuaizhizao.equipmentOpsGenerate.executeOk'));
+          } catch (e) {
             message.error(
-              (data.errors || []).join('；') ||
-                t('app.kuaizhizao.equipmentOpsGenerate.executeFail'),
+              getApiErrorMessage(e, t('app.kuaizhizao.equipmentOpsGenerate.executeFail')),
             );
-            return;
+          } finally {
+            setLoadingExecute(false);
           }
-          setResult(data);
-          message.success(t('app.kuaizhizao.equipmentOpsGenerate.executeOk'));
-        } catch (e) {
-          message.error(getApiErrorMessage(e, t('app.kuaizhizao.equipmentOpsGenerate.executeFail')));
-        } finally {
-          setLoadingExecute(false);
-        }
+        })();
       },
     });
   };
@@ -598,6 +594,7 @@ export default function EquipmentOpsGeneratePanel({
           <Form.Item
             name="use_work_schedule"
             label={t('app.kuaizhizao.equipmentOpsGenerate.useWorkSchedule')}
+            extra={t('app.kuaizhizao.equipmentOpsGenerate.useWorkScheduleHint')}
             valuePropName="checked"
           >
             <Switch />
@@ -825,8 +822,16 @@ export default function EquipmentOpsGeneratePanel({
           style={{ marginTop: 16 }}
           title={t('app.kuaizhizao.equipmentOpsGenerate.previewCard')}
         >
-          <Typography.Paragraph>
-            {t('app.kuaizhizao.equipmentOpsGenerate.previewSummary', {
+          <Alert
+            type={preview.ok === false ? 'error' : 'success'}
+            showIcon
+            style={{ marginBottom: 12 }}
+            title={
+              preview.ok === false
+                ? t('app.kuaizhizao.equipmentOpsGenerate.precheckHasErrors')
+                : t('app.kuaizhizao.equipmentOpsGenerate.previewOk')
+            }
+            description={t('app.kuaizhizao.equipmentOpsGenerate.previewSummary', {
               equipment: preview.equipment_count,
               spotPlans: preview.spot_check_seed_count ?? 0,
               spotTargets: preview.spot_check_targets,
@@ -835,7 +840,28 @@ export default function EquipmentOpsGeneratePanel({
               maintTargets: preview.maintenance_targets,
               maintDocs: preview.maintenance_docs,
             })}
-          </Typography.Paragraph>
+          />
+          {(preview.errors || []).map((e) => (
+            <Alert key={`e-${e}`} type="error" showIcon style={{ marginBottom: 8 }} title={e} />
+          ))}
+          {(preview.runtime_approx_plans || []).length > 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 8 }}
+              title={t('app.kuaizhizao.equipmentOpsGenerate.runtimeApproxHint')}
+              description={(preview.runtime_approx_plans || []).join('\n')}
+            />
+          )}
+          {(preview.operator_fallback_steps || []).length > 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 8 }}
+              title={t('app.kuaizhizao.equipmentOpsGenerate.operatorFallbackHint')}
+              description={(preview.operator_fallback_steps || []).join('\n')}
+            />
+          )}
           {(preview.notes || []).length > 0 && (
             <Typography.Paragraph type="secondary" style={{ whiteSpace: 'pre-wrap' }}>
               {(preview.notes || []).slice(0, 20).join('\n')}

@@ -876,12 +876,21 @@ def normalize_source_config_payload(
     return raw
 
 
+def _positive_int_or_none(raw: Any) -> Optional[int]:
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
 def resolve_computation_item_source_config(
     material_source_config: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     """
     从 DemandComputationItem.material_source_config 解析可用的扁平来源配置。
-    合并 get_material_source_config 顶层字段与内层 source_config。
+    合并 get_material_source_config 顶层字段与内层 source_config；
+    并兼容 `purchase.default_supplier_id` 嵌套写法。
     """
     if not material_source_config or not isinstance(material_source_config, dict):
         return {}
@@ -903,7 +912,27 @@ def resolve_computation_item_source_config(
     ):
         if cfg.get(key) is not None:
             merged[key] = cfg[key]
+
+    # 物料主数据/快照偶发把默认供应商写在 purchase 子对象下
+    purchase = cfg.get("purchase") if isinstance(cfg.get("purchase"), dict) else None
+    if purchase is None and isinstance(merged.get("purchase"), dict):
+        purchase = merged.get("purchase")
+    if isinstance(purchase, dict):
+        if _positive_int_or_none(merged.get("default_supplier_id")) is None:
+            sid = _positive_int_or_none(purchase.get("default_supplier_id"))
+            if sid is not None:
+                merged["default_supplier_id"] = sid
+        if not merged.get("default_supplier_name") and purchase.get("default_supplier_name"):
+            merged["default_supplier_name"] = purchase.get("default_supplier_name")
     return merged
+
+
+def resolve_default_supplier_id_from_source_config(
+    material_source_config: Optional[Dict[str, Any]],
+) -> Optional[int]:
+    """从计算明细/物料来源快照取默认供应商 ID（含 purchase 嵌套）。"""
+    sc = resolve_computation_item_source_config(material_source_config)
+    return _positive_int_or_none(sc.get("default_supplier_id"))
 
 
 def _to_positive_decimal(v: Any) -> Optional[Decimal]:

@@ -155,20 +155,38 @@ def _iter_time_cycle_datetimes(
     return out
 
 
-def _apply_work_time(dt: datetime, req: EquipmentOpsGenerateRequest) -> datetime:
-    """把发生时刻落到工作时段开始时间（可选）。"""
+def _parse_hms(raw: str, *, default: tuple[int, int, int]) -> tuple[int, int, int]:
+    parts = (raw or "").strip().split(":")
+    try:
+        hour = int(parts[0]) if parts else default[0]
+        minute = int(parts[1]) if len(parts) > 1 else default[1]
+        second = int(parts[2]) if len(parts) > 2 else default[2]
+        return hour, minute, second
+    except (TypeError, ValueError):
+        return default
+
+
+def _apply_work_time(dt: datetime, req: EquipmentOpsGenerateRequest) -> Optional[datetime]:
+    """工作日过滤 + 时刻钳到 start_time～end_time；非工作日返回 None。"""
     if not req.use_work_schedule or not req.work_schedule:
         return dt
     ws = req.work_schedule
-    start_s = (ws.start_time or "09:00:00").strip()
-    parts = start_s.split(":")
-    try:
-        hour = int(parts[0]) if parts else 9
-        minute = int(parts[1]) if len(parts) > 1 else 0
-        second = int(parts[2]) if len(parts) > 2 else 0
-    except (TypeError, ValueError):
-        hour, minute, second = 9, 0, 0
-    return dt.replace(hour=hour, minute=minute, second=second, microsecond=0)
+    site_d = to_site_date(dt)
+    if not ws.is_workday(site_d):
+        return None
+    sh, sm, ss = _parse_hms(ws.start_time or "09:00:00", default=(9, 0, 0))
+    eh, em, es = _parse_hms(ws.end_time or "18:00:00", default=(18, 0, 0))
+    start_dt = dt.replace(hour=sh, minute=sm, second=ss, microsecond=0)
+    end_dt = dt.replace(hour=eh, minute=em, second=es, microsecond=0)
+    if end_dt <= start_dt:
+        return start_dt
+    # 默认落在上班时刻；若原时刻已在窗内则保留（钳在窗内）
+    cur = dt.replace(microsecond=0)
+    if cur < start_dt:
+        return start_dt
+    if cur >= end_dt:
+        return start_dt
+    return cur
 
 
 def _equipment_items_from_plan(plan: Any) -> list[dict[str, Any]]:
@@ -272,12 +290,46 @@ class EquipmentOpsDataGenerateService:
             note = note.replace(f"{role_step_key}:", f"{label}:", 1)
         return int(uid), name, note
 
+    async def list_bound_equipment(
+        self, tenant_id: int, req: EquipmentOpsGenerateRequest
+    ) -> dict[str, Any]:
+        """点检模板设备 + 保养计划设备（含方案绑定）并集，供 FE 勾选对齐 BE。"""
+        items = await self._collect_bound_equipment(tenant_id, req)
+        return {
+            "equipment": [
+                {
+                    "id": int(e.id),
+                    "code": getattr(e, "code", None),
+                    "name": getattr(e, "name", None),
+                }
+                for e in items
+            ],
+            "notes": [
+                "点检仅展开模板单上的设备，不会按方案绑定扩到全厂",
+            ],
+        }
+
     async def preview(
         self, tenant_id: int, req: EquipmentOpsGenerateRequest
     ) -> dict[str, Any]:
+        return await self.precheck(tenant_id, req)
+
+    async def precheck(
+        self, tenant_id: int, req: EquipmentOpsGenerateRequest
+    ) -> dict[str, Any]:
+        """预检：跳过原因、预计条数、运行类近似、人员回退；0 单 ok=false。"""
         start, end = req.resolved_window()
-        plan = await self._build_plan(tenant_id, req)
+        plan = await self._build_plan(tenant_id, req, allow_empty=True)
+        job_count = int(plan["spot_check_docs"]) + int(plan["maintenance_docs"])
+        errors: list[str] = list(plan.get("errors") or [])
+        if job_count <= 0 and not errors:
+            errors.append(
+                "所选点检单/保养计划与设备组合下无可生成单据"
+                "（可能均为 B/C 采集、无方案、无设备或工作日过滤后为空）"
+            )
+        ok = job_count > 0 and len(errors) == 0
         return {
+            "ok": ok,
             "equipment_count": plan["equipment_count"],
             "spot_check_seed_count": plan["spot_check_seed_count"],
             "maintenance_plan_count": plan["maintenance_plan_count"],
@@ -286,6 +338,10 @@ class EquipmentOpsDataGenerateService:
             "spot_check_docs": plan["spot_check_docs"],
             "maintenance_docs": plan["maintenance_docs"],
             "notes": plan["notes"],
+            "errors": errors,
+            "runtime_approx_plans": plan.get("runtime_approx_plans") or [],
+            "operator_fallback_steps": plan.get("operator_fallback_steps") or [],
+            "skipped_bc_count": int(plan.get("skipped_bc_count") or 0),
             "anchor_start": start.isoformat(),
             "anchor_end": end.isoformat(),
         }
@@ -390,7 +446,7 @@ class EquipmentOpsDataGenerateService:
         from apps.kuaizhizao.services.maintenance_plan_service import MaintenanceExecutionService
         from infra.models.user import User
 
-        plan = await self._build_plan(tenant_id, req)
+        plan = await self._build_plan(tenant_id, req, allow_empty=False)
         run_id = str(uuid.uuid4())
 
         op_user = await User.get_or_none(id=operator_id)
@@ -670,8 +726,66 @@ class EquipmentOpsDataGenerateService:
             ordered.append(e)
         return ordered
 
-    async def _build_plan(
+    async def _collect_bound_equipment(
         self, tenant_id: int, req: EquipmentOpsGenerateRequest
+    ) -> list[Any]:
+        """点检模板设备 + 保养计划/方案绑定设备（与 _build_plan 范围一致）。"""
+        from apps.kuaizhizao.models.equipment import Equipment
+        from apps.kuaizhizao.models.equipment_ops import EquipmentSpotCheck
+        from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
+
+        if not req.spot_check_ids and not req.maintenance_plan_ids:
+            raise ValidationError("请至少选择一个点检单或保养计划")
+
+        ordered: list[Any] = []
+        seen: set[int] = set()
+
+        def _push(eq: Any) -> None:
+            eid = int(eq.id)
+            if eid in seen:
+                return
+            seen.add(eid)
+            ordered.append(eq)
+
+        if req.spot_check_ids:
+            seeds = await EquipmentSpotCheck.filter(
+                tenant_id=tenant_id,
+                id__in=req.spot_check_ids,
+                deleted_at__isnull=True,
+            ).all()
+            eq_rows = await Equipment.filter(
+                tenant_id=tenant_id,
+                id__in=[int(s.equipment_id) for s in seeds] or [-1],
+                deleted_at__isnull=True,
+            ).all()
+            for e in eq_rows:
+                _push(e)
+
+        if req.maintenance_plan_ids:
+            plans = await MaintenancePlan.filter(
+                tenant_id=tenant_id,
+                id__in=req.maintenance_plan_ids,
+                deleted_at__isnull=True,
+            ).all()
+            for mp in plans:
+                eq_items = _equipment_items_from_plan(mp)
+                if not eq_items:
+                    eq_items = await _equipment_items_from_scheme_binding(
+                        tenant_id,
+                        scheme_id=getattr(mp, "maintenance_scheme_id", None),
+                        scheme_type="maintenance",
+                    )
+                for e in await self._load_equipments_by_items(tenant_id, eq_items):
+                    _push(e)
+
+        return ordered
+
+    async def _build_plan(
+        self,
+        tenant_id: int,
+        req: EquipmentOpsGenerateRequest,
+        *,
+        allow_empty: bool = False,
     ) -> dict[str, Any]:
         from apps.kuaizhizao.models.equipment import Equipment
         from apps.kuaizhizao.models.equipment_ops import (
@@ -691,10 +805,18 @@ class EquipmentOpsDataGenerateService:
         start_d = to_site_date(start)
         end_d = to_site_date(end)
         notes: list[str] = []
+        errors: list[str] = []
         spot_jobs: list[dict[str, Any]] = []
         maint_jobs: list[dict[str, Any]] = []
         equipment_ids: set[int] = set()
         bound_eq_ids: set[int] = set()
+        skipped_bc_count = 0
+        runtime_approx_plans: list[str] = []
+        operator_fallback_steps: list[str] = []
+        notes.append("点检仅按模板单设备展开，不会按方案绑定扩设备")
+
+        insp_mode = req.inspector_operator.normalized_mode()
+        appr_mode = req.approver_operator.normalized_mode()
 
         if req.spot_check_ids:
             seeds = await EquipmentSpotCheck.filter(
@@ -729,6 +851,7 @@ class EquipmentOpsDataGenerateService:
                     continue
                 mode = _normalize_capture_mode(getattr(scheme, "capture_mode", None))
                 if mode in ("B", "C"):
+                    skipped_bc_count += 1
                     notes.append(
                         f"点检单 {doc_no}: 采集方式 {mode} 须真实照片，已跳过"
                     )
@@ -740,6 +863,22 @@ class EquipmentOpsDataGenerateService:
                 bound_eq_ids.add(int(equipment.id))
                 if int(equipment.id) not in selected_eq:
                     continue
+                if insp_mode in ("equipment_assigned", "scheme_assigned"):
+                    assigned = (
+                        getattr(equipment, "spot_check_person_id", None)
+                        or getattr(seed, "inspector_id", None)
+                    )
+                    if not int(assigned or 0):
+                        step = f"点检执行人({getattr(equipment, 'code', None) or equipment.id})"
+                        if step not in operator_fallback_steps:
+                            operator_fallback_steps.append(step)
+                            notes.append(f"{step}: 主数据未指定，将回退当前用户")
+                if appr_mode in ("equipment_assigned", "scheme_assigned"):
+                    if not int(getattr(scheme, "reviewer_user_id", None) or 0):
+                        step = f"点检审批人({getattr(scheme, 'code', None) or scheme.id})"
+                        if step not in operator_fallback_steps:
+                            operator_fallback_steps.append(step)
+                            notes.append(f"{step}: 方案未指定审核人，将回退当前用户")
                 cycle_type = str(getattr(scheme, "cycle_type", "") or "").strip() or "每天"
                 occ_dates = _iter_named_cycle_dates(cycle_type, start_d, end_d)
                 if len(occ_dates) >= MAX_OCCURRENCES_PER_TARGET:
@@ -754,7 +893,7 @@ class EquipmentOpsDataGenerateService:
                         ),
                         req,
                     )
-                    if issued < start or issued > end:
+                    if issued is None or issued < start or issued > end:
                         continue
                     spot_jobs.append(
                         {
@@ -795,36 +934,42 @@ class EquipmentOpsDataGenerateService:
                     continue
                 cycle_type = str(getattr(mp, "cycle_type", "") or "").strip()
                 if cycle_type in ("按时间", "by_time", "time", ""):
-                    occs = _iter_time_cycle_datetimes(
+                    raw_occs = _iter_time_cycle_datetimes(
                         start=start,
                         end=end,
                         cycle_value=getattr(mp, "cycle_value", None),
                         cycle_unit=getattr(mp, "cycle_unit", None),
                     )
                 else:
-                    # 运行时长/次数：无运行数据，按天展开并提示
+                    approx = (
+                        f"{mp.plan_no}: 周期「{cycle_type}」将按每天近似展开"
+                    )
+                    runtime_approx_plans.append(approx)
                     notes.append(
                         f"保养计划 {mp.plan_no}: 周期为「{cycle_type}」，"
                         "造数按每天一次展开（无运行/次数真源）"
                     )
-                    occs = [
-                        _apply_work_time(
-                            resolve_business_datetime(
-                                datetime(d.year, d.month, d.day, 9, 0, 0)
-                            ),
-                            req,
+                    raw_occs = [
+                        resolve_business_datetime(
+                            datetime(d.year, d.month, d.day, 9, 0, 0)
                         )
                         for d in _iter_named_cycle_dates("每天", start_d, end_d)
                     ]
+                occs: list[datetime] = []
+                for raw in raw_occs:
+                    issued_at = _apply_work_time(raw, req)
+                    if issued_at is None or issued_at < start or issued_at > end:
+                        continue
+                    occs.append(issued_at)
                 if len(occs) >= MAX_OCCURRENCES_PER_TARGET:
                     notes.append(
                         f"保养计划 {mp.plan_no}: 周期展开已截断为 "
                         f"{MAX_OCCURRENCES_PER_TARGET} 次"
                     )
+                    occs = occs[:MAX_OCCURRENCES_PER_TARGET]
                 for equipment in equipments:
                     equipment_ids.add(int(equipment.id))
-                    for issued in occs:
-                        issued_at = _apply_work_time(issued, req)
+                    for issued_at in occs:
                         maint_jobs.append(
                             {
                                 "equipment": equipment,
@@ -840,9 +985,16 @@ class EquipmentOpsDataGenerateService:
                 + ",".join(str(x) for x in outside[:20])
             )
         if not spot_jobs and not maint_jobs:
-            raise ValidationError(
-                "所选点检单/保养计划与设备组合下无可生成单据，请检查模板方案与设备"
-            )
+            msg = "所选点检单/保养计划与设备组合下无可生成单据，请检查模板方案与设备"
+            if skipped_bc_count > 0 and not req.maintenance_plan_ids:
+                msg = (
+                    f"所选点检模板均为 B/C 采集（已跳过 {skipped_bc_count} 个），"
+                    "无法造数；请换 A 类模板或改用保养计划"
+                )
+            if allow_empty:
+                errors.append(msg)
+            else:
+                raise ValidationError(msg)
 
         return {
             "equipment_count": len(equipment_ids),
@@ -859,4 +1011,8 @@ class EquipmentOpsDataGenerateService:
             "spot_check_docs": len(spot_jobs),
             "maintenance_docs": len(maint_jobs),
             "notes": notes,
+            "errors": errors,
+            "runtime_approx_plans": runtime_approx_plans,
+            "operator_fallback_steps": operator_fallback_steps,
+            "skipped_bc_count": skipped_bc_count,
         }

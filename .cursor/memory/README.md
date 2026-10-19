@@ -63,6 +63,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 平台管理员全平台备份、backup_scope=all | `features/data-backup-platform-all-tenants.md` |
 | 备份列表卡死、Worker 未知、解压 dump | `features/data-backup-list-no-zip-extract.md` |
 | 租户恢复 parent_id、部门树 FK、fk_core_departments_parent_id | `features/tenant-restore-self-fk-nullify.md` |
+| 备份恢复 ID/UUID 对不上、软引用未跟偏移 | `features/data-backup-restore-id-align.md` |
 | 快数采、kuaiiot、MES 写回、边缘协议、fill_target | `features/kuaiiot-phased-hardening.md` |
 | 快视觉、kuaivision、视觉入站、检测记录、边缘节点 Token | `features/kuaivision-p0-shell.md` |
 | 快视觉边缘、edge-agent、心跳、厚度步骤 POC、bump-config | `features/kuaivision-p2-edge.md` |
@@ -126,7 +127,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 运营看板、参观模式、visit_mode、手填指标 | `features/business-board-visit-mode.md` |
 | 价格本批量登记、bulk、partner-price-book | `features/partner-price-book-bulk-register.md` |
 | 简易/加强密码、password_mode、强制改密、站点登录密码策略 | `features/tenant-password-policy.md` |
-| 流程造数、操作用户、单项跳过、采购/工单失败继续、工序流转间隔、造数进度条、flow-generate job | `features/flow-data-generate-operator-modes.md` |
+| 流程造数、操作用户、预检、工单自选并行、失败不跳过、工序流转间隔、造数进度条、flow-generate job | `features/flow-data-generate-operator-modes.md` |
 | 设备点检造数、保养执行造数、点检单导入 | `features/equipment-ops-data-generate.md` |
 | 点检计划已拆除、DJJH、勿再实现计划层、造数改选点检单 | `features/equipment-spot-check-plan.md` |
 | 应用初始化缓慢、首次组织引导、消息模板预设、失败重试 | `features/tenant-bootstrap-initialization.md` |
@@ -244,6 +245,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/data-backup-platform-all-tenants.md` | 平台管理员全平台租户备份 | system | 已交付 |
 | `features/data-backup-list-no-zip-extract.md` | 备份列表禁止解压 dump | system | 已交付 |
 | `features/tenant-restore-self-fk-nullify.md` | 租户恢复自引用 FK 置空 | system | 已交付 |
+| `features/data-backup-restore-id-align.md` | 租户恢复 ID/UUID 对齐 | system | 已交付 |
 | `features/kuaiiot-phased-hardening.md` | 快数采分阶段硬化 | kuaiiot | 进行中 |
 | `features/kuaivision-p0-shell.md` | 快视觉 P0 壳与入站 | kuaivision | 已交付 |
 | `features/kuaivision-p2-edge.md` | 快视觉 P2 Edge 与 POC | kuaivision | 已交付 |

@@ -68,6 +68,51 @@ def test_fk_columns_to_serial_parents_maps_child_cols():
     }
 
 
+def test_fk_columns_to_serial_parents_infers_unambiguous_soft_refs():
+    """无本表 FK 的同名列，若全库对该列名只指向一个 serial 父表，则跟随偏移。"""
+    plan = {
+        "core_users": (["id"], "id\n1\n"),
+        "apps_orders": (["id", "user_id"], "id,user_id\n1,1\n"),
+    }
+    fk_rows = [
+        {
+            "child_table": "core_files",
+            "parent_table": "core_users",
+            "child_column": "user_id",
+            "parent_column": "id",
+        }
+    ]
+    assert jobs._fk_columns_to_serial_parents(fk_rows, {"core_users"}, plan) == {
+        "apps_orders": {"user_id": "core_users"}
+    }
+
+
+def test_fk_columns_to_serial_parents_skips_ambiguous_column_names():
+    plan = {
+        "dept": (["id", "parent_id"], "id,parent_id\n1,\n"),
+        "cat": (["id", "parent_id"], "id,parent_id\n1,\n"),
+    }
+    fk_rows = [
+        {
+            "child_table": "dept",
+            "parent_table": "dept",
+            "child_column": "parent_id",
+            "parent_column": "id",
+        },
+        {
+            "child_table": "cat",
+            "parent_table": "cat",
+            "child_column": "parent_id",
+            "parent_column": "id",
+        },
+    ]
+    mapped = jobs._fk_columns_to_serial_parents(fk_rows, {"dept", "cat"}, plan)
+    assert mapped == {
+        "dept": {"parent_id": "dept"},
+        "cat": {"parent_id": "cat"},
+    }
+
+
 async def test_global_unique_uuid_collision_remaps_parent_and_fk():
     class Connection:
         async def execute_query_dict(self, sql, args=None):
@@ -125,13 +170,45 @@ async def test_global_unique_uuid_only_colliding_values_remapped():
         ),
     }
     remapped = await jobs._remap_import_plan_global_unique_uuids_if_needed(
-        plan, target_tenant_id=3, table_column_map={}, fk_rows=[], conn=Connection(),
+        plan,
+        target_tenant_id=3,
+        table_column_map={"settings": ["id", "tenant_id", "uuid"]},
+        fk_rows=[],
+        conn=Connection(),
     )
     values = jobs._extract_csv_column_values(remapped["settings"][1], "uuid")
     assert values[1] == "free-two"
     assert values[0] != "used-one"
     uuid_module.UUID(values[0])
     assert len(seen_queries) >= 2  # 初检 + 重检各一次
+    assert "IS DISTINCT FROM" in seen_queries[0][0]
+
+
+async def test_global_unique_uuid_ignores_target_tenant_own_rows():
+    """同租户恢复：目标租户旧 UUID 会 DELETE，不得误判冲突并重排。"""
+
+    class Connection:
+        async def execute_query_dict(self, sql, args=None):
+            if "FROM pg_index" in sql:
+                return [{"table_name": "settings", "column_name": "uuid"}]
+            if "IS DISTINCT FROM" in sql:
+                return []
+            raise AssertionError(f"带 tenant 的 uuid 表应排除目标租户: {sql}")
+
+    plan = {
+        "settings": (
+            ["id", "tenant_id", "uuid"],
+            "id,tenant_id,uuid\n1,3,keep-me\n",
+        ),
+    }
+    remapped = await jobs._remap_import_plan_global_unique_uuids_if_needed(
+        plan,
+        target_tenant_id=3,
+        table_column_map={"settings": ["id", "tenant_id", "uuid"]},
+        fk_rows=[],
+        conn=Connection(),
+    )
+    assert jobs._extract_csv_column_values(remapped["settings"][1], "uuid") == ["keep-me"]
 
 
 @pytest.mark.asyncio

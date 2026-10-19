@@ -54,11 +54,16 @@ import { listSalesOrders } from '../../../services/sales-order';
 import { listSalesForecasts } from '../../../services/sales-forecast';
 import {
   executeFlowGenerate,
+  FlowGenerateExecuteError,
   getFlowOperatorDefaults,
+  precheckFlowGenerate,
   previewFlowGenerate,
+  repairFlowMaterialIds,
+  revertFlowGenerate,
   type FlowExecuteResult,
   type FlowGenerateJob,
   type FlowGeneratePayload,
+  type FlowPrecheckResult,
   type FlowPreviewResult,
   type FlowSourceType,
   type FlowStepResult,
@@ -71,6 +76,7 @@ const STEP_OPTIONS = [
   { key: 'demand_computation', required: true },
   { key: 'purchase', required: false },
   { key: 'incoming_inspection', required: false },
+  { key: 'outsource', required: false },
   { key: 'inventory_topup', required: false },
   { key: 'production_picking', required: false },
   { key: 'reporting', required: false },
@@ -131,12 +137,21 @@ export default function FlowDataGeneratePage() {
   const [tenantSwitching, setTenantSwitching] = useState(false);
 
   const [preview, setPreview] = useState<FlowPreviewResult | null>(null);
+  const [precheck, setPrecheck] = useState<FlowPrecheckResult | null>(null);
   const [result, setResult] = useState<FlowExecuteResult | null>(null);
+  const [resumeRunId, setResumeRunId] = useState<string | null>(null);
+  const [lastRunId, setLastRunId] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [loadingPrecheck, setLoadingPrecheck] = useState(false);
+  const [loadingRepair, setLoadingRepair] = useState(false);
   const [loadingExecute, setLoadingExecute] = useState(false);
+  const [loadingRevert, setLoadingRevert] = useState(false);
   const [executeJob, setExecuteJob] = useState<FlowGenerateJob | null>(null);
   const [orderKeyword, setOrderKeyword] = useState('');
   const [sourceType, setSourceType] = useState<FlowSourceType>('sales_order');
+  const [selectedMaterialIds, setSelectedMaterialIds] = useState<number[]>([]);
+  const [parallelWorkOrders, setParallelWorkOrders] = useState(true);
+  const [estimatedFinishAt, setEstimatedFinishAt] = useState<string | null>(null);
 
   const tenantsQuery = useQuery({
     queryKey: ['kuaizhizao', 'flow-generate', 'tenant-options', isInfraSuperAdmin],
@@ -416,6 +431,7 @@ export default function FlowDataGeneratePage() {
       setTenantConfirmed(true);
       setPreview(null);
       setResult(null);
+      setResumeRunId(null);
       setOrderKeyword('');
       form.setFieldsValue({
         source_doc_id: undefined,
@@ -431,7 +447,9 @@ export default function FlowDataGeneratePage() {
     }
   };
 
-  const buildPayload = async (): Promise<FlowGeneratePayload> => {
+  const buildPayload = async (opts?: {
+    resumeRunId?: string | null;
+  }): Promise<FlowGeneratePayload> => {
     if (!ready || !selectedTenantId) {
       throw new Error(t('app.kuaizhizao.flowDataGenerate.tenantRequired'));
     }
@@ -503,17 +521,27 @@ export default function FlowDataGeneratePage() {
       reportingMin,
       Math.min(20, Number(values.reporting_batches_max ?? DEFAULT_REPORTING_BATCHES_MAX)),
     );
+    const groupMinRaw = values.parallel_group_size_min;
+    const groupMaxRaw = values.parallel_group_size_max;
+    const groupMin =
+      groupMinRaw != null && Number(groupMinRaw) > 0 ? Math.floor(Number(groupMinRaw)) : null;
+    const groupMax =
+      groupMaxRaw != null && Number(groupMaxRaw) > 0 ? Math.floor(Number(groupMaxRaw)) : null;
+    const flowEnd: Dayjs | undefined = values.flow_end_at;
+    // 填了结束时间但未预览回填过间隔 → 交给后端按时间窗均摊
+    const useBackendBudget = Boolean(flowEnd) && !estimatedFinishAt;
     return {
       source_type: sourceType,
       sales_order_id: sourceType === 'sales_order' ? docId : null,
       sales_forecast_id: sourceType === 'sales_forecast' ? docId : null,
       warehouse_id: values.warehouse_id ? Number(values.warehouse_id) : null,
       anchor_at: anchor ? anchor.toISOString() : null,
+      flow_end_at: flowEnd ? flowEnd.toISOString() : null,
       default_interval: {
         min_seconds: defaultMinMinutes * 60,
         max_seconds: defaultMaxMinutes * 60,
       },
-      intervals,
+      intervals: useBackendBudget ? {} : intervals,
       steps,
       step_operators,
       reporting_batches: {
@@ -529,6 +557,13 @@ export default function FlowDataGeneratePage() {
             lookback_days: 30,
           }
         : null,
+      selected_material_ids:
+        selectedMaterialIds.length > 0 ? selectedMaterialIds : null,
+      parallel_work_orders: parallelWorkOrders,
+      parallel_group_size_min: groupMin,
+      parallel_group_size_max: groupMax ?? groupMin,
+      allow_skip_iqc: Boolean(values.allow_skip_iqc),
+      resume_run_id: opts?.resumeRunId ? String(opts.resumeRunId) : null,
     };
   };
 
@@ -536,10 +571,37 @@ export default function FlowDataGeneratePage() {
     setLoadingPreview(true);
     setResult(null);
     try {
+      const shouldFillIntervals = !estimatedFinishAt;
       const payload = await buildPayload();
       const data = await previewFlowGenerate(payload);
       setPreview(data);
-      message.success(t('app.kuaizhizao.flowDataGenerate.previewOk'));
+      const suggested = data.suggested_intervals;
+      if (
+        shouldFillIntervals &&
+        suggested &&
+        Object.keys(suggested).length > 0
+      ) {
+        const patch: Record<string, number> = {};
+        for (const opt of STEP_OPTIONS) {
+          const iv = suggested[opt.key];
+          if (!iv) continue;
+          patch[`interval_min_${opt.key}`] = Math.max(1, Math.round(iv.min_seconds / 60));
+          patch[`interval_max_${opt.key}`] = Math.max(
+            1,
+            Math.round(iv.max_seconds / 60),
+          );
+        }
+        const first = Object.values(suggested)[0];
+        if (first) {
+          patch.default_min_minutes = Math.max(1, Math.round(first.min_seconds / 60));
+          patch.default_max_minutes = Math.max(1, Math.round(first.max_seconds / 60));
+        }
+        form.setFieldsValue(patch);
+        message.success(t('app.kuaizhizao.flowDataGenerate.intervalsFilled'));
+      } else {
+        message.success(t('app.kuaizhizao.flowDataGenerate.previewOk'));
+      }
+      setEstimatedFinishAt(data.estimated_finish_at || null);
     } catch (e) {
       message.error(getApiErrorMessage(e, t('app.kuaizhizao.flowDataGenerate.previewFail')));
     } finally {
@@ -547,52 +609,241 @@ export default function FlowDataGeneratePage() {
     }
   };
 
+  const handlePrecheck = async () => {
+    setLoadingPrecheck(true);
+    setResult(null);
+    setPreview(null);
+    try {
+      const payload = await buildPayload();
+      // 预检先不带自选过滤，拿到完整候选后再由用户勾选
+      const data = await precheckFlowGenerate({
+        ...payload,
+        selected_material_ids: null,
+      });
+      setPrecheck(data);
+      const readyIds = (data.work_order_candidates || [])
+        .filter((c) => c.ready !== false)
+        .map((c) => Number(c.material_id))
+        .filter((id) => id > 0);
+      setSelectedMaterialIds(readyIds);
+      if (data.parallel_work_orders_default != null) {
+        setParallelWorkOrders(Boolean(data.parallel_work_orders_default));
+      }
+      const errCount = (data.errors || []).length;
+      const warnCount = (data.warnings || []).length;
+      const candCount = (data.work_order_candidates || []).length;
+      if (data.ok) {
+        message.success(
+          t('app.kuaizhizao.flowDataGenerate.precheckOkDetail', {
+            candidates: candCount,
+            warnings: warnCount,
+          }),
+        );
+      } else {
+        message.error(
+          t('app.kuaizhizao.flowDataGenerate.precheckHasErrorsDetail', {
+            errors: errCount,
+            warnings: warnCount,
+          }),
+        );
+      }
+      // 滚到结果区，避免长表单挡住提示
+      window.requestAnimationFrame(() => {
+        document.getElementById('flow-generate-precheck-result')?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      });
+    } catch (e) {
+      setPrecheck(null);
+      message.error(getApiErrorMessage(e, t('app.kuaizhizao.flowDataGenerate.precheckFail')));
+    } finally {
+      setLoadingPrecheck(false);
+    }
+  };
+
+  const handleRepairMaterialIds = async () => {
+    if (!precheck?.can_repair_material_ids) {
+      message.warning(t('app.kuaizhizao.flowDataGenerate.repairMaterialIdsNone'));
+      return;
+    }
+    modal.confirm({
+      title: t('app.kuaizhizao.flowDataGenerate.repairMaterialIdsTitle'),
+      content: t('app.kuaizhizao.flowDataGenerate.repairMaterialIdsConfirm'),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        setLoadingRepair(true);
+        try {
+          const payload = await buildPayload();
+          const repair = await repairFlowMaterialIds({
+            ...payload,
+            selected_material_ids: null,
+          });
+          if (repair.repaired_count > 0) {
+            message.success(
+              t('app.kuaizhizao.flowDataGenerate.repairMaterialIdsOk', {
+                repaired: repair.repaired_count,
+                failed: repair.failed_count,
+              }),
+            );
+          } else if (repair.failed_count > 0) {
+            message.error(
+              t('app.kuaizhizao.flowDataGenerate.repairMaterialIdsFail', {
+                failed: repair.failed_count,
+              }),
+            );
+          } else {
+            message.info(t('app.kuaizhizao.flowDataGenerate.repairMaterialIdsNone'));
+          }
+          (repair.failed || []).slice(0, 5).forEach((f) => {
+            if (f.message) message.warning(f.message);
+          });
+          // 修复后自动再预检
+          await handlePrecheck();
+        } catch (e) {
+          message.error(
+            getApiErrorMessage(e, t('app.kuaizhizao.flowDataGenerate.repairMaterialIdsError')),
+          );
+        } finally {
+          setLoadingRepair(false);
+        }
+      },
+    });
+  };
+
+  const runExecute = (resumeId?: string | null) => {
+    const tenantLabel =
+      tenantOptions.find((o) => o.value === selectedTenantId)?.label || `#${selectedTenantId}`;
+    const isResume = Boolean(resumeId);
+    modal.confirm({
+      title: isResume
+        ? t('app.kuaizhizao.flowDataGenerate.resumeConfirmTitle')
+        : t('app.kuaizhizao.flowDataGenerate.confirmTitle'),
+      content: isResume
+        ? t('app.kuaizhizao.flowDataGenerate.resumeConfirmContent', {
+            tenant: tenantLabel,
+            runId: String(resumeId).slice(0, 8),
+          })
+        : t('app.kuaizhizao.flowDataGenerate.confirmContentWithTenant', {
+            tenant: tenantLabel,
+          }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onOk: () => {
+        void (async () => {
+          setLoadingExecute(true);
+          setResult(null);
+          setExecuteJob(null);
+          try {
+            const payload = await buildPayload({ resumeRunId: resumeId || null });
+            const data = await executeFlowGenerate(payload, (job) => setExecuteJob(job));
+            if (!data.success) {
+              message.error(
+                (data.errors || []).join('；') ||
+                  t('app.kuaizhizao.flowDataGenerate.executeFail'),
+              );
+              setResult(null);
+              return;
+            }
+            setResult(data);
+            setResumeRunId(null);
+            if (data.run_id) setLastRunId(String(data.run_id));
+            message.success(
+              data.resumed
+                ? t('app.kuaizhizao.flowDataGenerate.resumeOk')
+                : t('app.kuaizhizao.flowDataGenerate.executeOk'),
+            );
+            void sourceDocQuery.refetch();
+          } catch (e) {
+            setResult(null);
+            if (e instanceof FlowGenerateExecuteError && e.resumable && e.run_id) {
+              setResumeRunId(e.run_id);
+              setLastRunId(e.run_id);
+              message.error(
+                e.message || t('app.kuaizhizao.flowDataGenerate.executeFailResumable'),
+              );
+            } else {
+              message.error(
+                getApiErrorMessage(e, t('app.kuaizhizao.flowDataGenerate.executeFail')),
+              );
+            }
+          } finally {
+            setLoadingExecute(false);
+          }
+        })();
+      },
+    });
+  };
+
   const handleExecute = async () => {
     if (!ready) {
       message.warning(t('app.kuaizhizao.flowDataGenerate.tenantRequired'));
       return;
     }
-    const tenantLabel =
-      tenantOptions.find((o) => o.value === selectedTenantId)?.label || `#${selectedTenantId}`;
+    if (!precheck) {
+      message.warning(t('app.kuaizhizao.flowDataGenerate.precheckRequired'));
+      return;
+    }
+    if (!precheck.ok) {
+      message.error(t('app.kuaizhizao.flowDataGenerate.precheckBlockExecute'));
+      return;
+    }
+    if ((precheck.work_order_candidates || []).length > 0 && selectedMaterialIds.length === 0) {
+      message.warning(t('app.kuaizhizao.flowDataGenerate.workOrderSelectRequired'));
+      return;
+    }
+    runExecute(null);
+  };
+
+  const handleResume = () => {
+    if (!resumeRunId) {
+      message.warning(t('app.kuaizhizao.flowDataGenerate.resumeMissing'));
+      return;
+    }
+    if (!precheck?.ok) {
+      message.error(t('app.kuaizhizao.flowDataGenerate.precheckBlockExecute'));
+      return;
+    }
+    runExecute(resumeRunId);
+  };
+
+  const handleRevert = () => {
+    const rid = lastRunId || resumeRunId;
+    if (!rid) {
+      message.warning(t('app.kuaizhizao.flowDataGenerate.revertMissing'));
+      return;
+    }
     modal.confirm({
-      title: t('app.kuaizhizao.flowDataGenerate.confirmTitle'),
-      content: t('app.kuaizhizao.flowDataGenerate.confirmContentWithTenant', {
-        tenant: tenantLabel,
+      title: t('app.kuaizhizao.flowDataGenerate.revertConfirmTitle'),
+      content: t('app.kuaizhizao.flowDataGenerate.revertConfirmContent', {
+        runId: String(rid).slice(0, 8),
       }),
       okText: t('common.confirm'),
       cancelText: t('common.cancel'),
-      onOk: async () => {
-        setLoadingExecute(true);
-        setResult(null);
-        setExecuteJob(null);
-        try {
-          const payload = await buildPayload();
-          const data = await executeFlowGenerate(payload, (job) => setExecuteJob(job));
-          if (!data.success) {
-            message.error(
-              (data.errors || []).join('；') ||
-                t('app.kuaizhizao.flowDataGenerate.executePartial'),
-            );
-            setResult(null);
-            return;
-          }
-          setResult(data);
-          if ((data.errors || []).length > 0) {
-            message.warning(
-              t('app.kuaizhizao.flowDataGenerate.executePartialOk', {
-                skipped: data.errors!.length,
+      okButtonProps: { danger: true },
+      onOk: () => {
+        void (async () => {
+          setLoadingRevert(true);
+          try {
+            const data = await revertFlowGenerate(String(rid));
+            message.success(
+              t('app.kuaizhizao.flowDataGenerate.revertOk', {
+                count: data.reverted_count,
               }),
             );
-          } else {
-            message.success(t('app.kuaizhizao.flowDataGenerate.executeOk'));
+            (data.notes || []).slice(0, 5).forEach((n) => message.warning(n));
+            setResumeRunId(null);
+            setLastRunId(null);
+            setResult(null);
+          } catch (e) {
+            message.error(
+              getApiErrorMessage(e, t('app.kuaizhizao.flowDataGenerate.revertFail')),
+            );
+          } finally {
+            setLoadingRevert(false);
           }
-          void sourceDocQuery.refetch();
-        } catch (e) {
-          setResult(null);
-          message.error(getApiErrorMessage(e, t('app.kuaizhizao.flowDataGenerate.executeFail')));
-        } finally {
-          setLoadingExecute(false);
-        }
+        })();
       },
     });
   };
@@ -669,6 +920,8 @@ export default function FlowDataGeneratePage() {
                 setSelectedTenantId(Number(v));
                 setTenantConfirmed(false);
                 setPreview(null);
+                setPrecheck(null);
+                setSelectedMaterialIds([]);
                 setResult(null);
               }}
             />
@@ -718,11 +971,15 @@ export default function FlowDataGeneratePage() {
             <Form
               form={form}
               layout="vertical"
+              onValuesChange={(changed) => {
+                if ('flow_end_at' in changed) setEstimatedFinishAt(null);
+              }}
               initialValues={{
                 enabled_steps: STEP_OPTIONS.map((s) => s.key),
                 default_min_minutes: 5,
                 default_max_minutes: 30,
                 use_work_schedule: false,
+                allow_skip_iqc: false,
                 reporting_batches_min: DEFAULT_REPORTING_BATCHES_MIN,
                 reporting_batches_max: DEFAULT_REPORTING_BATCHES_MAX,
                 ...Object.fromEntries(
@@ -755,7 +1012,10 @@ export default function FlowDataGeneratePage() {
                         setSourceType(next);
                         setOrderKeyword('');
                         setPreview(null);
+                        setPrecheck(null);
+                        setSelectedMaterialIds([]);
                         setResult(null);
+                        setResumeRunId(null);
                         form.setFieldsValue({ source_doc_id: undefined });
                       }}
                     />
@@ -801,6 +1061,13 @@ export default function FlowDataGeneratePage() {
                         }
                       }}
                       onClear={() => setOrderKeyword('')}
+                      onChange={() => {
+                        setPreview(null);
+                        setPrecheck(null);
+                        setSelectedMaterialIds([]);
+                        setResult(null);
+                        setResumeRunId(null);
+                      }}
                       loading={sourceDocQuery.isLoading || sourceDocQuery.isFetching}
                       notFoundContent={
                         sourceDocQuery.isError
@@ -834,6 +1101,15 @@ export default function FlowDataGeneratePage() {
                     <DatePicker showTime style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    name="flow_end_at"
+                    label={t('app.kuaizhizao.flowDataGenerate.flowEndAt')}
+                    extra={t('app.kuaizhizao.flowDataGenerate.flowEndAtHint')}
+                  >
+                    <DatePicker showTime style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
                 <Col xs={24} md={6}>
                   <Form.Item
                     name="default_min_minutes"
@@ -853,6 +1129,16 @@ export default function FlowDataGeneratePage() {
                   </Form.Item>
                 </Col>
               </Row>
+              {estimatedFinishAt ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  title={t('app.kuaizhizao.flowDataGenerate.estimatedFinish', {
+                    time: dayjs(estimatedFinishAt).format('YYYY-MM-DD HH:mm:ss'),
+                  })}
+                />
+              ) : null}
 
               <Form.Item name="enabled_steps" label={t('app.kuaizhizao.flowDataGenerate.steps')}>
                 <Checkbox.Group
@@ -867,6 +1153,15 @@ export default function FlowDataGeneratePage() {
               <Form.Item
                 name="use_work_schedule"
                 label={t('app.kuaizhizao.flowDataGenerate.useWorkSchedule')}
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+
+              <Form.Item
+                name="allow_skip_iqc"
+                label={t('app.kuaizhizao.flowDataGenerate.allowSkipIqc')}
+                extra={t('app.kuaizhizao.flowDataGenerate.allowSkipIqcHint')}
                 valuePropName="checked"
               >
                 <Switch />
@@ -904,6 +1199,31 @@ export default function FlowDataGeneratePage() {
                   </Col>
                 </Row>
               ))}
+
+              <Typography.Title level={5} style={{ marginTop: 24, marginBottom: 8 }}>
+                {t('app.kuaizhizao.flowDataGenerate.parallelGroupCard')}
+              </Typography.Title>
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+                {t('app.kuaizhizao.flowDataGenerate.parallelGroupHint')}
+              </Typography.Paragraph>
+              <Row gutter={16}>
+                <Col xs={24} md={8}>
+                  <Form.Item
+                    name="parallel_group_size_min"
+                    label={t('app.kuaizhizao.flowDataGenerate.parallelGroupMin')}
+                  >
+                    <InputNumber min={1} max={9999} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Form.Item
+                    name="parallel_group_size_max"
+                    label={t('app.kuaizhizao.flowDataGenerate.parallelGroupMax')}
+                  >
+                    <InputNumber min={1} max={9999} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+              </Row>
 
               <Typography.Title level={5} style={{ marginTop: 24, marginBottom: 8 }}>
                 {t('app.kuaizhizao.flowDataGenerate.reportingBatchCard')}
@@ -1075,16 +1395,177 @@ export default function FlowDataGeneratePage() {
                 </Row>
               ))}
 
-              <Space style={{ marginTop: 16 }}>
+              <Typography.Title level={5} style={{ marginTop: 16, marginBottom: 8 }}>
+                {t('app.kuaizhizao.flowDataGenerate.workOrderSelectCard')}
+              </Typography.Title>
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                {t('app.kuaizhizao.flowDataGenerate.workOrderSelectHint')}
+              </Typography.Paragraph>
+              <Form.Item
+                label={t('app.kuaizhizao.flowDataGenerate.parallelWorkOrders')}
+                style={{ marginBottom: 12 }}
+              >
+                <Switch checked={parallelWorkOrders} onChange={setParallelWorkOrders} />
+                <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
+                  {t('app.kuaizhizao.flowDataGenerate.parallelWorkOrdersHint')}
+                </Typography.Text>
+              </Form.Item>
+              {!precheck && (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  title={t('app.kuaizhizao.flowDataGenerate.precheckFirstHint')}
+                />
+              )}
+
+              <Space style={{ marginTop: 16 }} wrap>
+                <Button onClick={() => void handlePrecheck()} loading={loadingPrecheck}>
+                  {t('app.kuaizhizao.flowDataGenerate.precheck')}
+                </Button>
                 <Button onClick={() => void handlePreview()} loading={loadingPreview}>
                   {t('app.kuaizhizao.flowDataGenerate.preview')}
                 </Button>
                 <Button type="primary" onClick={() => void handleExecute()} loading={loadingExecute}>
                   {t('app.kuaizhizao.flowDataGenerate.execute')}
                 </Button>
+                {resumeRunId ? (
+                  <Button
+                    type="primary"
+                    ghost
+                    onClick={() => handleResume()}
+                    loading={loadingExecute}
+                  >
+                    {t('app.kuaizhizao.flowDataGenerate.resume')}
+                  </Button>
+                ) : null}
+                {lastRunId || resumeRunId ? (
+                  <Button danger onClick={() => handleRevert()} loading={loadingRevert}>
+                    {t('app.kuaizhizao.flowDataGenerate.revert')}
+                  </Button>
+                ) : null}
               </Space>
+              {resumeRunId ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginTop: 12 }}
+                  title={t('app.kuaizhizao.flowDataGenerate.resumeHint', {
+                    runId: resumeRunId.slice(0, 8),
+                  })}
+                />
+              ) : null}
+              {lastRunId && !resumeRunId ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginTop: 12 }}
+                  title={t('app.kuaizhizao.flowDataGenerate.revertHint', {
+                    runId: lastRunId.slice(0, 8),
+                  })}
+                />
+              ) : null}
             </Form>
           </Card>
+
+          {precheck && (
+            <Card
+              id="flow-generate-precheck-result"
+              size="small"
+              style={{ marginTop: 16 }}
+              title={t('app.kuaizhizao.flowDataGenerate.precheckCard')}
+            >
+              <Alert
+                type={precheck.ok ? 'success' : 'error'}
+                showIcon
+                style={{ marginBottom: 12 }}
+                title={
+                  precheck.ok
+                    ? t('app.kuaizhizao.flowDataGenerate.precheckOkDetail', {
+                        candidates: (precheck.work_order_candidates || []).length,
+                        warnings: (precheck.warnings || []).length,
+                      })
+                    : t('app.kuaizhizao.flowDataGenerate.precheckHasErrorsDetail', {
+                        errors: (precheck.errors || []).length,
+                        warnings: (precheck.warnings || []).length,
+                      })
+                }
+                description={
+                  precheck.order_code
+                    ? t('app.kuaizhizao.flowDataGenerate.previewSummary', {
+                        order: precheck.order_code,
+                        warehouse: precheck.warehouse_name,
+                      })
+                    : undefined
+                }
+              />
+              {(precheck.blocking_codes || []).length > 0 && (
+                <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                  {t('app.kuaizhizao.flowDataGenerate.blockingCodes')}:{' '}
+                  {(precheck.blocking_codes || []).join('、')}
+                </Typography.Paragraph>
+              )}
+              {(precheck.errors || []).map((e) => (
+                <Alert key={`e-${e}`} type="error" showIcon style={{ marginBottom: 8 }} title={e} />
+              ))}
+              {(precheck.warnings || []).map((w) => (
+                <Alert key={`w-${w}`} type="warning" showIcon style={{ marginBottom: 8 }} title={w} />
+              ))}
+              {precheck.can_repair_material_ids && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  title={t('app.kuaizhizao.flowDataGenerate.repairMaterialIdsHint', {
+                    count: (precheck.material_id_issues || []).length,
+                  })}
+                  action={
+                    <Button
+                      size="small"
+                      type="primary"
+                      loading={loadingRepair || loadingPrecheck}
+                      onClick={() => void handleRepairMaterialIds()}
+                    >
+                      {t('app.kuaizhizao.flowDataGenerate.repairMaterialIds')}
+                    </Button>
+                  }
+                />
+              )}
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                {t('app.kuaizhizao.flowDataGenerate.workOrderSelectHint')}
+              </Typography.Paragraph>
+              {(precheck.work_order_candidates || []).length > 0 ? (
+                <Checkbox.Group
+                  style={{ width: '100%' }}
+                  value={selectedMaterialIds}
+                  onChange={(vals) =>
+                    setSelectedMaterialIds(
+                      (vals as Array<string | number>)
+                        .map((v) => Number(v))
+                        .filter((id) => id > 0),
+                    )
+                  }
+                  options={(precheck.work_order_candidates || []).map((c) => ({
+                    value: c.material_id,
+                    disabled: c.ready === false,
+                    label: `${c.material_code}${c.material_name ? ` ${c.material_name}` : ''}${
+                      c.ready === false
+                        ? `（${(c.blockers || []).join('、') || t('app.kuaizhizao.flowDataGenerate.candidateNotReady')}）`
+                        : c.has_process
+                          ? `（工序 ${c.process_operation_count ?? 0}）`
+                          : ''
+                    }`,
+                  }))}
+                />
+              ) : (
+                <Alert
+                  type="info"
+                  showIcon
+                  title={t('app.kuaizhizao.flowDataGenerate.noWorkOrderCandidates')}
+                />
+              )}
+            </Card>
+          )}
 
           {preview && (
             <Card
@@ -1170,15 +1651,8 @@ export default function FlowDataGeneratePage() {
             <Card
               size="small"
               style={{ marginTop: 16 }}
-              title={
-                (result.errors || []).length > 0
-                  ? t('app.kuaizhizao.flowDataGenerate.resultPartial')
-                  : t('app.kuaizhizao.flowDataGenerate.resultOk')
-              }
+              title={t('app.kuaizhizao.flowDataGenerate.resultOk')}
             >
-              {(result.errors || []).map((e) => (
-                <Alert key={e} type="warning" showIcon style={{ marginBottom: 8 }} title={e} />
-              ))}
               {(result.outsource_notes || []).map((n) => (
                 <Alert key={n} type="info" showIcon style={{ marginBottom: 8 }} title={n} />
               ))}

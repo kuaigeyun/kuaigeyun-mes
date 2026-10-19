@@ -23,6 +23,7 @@ from apps.kuaizhizao.services.flow_data_generate_service import (
     STEP_DEFAULT_ROLE_CODES,
     STEP_KEYS,
     FlowDataGenerateService,
+    FlowGenerateFailedError,
     FlowGenerateJobService,
     FlowGenerateRequest,
     IntervalConfig,
@@ -98,6 +99,27 @@ class FlowGenerateBody(BaseModel):
     reporting_batches: ReportingBatchBody = Field(default_factory=ReportingBatchBody)
     work_schedule: Optional[WorkScheduleBody] = None
     use_work_schedule: bool = False
+    selected_material_ids: Optional[list[int]] = Field(
+        None, description="自选完工物料；空/不传=全部下推工单走生产链"
+    )
+    parallel_work_orders: bool = Field(
+        True, description="多工单生产链并行推进业务时刻"
+    )
+    parallel_group_size_min: Optional[int] = Field(
+        None, ge=1, le=9999, description="数量并行组每组最小件数（如 1）"
+    )
+    parallel_group_size_max: Optional[int] = Field(
+        None, ge=1, le=9999, description="数量并行组每组最大件数（如 3）"
+    )
+    flow_end_at: Optional[datetime] = Field(
+        None, description="流程结束锚点；与 anchor_at 组成时间窗推算步骤间隔"
+    )
+    allow_skip_iqc: bool = Field(
+        False, description="来料检建单失败时允许直推入库（默认关闭）"
+    )
+    resume_run_id: Optional[str] = Field(
+        None, description="续跑：失败轮次的 run_id，按检查点跳过已完成阶段"
+    )
 
 
 def _assert_admin_gate(auth: AuthContext, *, action: str) -> None:
@@ -160,6 +182,19 @@ def _to_flow_request(body: FlowGenerateBody) -> FlowGenerateRequest:
         reporting_batches=parse_reporting_batches(body.reporting_batches.model_dump()),
         work_schedule=parse_work_schedule(schedule_raw),
         use_work_schedule=bool(body.use_work_schedule),
+        selected_material_ids=(
+            [int(x) for x in body.selected_material_ids if int(x or 0) > 0]
+            if body.selected_material_ids is not None
+            else None
+        ),
+        parallel_work_orders=bool(body.parallel_work_orders),
+        parallel_group_size_min=body.parallel_group_size_min,
+        parallel_group_size_max=body.parallel_group_size_max,
+        flow_end_at=body.flow_end_at,
+        allow_skip_iqc=bool(body.allow_skip_iqc),
+        resume_run_id=(str(body.resume_run_id).strip() or None)
+        if body.resume_run_id
+        else None,
     )
 
 
@@ -310,6 +345,42 @@ async def preview_flow_generate(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
 
+@router.post(
+    "/flow-generate/precheck",
+    summary="Precheck flow generate readiness and work-order candidates",
+    dependencies=[Depends(require_permission_codes(FLOW_GENERATE_PERMISSION))],
+)
+async def precheck_flow_generate(
+    body: FlowGenerateBody,
+    tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
+) -> dict[str, Any]:
+    _assert_admin_gate(auth, action="使用流程造数")
+    try:
+        return await FlowDataGenerateService().precheck(tenant_id, _to_flow_request(body))
+    except (NotFoundError, BusinessLogicError, ValidationError, ValueError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
+@router.post(
+    "/flow-generate/repair-material-ids",
+    summary="Repair stale material_id on source lines by code+name match",
+    dependencies=[Depends(require_permission_codes(FLOW_GENERATE_PERMISSION))],
+)
+async def repair_flow_generate_material_ids(
+    body: FlowGenerateBody,
+    tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
+) -> dict[str, Any]:
+    _assert_admin_gate(auth, action="使用流程造数")
+    try:
+        return await FlowDataGenerateService().repair_material_ids(
+            tenant_id, _to_flow_request(body)
+        )
+    except (NotFoundError, BusinessLogicError, ValidationError, ValueError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
 async def _run_flow_generate_job(
     *,
     job_id: str,
@@ -337,6 +408,19 @@ async def _run_flow_generate_job(
             progress=100,
             message="完成",
             result=result,
+        )
+    except FlowGenerateFailedError as e:
+        FlowGenerateJobService.update(
+            job_id,
+            status="failed",
+            message="造数未通过（可续跑）" if e.resumable else "造数未通过",
+            error=str(e),
+            result={
+                "success": False,
+                "run_id": e.run_id,
+                "resumable": bool(e.resumable),
+                "error": str(e),
+            },
         )
     except (NotFoundError, BusinessLogicError, ValidationError, ValueError) as e:
         FlowGenerateJobService.update(
@@ -407,6 +491,29 @@ async def get_flow_generate_job(
     return FlowGenerateJobService.to_dict(rec)
 
 
+class FlowRevertBody(BaseModel):
+    run_id: str = Field(..., min_length=8, description="要撤回的造数 run_id")
+
+
+@router.post(
+    "/flow-generate/revert",
+    summary="Revert documents written by a flow-generate run_id",
+    dependencies=[Depends(require_permission_codes(FLOW_GENERATE_PERMISSION))],
+)
+async def revert_flow_generate(
+    body: FlowRevertBody,
+    tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
+) -> dict[str, Any]:
+    _assert_admin_gate(auth, action="撤回流程造数")
+    try:
+        return await FlowDataGenerateService().revert_run(
+            tenant_id, str(body.run_id).strip()
+        )
+    except (NotFoundError, BusinessLogicError, ValidationError, ValueError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
 class EquipmentOpsGenerateBody(BaseModel):
     spot_check_ids: list[int] = Field(
         default_factory=list, description="点检单 ID 列表（作模板）"
@@ -434,6 +541,25 @@ class EquipmentOpsGenerateBody(BaseModel):
 
 def _to_equipment_ops_request(body: EquipmentOpsGenerateBody):
     return parse_equipment_ops_generate_request(body.model_dump())
+
+
+@router.post(
+    "/equipment-ops-generate/bound-equipment",
+    summary="List equipment bound to selected spot-check / maintenance templates",
+    dependencies=[Depends(require_permission_codes(FLOW_GENERATE_PERMISSION))],
+)
+async def list_equipment_ops_bound_equipment(
+    body: EquipmentOpsGenerateBody,
+    tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
+) -> dict[str, Any]:
+    _assert_admin_gate(auth, action="使用设备点检保养造数")
+    try:
+        return await EquipmentOpsDataGenerateService().list_bound_equipment(
+            tenant_id, _to_equipment_ops_request(body)
+        )
+    except (NotFoundError, BusinessLogicError, ValidationError, ValueError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
 
 @router.post(
