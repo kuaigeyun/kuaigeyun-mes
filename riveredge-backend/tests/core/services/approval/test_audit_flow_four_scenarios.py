@@ -159,7 +159,7 @@ class TestScenarioRecallOwn:
                 action_by=0,
                 from_node="n2",
                 to_node="cond",
-                comment="空审批人自动通过（emptyApproverPolicy=auto_pass）",
+                comment="空审批人自动通过",
                 action_at=None,
                 change_payload=None,
             ),

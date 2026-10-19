@@ -528,15 +528,18 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
       }
       onSuccess?.();
 
-      // 多级审核：本级通过后若仍 pending 且当前人仍有待办，保持弹窗以便连续审下一级
+      // 多级审核：本级通过 / 撤回本级后若仍 pending，保持弹窗并刷新节点图
       if (
         auditHubOpen
-        && (action === 'approve' || action === 'reject')
+        && (action === 'approve' || action === 'reject' || action === 'recall_own')
         && resolvedEntityType
       ) {
         try {
           const status = await getApprovalStatus(resolvedEntityType, recordId);
           const stillPending = status?.has_instance && status.status === 'pending';
+          if (action === 'recall_own' && stillPending) {
+            return true;
+          }
           const stillMine =
             Boolean(status?.viewer_actions?.has_my_pending_task)
             || Boolean(status?.has_my_pending_task)
