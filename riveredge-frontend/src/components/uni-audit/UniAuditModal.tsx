@@ -58,6 +58,7 @@ import { MarkerTag, StatusTag } from '../../constants/statusBadges';
 import { resolveAuditFlowExecutePermission } from '../../utils/auditFlowViewerGate';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 import ApprovalFlowPreview from './ApprovalFlowPreview';
+import { formatApprovalExecutionComment } from './formatApprovalExecutionComment';
 import UniAuditAdvancedActionModal, { type AdvancedActionState } from './UniAuditAdvancedActionModal';
 import type { UniAuditAction } from './types';
 import { documentCodeFromInstanceTitle } from './resolveRecordDocumentCode';
@@ -684,8 +685,9 @@ function AuditHubDetailPanel({
 
                       <div style={{ marginTop: 8, fontSize: 12 }}>
 
-                        {node.executions.map((ex, idx) => (
-
+                        {node.executions.map((ex, idx) => {
+                          const displayComment = formatApprovalExecutionComment(ex.comment);
+                          return (
                           <div key={`${node.node_id}-ex-${idx}`} style={{ marginBottom: 4 }}>
 
                             <div
@@ -727,15 +729,11 @@ function AuditHubDetailPanel({
 
                             </div>
 
-                            {ex.comment && (
-
+                            {displayComment ? (
                               <div>
-
-                                <Text type="secondary">{ex.comment}</Text>
-
+                                <Text type="secondary">{displayComment}</Text>
                               </div>
-
-                            )}
+                            ) : null}
 
                             {ex.field_changes && ex.field_changes.length > 0 && (
 
@@ -756,8 +754,8 @@ function AuditHubDetailPanel({
                             )}
 
                           </div>
-
-                        ))}
+                          );
+                        })}
 
                       </div>
 
@@ -840,6 +838,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
   const [flowLoading, setFlowLoading] = useState(false);
 
   const [flowStatus, setFlowStatus] = useState<ApprovalStatusResponse | null>(null);
+  const [flowLoadError, setFlowLoadError] = useState<string | null>(null);
 
   const [advancedAction, setAdvancedAction] = useState<AdvancedActionState | null>(null);
   /** null=未选择；双分支条件必须显式选是/否，禁止默认跳边 */
@@ -1069,6 +1068,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     if (!entityType || !entityId) {
 
       setFlowStatus(null);
+      setFlowLoadError(t('components.uniAudit.flowStatusMissingEntity'));
 
       return;
 
@@ -1077,18 +1077,26 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     let cancelled = false;
 
     setFlowLoading(true);
+    setFlowLoadError(null);
 
     getApprovalStatus(entityType, entityId)
 
       .then((res) => {
 
-        if (!cancelled) setFlowStatus(res);
+        if (!cancelled) {
+          setFlowStatus(res);
+          setFlowLoadError(null);
+        }
 
       })
 
-      .catch(() => {
+      .catch((err: unknown) => {
 
-        if (!cancelled) setFlowStatus(null);
+        if (!cancelled) {
+          setFlowStatus(null);
+          const msg = err instanceof Error ? err.message : String(err || '');
+          setFlowLoadError(msg || t('components.uniAudit.flowStatusLoadFailed'));
+        }
 
       })
 
@@ -1104,7 +1112,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     };
 
-  }, [open, entityType, entityId]);
+  }, [open, entityType, entityId, t]);
 
   const nodeDecision = flowStatus?.current_node_decision;
 
@@ -1227,6 +1235,10 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     if (flowLoading || flowStatus?.process?.nodes?.nodes?.length) return null;
 
+    if (flowLoadError) {
+      return flowLoadError;
+    }
+
     if (flowStatus?.has_flow) {
 
       return '当前使用单据审核绑定流程；若未配置节点图，请在「审批流程」设计器中完善。';
@@ -1235,7 +1247,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     return '当前单据未启用平台审批流，将执行单据审核生命周期操作。';
 
-  }, [flowLoading, flowStatus]);
+  }, [flowLoading, flowStatus, flowLoadError]);
 
 
 

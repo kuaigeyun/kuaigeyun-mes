@@ -44,6 +44,39 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaiplm-trial-flow-optional-project-title-first-r01',
+    date: '2026-10-19',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-optional-project-title-first-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-optional-project-title-first-r01.description',
+  },
+  {
+    id: 'kuaiplm-trial-flow-project-ref-r01',
+    date: '2026-10-19',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.description',
+  },
+  {
+    id: 'audit-revoke-reopen-keep-nodes-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-revoke-reopen-keep-nodes-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-revoke-reopen-keep-nodes-r01.description',
+  },
+  {
+    id: 'audit-execution-comment-no-internal-code-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-execution-comment-no-internal-code-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-execution-comment-no-internal-code-r01.description',
+  },
+  {
     id: 'approval-reject-previous-history-payload-r01',
     date: '2026-10-19',
     type: 'fix',

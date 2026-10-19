@@ -41,6 +41,7 @@ standard: 反审核有已通过实例时重开终审节点 pending；单据落 p
 2. 未声明 `reopened` 的旧 `flow_revoke` 仍走 cancel+草稿，避免其它单据硬编码 DRAFT 时留下 orphan pending 实例。
 3. 重开须**保留** `__branch_true_*`；`cancel_approval` / 撤回提交才 strip。
 4. 重开实例 `data.reopened_from_instance_id`；`get_approval_status` 合并上一已通过实例在终审节点**之外**的 tasks/history，前序节点仍显示已通过。
+5. **禁止**重开后走 `_create_node_tasks` 空审批人 `auto_pass`：三级汇报线解析为空会瞬间到 end，弹窗变成「未绑定审批流」。须按 `final_approver_user_ids_on_node` 种子 pending；`get_approval_status` 的 bootstrap 异常不得打成 500。
 
 ## 关联
 

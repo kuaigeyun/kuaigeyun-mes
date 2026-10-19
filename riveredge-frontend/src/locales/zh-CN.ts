@@ -5779,6 +5779,7 @@ export default {
   'app.kuaiplm.trialFlow.fields.stepPreview': '提交后将生成工序链',
   'app.kuaiplm.trialFlow.fields.code': '试流单号',
   'app.kuaiplm.trialFlow.fields.project': '研发项目',
+  'app.kuaiplm.trialFlow.fields.projectPlaceholder': '可选，选择项目或手填项目代号',
   'app.kuaiplm.trialFlow.fields.businessType': '试流类型',
   'app.kuaiplm.trialFlow.fields.title': '标题',
   'app.kuaiplm.trialFlow.fields.currentStep': '当前工序',
@@ -32211,6 +32212,10 @@ export default {
     '表单保存失败会提示原因',
   'pages.dashboard.updateLog.entries.form-modal-save-error-visible-r01.description':
     '新建编辑弹窗保存时，接口校验失败会弹出具体原因，不再出现点了保存却没有任何提示。',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-flow-profile-tenant-import-r01.title':
+    '试流单表单配置加载修复',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-flow-profile-tenant-import-r01.description':
+    '修复福尼特 OA 试流单新建或编辑时因租户服务模块路径错误导致无法加载行业表单配置的问题。',
   'pages.dashboard.updateLog.entries.funide-oa-drawings-menu-to-doc-control-r01.title':
     '2D/3D/模具图菜单归入文控资料',
   'pages.dashboard.updateLog.entries.funide-oa-drawings-menu-to-doc-control-r01.description':
@@ -44097,6 +44102,8 @@ export default {
   'components.uniAudit.phaseNone': '—',
   'components.uniAudit.noPermission': '您没有该操作权限',
   'components.uniAudit.flowStatusLoading': '正在同步当前审核节点，请稍候再点审核',
+  'components.uniAudit.flowStatusLoadFailed': '加载审批流程失败，请关闭后重试；若仍无节点请联系管理员检查审批配置',
+  'components.uniAudit.flowStatusMissingEntity': '缺少单据类型或单据标识，无法加载审批流程',
   'components.uniAudit.missingReviewPermission':
     '您的角色未开通本单据的审核权限（部门负责人指派与审核权限须同时满足）',
   'components.uniAudit.notNodeAssignee': '您不是当前节点的待办审批人，无法审核或驳回',
@@ -44118,6 +44125,22 @@ export default {
   'components.uniAudit.urge': '催办',
   'components.uniAudit.recallOwnAction': '撤销审核',
   'components.uniAudit.submitterAwaitingOthers': '您为发起人，请等待当前节点审批人处理',
+  'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-optional-project-title-first-r01.title':
+    '试流单研发项目改为可选且标题优先',
+  'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-optional-project-title-first-r01.description':
+    '新建试流单可不填研发项目；表单字段顺序调整为标题在最前，项目与试流类型在其后。',
+  'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.title':
+    '试流单研发项目支持关联或手填代号',
+  'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.description':
+    '新建试流单时研发项目与产品固件、样品加工一致：可从列表选择项目，也可直接手填项目代号（无需先建项目档案）。',
+  'pages.dashboard.updateLog.entries.audit-revoke-reopen-keep-nodes-r01.title':
+    '多级审批撤销后保留流程图节点',
+  'pages.dashboard.updateLog.entries.audit-revoke-reopen-keep-nodes-r01.description':
+    '终审撤销重开时按原终审人重建待办，避免空审批人自动通过冲掉节点；状态接口 bootstrap 失败不再把弹窗显示成未绑定审批流。',
+  'pages.dashboard.updateLog.entries.audit-execution-comment-no-internal-code-r01.title':
+    '审核节点记录不再展示内部配置码',
+  'pages.dashboard.updateLog.entries.audit-execution-comment-no-internal-code-r01.description':
+    '空审批人自动通过等节点执行意见去掉 emptyApproverPolicy 等内部标识，历史记录展示亦会自动隐藏括号内配置说明。',
   'pages.dashboard.updateLog.entries.approval-reject-previous-history-payload-r01.title':
     '驳回到上一级不再报错',
   'pages.dashboard.updateLog.entries.approval-reject-previous-history-payload-r01.description':

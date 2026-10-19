@@ -908,6 +908,15 @@ class ApprovalInstanceService:
                         entity_id,
                         exc,
                     )
+                except Exception as exc:
+                    # 禁止因 bootstrap/补齐待办失败把整单状态接口打成 500：
+                    # 前端会当成「未绑定审批流」清空节点图。
+                    logger.exception(
+                        "bootstrap_instance_workflow failed for {}:{} — {}",
+                        entity_type,
+                        entity_id,
+                        exc,
+                    )
             instance_ids = [inst.id for inst in entity_instances]
             if instance and instance.status == "pending" and instance.current_node:
                 # bootstrap 可能推进节点，再清一次非当前残留
@@ -2021,27 +2030,102 @@ class ApprovalInstanceService:
             to_node=last_node_id,
         )
 
-        await ApprovalInstanceService.bootstrap_instance_workflow(
-            tenant_id, new_instance
+        # 终审节点待办必须按「原终审通过人」重建，禁止走 bootstrap→_create_node_tasks：
+        # 三级/按汇报线解析为空时 emptyApproverPolicy=auto_pass 会立刻跳到 end，
+        # 实例变 approved、重开失败，弹窗再取状态就看不到流程节点。
+        from core.services.approval.approval_flow_policy import final_approver_user_ids_on_node
+
+        final_uids = await final_approver_user_ids_on_node(
+            tenant_id, approved, last_node_id
         )
-        await new_instance.refresh_from_db()
-        if new_instance.status != "pending" or str(new_instance.current_node or "") != last_node_id:
+        if not final_uids and operator_id:
+            final_uids = {int(operator_id)}
+        if not final_uids:
+            try:
+                resolved = await ApprovalInstanceService._resolve_node_approvers(
+                    last_node, new_instance
+                )
+                final_uids = {int(x) for x in (resolved or []) if x is not None}
+            except Exception as exc:
+                logger.warning(
+                    "反审核重开解析终审人失败: {}:{} — {}",
+                    entity_type,
+                    entity_id,
+                    exc,
+                )
+                final_uids = set()
+
+        async def _abort_reopen(reason: str) -> None:
+            await ApprovalTask.filter(
+                tenant_id=tenant_id,
+                approval_instance_id=new_instance.id,
+            ).update(status="cancelled")
+            new_instance.status = "cancelled"
+            new_instance.completed_at = resolve_business_datetime()
+            new_instance.current_node = None
+            new_instance.current_approver_id = None
+            await new_instance.save()
             logger.error(
-                "反审核重开终审节点后状态异常: {}:{} instance={} status={} node={}",
+                "反审核重开终审节点失败并已作废新实例: {}:{} instance={} reason={}",
                 entity_type,
                 entity_id,
                 new_instance.id,
-                new_instance.status,
-                new_instance.current_node,
+                reason,
+            )
+
+        if not final_uids:
+            await _abort_reopen("no_final_approvers")
+            return None
+
+        for uid in sorted(final_uids):
+            await ApprovalTask.create(
+                tenant_id=tenant_id,
+                approval_instance_id=new_instance.id,
+                node_id=last_node_id,
+                approver_id=int(uid),
+                status="pending",
+            )
+        new_instance.current_node = last_node_id
+        new_instance.current_approver_id = int(next(iter(final_uids)))
+        new_instance.status = "pending"
+        await new_instance.save()
+
+        # 仅补齐同节点其它可审人；已有 pending，不会再走空审批人 auto_pass
+        try:
+            await ApprovalInstanceService.bootstrap_instance_workflow(
+                tenant_id, new_instance
+            )
+        except Exception as exc:
+            logger.warning(
+                "反审核重开后 bootstrap 补齐跳过: {}:{} — {}",
+                entity_type,
+                entity_id,
+                exc,
+            )
+        await new_instance.refresh_from_db()
+        if new_instance.status != "pending" or str(new_instance.current_node or "") != last_node_id:
+            await _abort_reopen(
+                f"status={new_instance.status} node={new_instance.current_node}"
             )
             return None
 
+        pending_left = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=new_instance.id,
+            node_id=last_node_id,
+            status="pending",
+        ).count()
+        if pending_left < 1:
+            await _abort_reopen("no_pending_tasks")
+            return None
+
         logger.info(
-            "反审核已重开终审节点: {}:{} node={} instance={}",
+            "反审核已重开终审节点: {}:{} node={} instance={} approvers={}",
             entity_type,
             entity_id,
             last_node_id,
             new_instance.id,
+            sorted(final_uids),
         )
         return new_instance
 
@@ -2079,7 +2163,7 @@ class ApprovalInstanceService:
                 approval_instance_id=instance.id,
                 action="withdraw",
                 action_by=operator_id,
-                comment="invalidated_by_config",
+                comment="流程配置已变更，原待办已作废",
                 from_node=withdraw_node,
                 to_node="start",
             )
@@ -2726,7 +2810,7 @@ class ApprovalInstanceService:
             action_by=instance.submitter_id,
             from_node=str(node_id) if node_id else None,
             to_node=None,
-            comment="空审批人自动通过（emptyApproverPolicy=auto_pass）",
+            comment="空审批人自动通过",
         )
         next_node = ApprovalInstanceService._get_next_node(
             instance.process.nodes if instance.process else {},
