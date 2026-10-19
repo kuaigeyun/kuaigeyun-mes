@@ -1,1 +1,0 @@
-import{Q as a}from"./clientRelease-2lmws2KU.js";const p={getPolicy:async()=>a.get("/apps/master-data/process/drawings/watermark-policy"),updatePolicy:async r=>a.put("/apps/master-data/process/drawings/watermark-policy",r)};export{p as d};
