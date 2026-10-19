@@ -1295,23 +1295,32 @@ class ApprovalInstanceService:
             tasks_by_inst.setdefault(int(task.approval_instance_id), []).append(task)
 
         for eid, instance in active_by_entity.items():
-            process = await ApprovalInstanceService._resolve_process_for_entity_display(
-                tenant_id, entity_type, instance
-            )
-            tasks = tasks_by_inst.get(int(instance.id), [])
-            history: list = []
-            nodes_overview: list = []
-            if process:
-                nodes_overview = await ApprovalInstanceService._build_nodes_overview(
-                    tenant_id, process, instance, tasks, history
+            try:
+                process = await ApprovalInstanceService._resolve_process_for_entity_display(
+                    tenant_id, entity_type, instance
                 )
-            viewer_actions = build_flow_viewer_actions(
-                viewer_id=int(viewer_id),
-                instance=instance,
-                tasks=tasks,
-                nodes_overview=nodes_overview,
-            )
-            out[eid] = viewer_actions
+                tasks = tasks_by_inst.get(int(instance.id), [])
+                history: list = []
+                nodes_overview: list = []
+                if process:
+                    nodes_overview = await ApprovalInstanceService._build_nodes_overview(
+                        tenant_id, process, instance, tasks, history
+                    )
+                viewer_actions = build_flow_viewer_actions(
+                    viewer_id=int(viewer_id),
+                    instance=instance,
+                    tasks=tasks,
+                    nodes_overview=nodes_overview,
+                )
+                out[eid] = viewer_actions
+            except Exception as exc:
+                # 列表只读门控：单条缺选边/坏图不得把整页 list 打成 422
+                logger.warning(
+                    "batch_flow_viewer_actions skipped for {}:{} — {}",
+                    entity_type,
+                    eid,
+                    exc,
+                )
         return out
 
     @staticmethod

@@ -1126,8 +1126,48 @@ PURCHASE_REQUISITION_FLOW_LABELS = {
 
 
 def normalize_purchase_requisition_lifecycle_filter(stage: Optional[str]) -> str:
-    """列表 lifecycle_stage 筛选值归一化（与 get_purchase_requisition_lifecycle 的 current_stage_name 一致）。"""
+    """列表 lifecycle_stage 筛选值归一化。"""
     return _norm(stage)
+
+
+def match_purchase_requisition_lifecycle_filter(
+    requisition: Any,
+    lifecycle_stage: str,
+    *,
+    audit_required: bool = True,
+) -> bool:
+    """列表钉住 Tab 是否命中该采购申请。
+
+    Mode A 下草稿/待审/驳回的 ``current_stage_name`` 为「—」（审核见 audit 列），
+    不能用阶段名与「草稿」「已驳回」比对，否则钉住后列表恒为空。
+    """
+    target = normalize_purchase_requisition_lifecycle_filter(lifecycle_stage)
+    if not target:
+        return True
+
+    status_raw = _norm(getattr(requisition, "status", None))
+    status_norm = normalize_status(status_raw)
+    review_status = _norm(getattr(requisition, "review_status", None))
+
+    if target == "草稿":
+        return _is_draft(status_raw) and not _is_rejected(review_status)
+    if target == "已驳回":
+        return status_norm in (
+            DocumentStatus.REJECTED.value,
+            "REJECTED",
+            "已驳回",
+        ) or _is_rejected(review_status)
+
+    lifecycle = get_purchase_requisition_lifecycle(
+        requisition, milestones=None, audit_required=audit_required
+    )
+    stage_name = normalize_purchase_requisition_lifecycle_filter(
+        lifecycle.get("current_stage_name"),
+    )
+    if stage_name == target:
+        return True
+    flow_class = str(lifecycle.get("flow_class") or "").strip()
+    return PURCHASE_REQUISITION_FLOW_LABELS.get(flow_class) == target
 
 
 def get_purchase_requisition_lifecycle(

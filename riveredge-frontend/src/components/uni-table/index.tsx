@@ -2256,7 +2256,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       } else {
         delete next.keyword
       }
-      searchParamsRef.current = Object.keys(next).length > 0 ? next : undefined
+      // 空对象表示「已主动清空」；勿写 undefined，否则 request 会回退到 ProForm 残留值
+      searchParamsRef.current = Object.keys(next).length > 0 ? next : {}
       setPinnedSearchUiEpoch((e) => e + 1)
 
       // 必须回第一页并清 TanStack 缓存：仅 reload 会停在旧页导致「有数据却搜空」
@@ -2273,8 +2274,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     setFuzzySearchKeyword('')
     const seed =
       typeof searchResetSeed === 'function' ? searchResetSeed() : searchResetSeed
+    // 必须用 {} 而非 undefined：undefined 会让 request 回退 getFieldsValue()，
+    // 钉住 Tab 看似未选中，但 lifecycle_stage/日期等仍随表单残留筛成空表。
     searchParamsRef.current =
-      seed && Object.keys(seed).length > 0 ? { ...seed } : undefined
+      seed && Object.keys(seed).length > 0 ? { ...seed } : {}
     setPinnedSearchUiEpoch((e) => e + 1)
     try {
       formRef.current?.resetFields?.()
@@ -2395,8 +2398,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     /**
-     * 取搜索表单值：`searchParamsRef.current` 可能是空对象（表示主动清空筛选），
-     * 仅在 `undefined` 时回退到 ProForm `getFieldsValue`，避免覆盖「清空」语义。
+     * 取搜索表单值：
+     * - `{}`：主动清空（重置/清关键词），禁止回退 ProForm，避免残留筛条件
+     * - `undefined`：尚未提交过筛选，可回退 ProForm（首屏/仅表单搜索）
+     * - 其它对象：钉住/高级搜索/模糊词已提交的条件
      */
     const formValues = formRef.current?.getFieldsValue() || {}
     const searchFormValues =

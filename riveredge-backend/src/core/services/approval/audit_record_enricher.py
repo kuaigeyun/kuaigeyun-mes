@@ -230,12 +230,23 @@ async def enrich_items(
             )
         )
     if viewer_id is not None:
-        out = await _attach_batch_viewer_actions(
-            tenant_id, entity_type, out, int(viewer_id)
-        )
-        out = await _attach_batch_flow_withdraw_revoke(
-            tenant_id, entity_type, out, int(viewer_id)
-        )
+        try:
+            out = await _attach_batch_viewer_actions(
+                tenant_id, entity_type, out, int(viewer_id)
+            )
+            out = await _attach_batch_flow_withdraw_revoke(
+                tenant_id, entity_type, out, int(viewer_id)
+            )
+        except Exception as exc:
+            # 审核门控失败不得拖垮业务列表（前端会把 422 显示成「暂无数据」）
+            from loguru import logger
+
+            logger.warning(
+                "audit enrich viewer gates skipped for {} ({} rows) — {}",
+                entity_type,
+                len(out),
+                exc,
+            )
     return out
 
 

@@ -139,6 +139,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 驳回上一级、驳回到制单人、reject_target、reject_options | `features/audit-reject-targets.md` |
 | 采购订单采购员空白、不含税金额不能改、金额单价互算 | `features/purchase-order-buyer-amount-edit.md` |
 | 采购申请到货日带入行、行到货日必填、required_date | `features/purchase-requisition-line-delivery-carry.md` |
+| 采购申请有权限列表空、角标有数、钉住草稿已驳回无单 | `features/purchase-requisition-lifecycle-pin-mode-a.md` |
 | 确认入库加载确认预览失败、仓库回显、loadConfirmPreviewFailed | `features/inbound-confirm-preview-warehouse-display.md` |
 | 可审人有委托无审核按钮、点审核误报没有权限、列表态未补齐待办、按钮提示待办人仍是上一节点、条件分支未确认就进特批 | `features/audit-hub-approve-button-visible.md` |
 | 审核弹窗流程预览连线偏移、生产偏移本地正常、Modal zoom transform | `features/audit-flow-preview-modal-transform.md` |
@@ -279,6 +280,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/audit-reject-targets.md` | 驳回上一级/制单人 reject_target | approval, UniAudit | 已交付 |
 | `features/purchase-order-buyer-amount-edit.md` | 采购订单采购员默认与金额单价互算 | mes-purchase | 已交付 |
 | `features/purchase-requisition-line-delivery-carry.md` | 采购申请表头到货日带入行且行必填 | mes-purchase | 已交付 |
+| `features/purchase-requisition-lifecycle-pin-mode-a.md` | 采购申请 Mode A 钉住草稿/驳回筛空 | mes-purchase | 已交付 |
 | `features/inbound-confirm-preview-warehouse-display.md` | 入库确认预览仓库走回显不拦确认 | mes-warehouse | 已交付 |
 | `features/modal-portal-click-isolation.md` | Modal Portal 点击不穿透底层 | modal / portal | 已交付 |
 | `features/audit-hub-approve-button-visible.md` | 审核弹窗可审人须有审核按钮 | approval | 已交付 |

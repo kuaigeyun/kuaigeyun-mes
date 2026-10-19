@@ -44144,6 +44144,18 @@ export default {
     '试流单研发项目支持关联或手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.description':
     '新建试流单时研发项目与产品固件、样品加工一致：可从列表选择项目，也可直接手填项目代号（无需先建项目档案）。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-list-audit-enrich-422-r01.title':
+    '采购申请列表不再因审批选边校验空白',
+  'pages.dashboard.updateLog.entries.purchase-requisition-list-audit-enrich-422-r01.description':
+    '列表嵌入审核门控时，单条缺「是否总经理特批」等选边不再把整页打成 422；前端不再误显示暂无数据（菜单角标仍有数字）。',
+  'pages.dashboard.updateLog.entries.unitable-reset-clear-search-params-r01.title':
+    '列表点重置后真正清空筛选',
+  'pages.dashboard.updateLog.entries.unitable-reset-clear-search-params-r01.description':
+    '重置不再回退到表单残留条件；避免钉住看似未选中却仍按旧生命周期/关键词筛成空表（同角色一人正常一人空白）。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-lifecycle-pin-mode-a-r01.title':
+    '采购申请草稿驳回钉住可筛出单据',
+  'pages.dashboard.updateLog.entries.purchase-requisition-lifecycle-pin-mode-a-r01.description':
+    '开启审核后生命周期主轴不展示草稿/驳回；钉住「草稿」「已驳回」改为按单据状态筛选，不再因阶段名为「—」导致列表空白（菜单角标仍有数字）。',
   'pages.dashboard.updateLog.entries.audit-recall-keep-initiator-branch-r01.title':
     '二级撤销审核后仍可再审',
   'pages.dashboard.updateLog.entries.audit-recall-keep-initiator-branch-r01.description':

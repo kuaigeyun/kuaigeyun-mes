@@ -378,27 +378,23 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         *,
         audit_required: bool,
     ) -> List[PurchaseRequisition]:
-        """按后端 lifecycle 计算结果筛选（与列表展示阶段一致，避免 status 精确匹配漏单）。"""
+        """按 lifecycle 钉住 Tab 筛选（Mode A 草稿/驳回走 status，勿比对「—」）。"""
         from apps.kuaizhizao.services.document_lifecycle_service import (
-            get_purchase_requisition_lifecycle,
-            normalize_purchase_requisition_lifecycle_filter,
+            match_purchase_requisition_lifecycle_filter,
         )
 
         if not reqs:
             return []
 
-        target = normalize_purchase_requisition_lifecycle_filter(lifecycle_stage)
-        matched: List[PurchaseRequisition] = []
-        for req in reqs:
-            lifecycle = get_purchase_requisition_lifecycle(
-                req, milestones=None, audit_required=audit_required
+        return [
+            req
+            for req in reqs
+            if match_purchase_requisition_lifecycle_filter(
+                req,
+                lifecycle_stage,
+                audit_required=audit_required,
             )
-            stage_name = normalize_purchase_requisition_lifecycle_filter(
-                lifecycle.get("current_stage_name"),
-            )
-            if stage_name == target:
-                matched.append(req)
-        return matched
+        ]
 
     @staticmethod
     def _resolve_list_order_by(order_by: Optional[str]) -> tuple[str, str]:
@@ -570,17 +566,27 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         enriched = await enrich_purchase_requisition_list_capabilities(tenant_id, reqs, result)
         from core.services.approval.audit_record_enricher import enrich_data_payload
+        from loguru import logger
 
-        return await enrich_data_payload(
-            tenant_id,
-            "purchase_request",
-            {
-                "data": [item.model_dump() for item in enriched],
-                "total": total,
-                "success": True,
-            },
-            viewer_id=viewer_id,
-        )
+        payload = {
+            "data": [item.model_dump() for item in enriched],
+            "total": total,
+            "success": True,
+        }
+        try:
+            return await enrich_data_payload(
+                tenant_id,
+                "purchase_request",
+                payload,
+                viewer_id=viewer_id,
+            )
+        except Exception as exc:
+            # 审批概况/选边校验失败时仍返回业务行，避免列表整页 422→前端空表
+            logger.warning(
+                "purchase_requisition list audit enrich failed — returning rows without viewer gates: {}",
+                exc,
+            )
+            return payload
 
     async def _recalc_conversion_status(
         self, tenant_id: int, req: PurchaseRequisition

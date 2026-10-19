@@ -8,11 +8,13 @@ from apps.kuaizhizao.services.document_lifecycle_service import (
     get_demand_lifecycle,
     get_incoming_inspection_lifecycle,
     get_purchase_order_lifecycle,
+    get_purchase_requisition_lifecycle,
     get_reporting_record_lifecycle,
     get_sales_delivery_lifecycle,
     get_sales_order_change_lifecycle,
     get_sales_order_lifecycle,
     get_shipment_notice_lifecycle,
+    match_purchase_requisition_lifecycle_filter,
 )
 
 
@@ -154,3 +156,26 @@ def test_order_change_rejected_shows_rejected():
     lc = get_sales_order_change_lifecycle("已驳回", "REJECTED")
     assert lc["current_stage_name"] == "已驳回"
     assert lc["status"] == "exception"
+
+
+def test_purchase_requisition_draft_pre_effective_shows_dash():
+    lc = get_purchase_requisition_lifecycle(
+        SimpleNamespace(status="草稿", review_status="PENDING"),
+        audit_required=True,
+    )
+    _assert_pre_effective(lc)
+    assert lc["flow_class"] == "draft"
+
+
+def test_purchase_requisition_list_filter_draft_and_rejected_not_by_dash():
+    """钉住「草稿/已驳回」须按 status 命中，不能比对 Mode A 的「—」。"""
+    draft = SimpleNamespace(status="草稿", review_status="PENDING")
+    rejected = SimpleNamespace(status="已驳回", review_status="REJECTED")
+    approved = SimpleNamespace(status="已通过", review_status="APPROVED")
+
+    assert match_purchase_requisition_lifecycle_filter(draft, "草稿", audit_required=True)
+    assert not match_purchase_requisition_lifecycle_filter(draft, "已驳回", audit_required=True)
+    assert match_purchase_requisition_lifecycle_filter(rejected, "已驳回", audit_required=True)
+    assert not match_purchase_requisition_lifecycle_filter(rejected, "草稿", audit_required=True)
+    assert match_purchase_requisition_lifecycle_filter(approved, "已通过", audit_required=True)
+    assert not match_purchase_requisition_lifecycle_filter(approved, "草稿", audit_required=True)
