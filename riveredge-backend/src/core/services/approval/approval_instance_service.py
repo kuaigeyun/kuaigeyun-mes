@@ -4162,7 +4162,8 @@ class ApprovalInstanceService:
         from_node: Optional[str] = None,
         to_node: Optional[str] = None,
         from_approver_id: Optional[int] = None,
-        to_approver_id: Optional[int] = None
+        to_approver_id: Optional[int] = None,
+        change_payload: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         创建审批历史记录
@@ -4177,6 +4178,7 @@ class ApprovalInstanceService:
             to_node: 目标节点
             from_approver_id: 原审批人ID
             to_approver_id: 新审批人ID
+            change_payload: 驳回落点、审核中改单等扩展明细
         """
         try:
             await ApprovalHistory.create(
@@ -4189,7 +4191,8 @@ class ApprovalInstanceService:
                 from_node=from_node,
                 to_node=to_node,
                 from_approver_id=from_approver_id,
-                to_approver_id=to_approver_id
+                to_approver_id=to_approver_id,
+                change_payload=change_payload,
             )
         except Exception as e:
             # 记录历史失败不影响审批操作

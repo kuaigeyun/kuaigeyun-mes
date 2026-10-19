@@ -38,7 +38,10 @@ import {
 } from '../../../../services/approvalProcess';
 import { CanvasPageTemplate } from '../../../../components/layout-templates/CanvasPageTemplate';
 import UniFlowNode from '../../../../components/common/uni-flow-node';
-import { CANVAS_GRID_REACTFLOW } from '../../../../components/layout-templates/constants';
+import {
+  CANVAS_GRID_REACTFLOW,
+  CANVAS_GRID_REACTFLOW_FRAMED_INNER,
+} from '../../../../components/layout-templates/constants';
 import {
   normalizeFlowGraph,
   normalizeNodeData,
@@ -408,7 +411,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
   );
 
   const canvas = (
-    <div style={{ width: '100%', height: '100%', ...CANVAS_GRID_REACTFLOW.style }}>
+    <div style={{ width: '100%', height: '100%', ...CANVAS_GRID_REACTFLOW_FRAMED_INNER }}>
       <ReactFlow
         nodes={flowNodes as any}
         edges={flowEdges}

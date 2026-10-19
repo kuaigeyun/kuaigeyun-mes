@@ -345,18 +345,28 @@ export const CANVAS_FLOW_GRAPH_GRID_STYLE = {
 /**
  * ReactFlow Background 组件的等价参数（供 FlowEditor/FlowView 使用）
  */
+/** ReactFlow 画布区样式（含描边，用于独立嵌入、非 CanvasPageTemplate framed） */
+export const CANVAS_GRID_REACTFLOW_STYLE: CSSProperties = {
+  backgroundColor: CANVAS_VISUAL_BASE.BACKGROUND_COLOR,
+  border: `1px solid ${CANVAS_VISUAL_BASE.BORDER_COLOR}`,
+  borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS,
+  boxSizing: 'border-box',
+  overflow: 'hidden',
+};
+
+/** CanvasPageTemplate framed 内层：仅背景与裁切，描边由外层 Card 承担，避免双线 */
+export const CANVAS_GRID_REACTFLOW_FRAMED_INNER: CSSProperties = {
+  backgroundColor: CANVAS_VISUAL_BASE.BACKGROUND_COLOR,
+  boxSizing: 'border-box',
+  overflow: 'hidden',
+};
+
 export const CANVAS_GRID_REACTFLOW = {
   variant: 'dots' as const,
   gap: CANVAS_VISUAL_BASE.DOT_GAP_PX,
   size: CANVAS_VISUAL_BASE.DOT_SIZE_PX,
   color: CANVAS_VISUAL_BASE.DOT_COLOR,
-  style: {
-    backgroundColor: CANVAS_VISUAL_BASE.BACKGROUND_COLOR,
-    border: `1px solid ${CANVAS_VISUAL_BASE.BORDER_COLOR}`,
-    borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS,
-    boxSizing: 'border-box' as const,
-    overflow: 'hidden' as const,
-  },
+  style: CANVAS_GRID_REACTFLOW_STYLE,
 } as const;
 
 /**

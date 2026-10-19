@@ -32211,6 +32211,10 @@ export default {
     '表单保存失败会提示原因',
   'pages.dashboard.updateLog.entries.form-modal-save-error-visible-r01.description':
     '新建编辑弹窗保存时，接口校验失败会弹出具体原因，不再出现点了保存却没有任何提示。',
+  'pages.dashboard.updateLog.entries.funide-oa-drawings-menu-to-doc-control-r01.title':
+    '2D/3D/模具图菜单归入文控资料',
+  'pages.dashboard.updateLog.entries.funide-oa-drawings-menu-to-doc-control-r01.description':
+    '福尼特OA 将「2D图」「3D图」「模具图及DFM」从研发电子/结构移至文控资料，排在交付物之后。',
   'pages.dashboard.updateLog.entries.funide-oa-firmware-release-date-locked-r01.title':
     '产品固件发布日期固定为当天',
   'pages.dashboard.updateLog.entries.funide-oa-firmware-release-date-locked-r01.description':
@@ -41108,6 +41112,9 @@ export default {
   'pages.approval.designer.organizeNodes': '整理节点',
   'pages.approval.designer.deleteNode': '删除节点',
   'pages.approval.designer.nodeConfig': '节点配置',
+  'pages.approval.designer.tab.approver': '审批人',
+  'pages.approval.designer.tab.actions': '审核动作',
+  'pages.approval.designer.tab.recallReject': '撤回驳回反审',
   'pages.approval.designer.field': '字段',
   'pages.approval.designer.operator': '关系',
   'pages.approval.designer.value': '数值',
@@ -44111,6 +44118,22 @@ export default {
   'components.uniAudit.urge': '催办',
   'components.uniAudit.recallOwnAction': '撤销审核',
   'components.uniAudit.submitterAwaitingOthers': '您为发起人，请等待当前节点审批人处理',
+  'pages.dashboard.updateLog.entries.approval-reject-previous-history-payload-r01.title':
+    '驳回到上一级不再报错',
+  'pages.dashboard.updateLog.entries.approval-reject-previous-history-payload-r01.description':
+    '修复多级审批选择驳回到上一级时，写入审批历史因缺少 change_payload 参数导致失败的问题。',
+  'pages.dashboard.updateLog.entries.canvas-page-template-single-border-r01.title':
+    '画板页双层框线合并为单层',
+  'pages.dashboard.updateLog.entries.canvas-page-template-single-border-r01.description':
+    '审批流等画板设计器去掉内层重复描边，画布外仅保留一层 Card 边框。',
+  'pages.dashboard.updateLog.entries.approval-designer-node-config-tabs-r01.title':
+    '审批流设计器节点配置分 Tab',
+  'pages.dashboard.updateLog.entries.approval-designer-node-config-tabs-r01.description':
+    '审批节点右侧配置按审批人、审核动作、撤回驳回反审分 Tab 展示，切换 Tab 不卸载字段，避免保存丢配置。',
+  'pages.dashboard.updateLog.entries.plm-change-toolbar-perm-r01.title':
+    '工程变更工作台工具栏按钮与权限对齐',
+  'pages.dashboard.updateLog.entries.plm-change-toolbar-perm-r01.description':
+    '修正变更资源码点号写法与缺失的新建/删除权限声明，定制与通用工程变更页工具栏在相同权限下按钮一致；批量删除鉴权改为 delete。',
   'pages.dashboard.updateLog.entries.audit-exec-action-badge-color-r01.title':
     '审核节点执行记录动作徽章颜色对齐语义',
   'pages.dashboard.updateLog.entries.audit-exec-action-badge-color-r01.description':

@@ -9,7 +9,7 @@ import {
   ProFormText,
   ProFormTreeSelect,
 } from '@ant-design/pro-components';
-import { Divider, theme } from 'antd';
+import { Tabs, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { searchUserDisplay } from '../../../../../services/user';
 import { formatUserDisplayLabel } from '../../../../../utils/userDisplay';
@@ -43,8 +43,7 @@ interface ApprovalNodeFormProps {
   conditionFieldOptions?: { label: string; value: string }[];
 }
 
-export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
-  const { t } = useTranslation();
+function ApprovalNodeApproverFields({ t }: { t: (key: string) => string }) {
   return (
     <>
       <ProFormSelect
@@ -153,6 +152,13 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
           return null;
         }}
       </ProFormDependency>
+    </>
+  );
+}
+
+function ApprovalNodeActionFields({ t }: { t: (key: string) => string }) {
+  return (
+    <>
       <ProFormSwitch name="allowEditDuringApproval" label={t('pages.approval.designer.allowEditDuringApproval')} />
       <ProFormDependency name={['allowEditDuringApproval']}>
         {({ allowEditDuringApproval }) =>
@@ -167,60 +173,6 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
       </ProFormDependency>
       <ProFormSwitch name="allowTransfer" label={t('pages.approval.designer.allowTransfer')} />
       <ProFormSwitch name="allowAddSign" label={t('pages.approval.designer.allowAddSign')} />
-      <Divider orientation="left" plain style={{ margin: '8px 0 4px' }}>
-        {t('pages.approval.designer.withdrawSection')}
-      </Divider>
-      <ProFormSwitch
-        name="allowSubmitterWithdraw"
-        label={t('pages.approval.designer.allowSubmitterWithdraw')}
-        initialValue
-      />
-      <ProFormSwitch
-        name="submitterWithdrawOnlyBeforeAnyApprove"
-        label={t('pages.approval.designer.submitterWithdrawOnlyBeforeAnyApprove')}
-      />
-      <ProFormSwitch
-        name="allowApproverRecall"
-        label={t('pages.approval.designer.allowApproverRecall')}
-      />
-      <Divider orientation="left" plain style={{ margin: '8px 0 4px' }}>
-        {t('pages.approval.designer.rejectSection')}
-      </Divider>
-      <ProFormCheckbox.Group
-        name="rejectAllowedTargets"
-        label={t('pages.approval.designer.rejectAllowedTargets')}
-        initialValue={['previous', 'submitter']}
-        options={[
-          { label: t('pages.approval.designer.rejectTargetPrevious'), value: 'previous' },
-          { label: t('pages.approval.designer.rejectTargetSubmitter'), value: 'submitter' },
-        ]}
-      />
-      <ProFormSelect
-        name="rejectDefaultTarget"
-        label={t('pages.approval.designer.rejectDefaultTarget')}
-        initialValue="previous"
-        options={[
-          { label: t('pages.approval.designer.rejectTargetPrevious'), value: 'previous' },
-          { label: t('pages.approval.designer.rejectTargetSubmitter'), value: 'submitter' },
-        ]}
-      />
-      <Divider orientation="left" plain style={{ margin: '8px 0 4px' }}>
-        {t('pages.approval.designer.revokeSection')}
-      </Divider>
-      <ProFormSwitch
-        name="allowRevokeAfterApproved"
-        label={t('pages.approval.designer.allowRevokeAfterApproved')}
-        initialValue
-      />
-      <ProFormSelect
-        name="revokeLanding"
-        label={t('pages.approval.designer.revokeLanding')}
-        initialValue="reopen_final"
-        options={[
-          { label: t('pages.approval.designer.revokeLandingReopenFinal'), value: 'reopen_final' },
-          { label: t('pages.approval.designer.revokeLandingToDraft'), value: 'to_draft' },
-        ]}
-      />
       <ProFormSelect
         name="emptyApproverPolicy"
         label={t('pages.approval.designer.emptyApproverPolicy')}
@@ -241,6 +193,85 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
         tooltip={t('pages.approval.designer.timeoutHoursTip')}
       />
     </>
+  );
+}
+
+function ApprovalNodeRecallRejectFields({ t }: { t: (key: string) => string }) {
+  return (
+    <>
+      <ProFormSwitch
+        name="allowSubmitterWithdraw"
+        label={t('pages.approval.designer.allowSubmitterWithdraw')}
+        initialValue
+      />
+      <ProFormSwitch
+        name="submitterWithdrawOnlyBeforeAnyApprove"
+        label={t('pages.approval.designer.submitterWithdrawOnlyBeforeAnyApprove')}
+      />
+      <ProFormSwitch
+        name="allowApproverRecall"
+        label={t('pages.approval.designer.allowApproverRecall')}
+      />
+      <ProFormCheckbox.Group
+        name="rejectAllowedTargets"
+        label={t('pages.approval.designer.rejectAllowedTargets')}
+        initialValue={['previous', 'submitter']}
+        options={[
+          { label: t('pages.approval.designer.rejectTargetPrevious'), value: 'previous' },
+          { label: t('pages.approval.designer.rejectTargetSubmitter'), value: 'submitter' },
+        ]}
+      />
+      <ProFormSelect
+        name="rejectDefaultTarget"
+        label={t('pages.approval.designer.rejectDefaultTarget')}
+        initialValue="previous"
+        options={[
+          { label: t('pages.approval.designer.rejectTargetPrevious'), value: 'previous' },
+          { label: t('pages.approval.designer.rejectTargetSubmitter'), value: 'submitter' },
+        ]}
+      />
+      <ProFormSwitch
+        name="allowRevokeAfterApproved"
+        label={t('pages.approval.designer.allowRevokeAfterApproved')}
+        initialValue
+      />
+      <ProFormSelect
+        name="revokeLanding"
+        label={t('pages.approval.designer.revokeLanding')}
+        initialValue="reopen_final"
+        options={[
+          { label: t('pages.approval.designer.revokeLandingReopenFinal'), value: 'reopen_final' },
+          { label: t('pages.approval.designer.revokeLandingToDraft'), value: 'to_draft' },
+        ]}
+      />
+    </>
+  );
+}
+
+export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
+  const { t } = useTranslation();
+  return (
+    <Tabs
+      destroyOnHidden={false}
+      size="small"
+      items={[
+        {
+          key: 'approver',
+          label: t('pages.approval.designer.tab.approver'),
+          children: <ApprovalNodeApproverFields t={t} />,
+        },
+        {
+          key: 'actions',
+          label: t('pages.approval.designer.tab.actions'),
+          children: <ApprovalNodeActionFields t={t} />,
+        },
+        {
+          key: 'recallReject',
+          label: t('pages.approval.designer.tab.recallReject'),
+          children: <ApprovalNodeRecallRejectFields t={t} />,
+        },
+      ]}
+    />
   );
 };
 
