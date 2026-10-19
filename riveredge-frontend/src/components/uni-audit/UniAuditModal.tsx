@@ -1030,10 +1030,10 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
       if (hasMyPendingTask && caps.allow_transfer) {
         items.push({ action: 'transfer', title: t('components.uniAudit.transfer'), canExecute: true });
       }
-      if (hasMyPendingTask && caps.allow_add_sign) {
+      if ((hasMyPendingTask || adminOpen) && caps.allow_add_sign) {
         items.push({ action: 'add_sign', title: t('components.uniAudit.addSign'), canExecute: true });
       }
-      if (hasMyPendingTask) {
+      if (hasMyPendingTask || adminOpen) {
         items.push({ action: 'delegate', title: t('components.uniAudit.delegate'), canExecute: true });
       }
       if (isSubmitter) {
