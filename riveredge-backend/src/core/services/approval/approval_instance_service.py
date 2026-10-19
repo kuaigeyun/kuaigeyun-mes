@@ -291,7 +291,10 @@ class ApprovalInstanceService:
                         )
                         return True
                     await ApprovalInstanceService._create_node_tasks(
-                        tenant_id, approval_instance, current_node
+                        tenant_id,
+                        approval_instance,
+                        current_node,
+                        on_missing_branch="stop",
                     )
                     return True
 
@@ -304,7 +307,10 @@ class ApprovalInstanceService:
 
         start_id = start_node.get("id")
         next_node = ApprovalInstanceService._get_next_node(
-            nodes, start_id, instance=approval_instance
+            nodes,
+            start_id,
+            instance=approval_instance,
+            on_missing_branch="stop",
         )
         if not next_node:
             approval_instance.status = "approved"
@@ -332,7 +338,10 @@ class ApprovalInstanceService:
         approval_instance.current_node = next_node.get("id")
         await approval_instance.save()
         await ApprovalInstanceService._create_node_tasks(
-            tenant_id, approval_instance, next_node
+            tenant_id,
+            approval_instance,
+            next_node,
+            on_missing_branch="stop",
         )
         logger.info(
             "审批实例已同步启动: {} 当前节点: {}",
@@ -1032,6 +1041,9 @@ class ApprovalInstanceService:
                 if eligible_ids:
                     # 当前节点上不在可审名单的残留 pending（非加签）会导致按钮文案仍指向上一节点人
                     expected = {int(x) for x in eligible_ids}
+                    # 撤回本级会把操作人写成 current_approver；即便汇报线解析名单不含他，也不得当残留清掉
+                    if instance.current_approver_id is not None:
+                        expected.add(int(instance.current_approver_id))
                     stale_pending = [
                         t
                         for t in tasks
@@ -1837,8 +1849,11 @@ class ApprovalInstanceService:
 
         instance.current_node = recall_node_id
         instance.current_approver_id = int(operator_id)
-        # 撤回越过条件/空审批人跳过节点后须清选边，避免再审仍沿用旧分支
-        instance.data = ApprovalInstanceService._strip_branch_decision_keys(instance.data)
+        # 仅清撤回节点之后、需前序审批人再选的边；发起人提交时选的 initiator 分支须保留，
+        # 否则打开审核概况 bootstrap 撞条件节点会报「发起人须选定…」并把弹窗显示成未绑定。
+        instance.data = ApprovalInstanceService._strip_branch_keys_after_recall(
+            instance.data, graph, recall_node_id
+        )
         await instance.save()
 
         recall_node = get_node_config(graph, recall_node_id)
@@ -2591,9 +2606,12 @@ class ApprovalInstanceService:
         node: dict,
         *,
         route_action_by: Optional[int] = None,
+        on_missing_branch: str = "raise",
     ) -> List[ApprovalTask]:
         """
         为节点创建审批任务。start/end 不建任务；condition 不建任务，按条件选边后递归下一节点；cc 不建任务，发通知并推进到下一节点再递归。
+
+        on_missing_branch 传给条件选边：bootstrap 用 stop，审核推进用 raise。
         """
         node_type = node.get("type") or (node.get("data") or {}).get("type")
         node_id = node.get("id")
@@ -2605,9 +2623,20 @@ class ApprovalInstanceService:
             # 条件节点：不创建任务，按 instance.data 与节点 conditions 选一条出边，推进到下一节点再递归
             nodes_config = (instance.process.nodes or {}) if instance.process else {}
             next_node = ApprovalInstanceService._get_next_node(
-                nodes_config, node_id, instance=instance
+                nodes_config,
+                node_id,
+                instance=instance,
+                on_missing_branch=on_missing_branch,
             )
             if not next_node:
+                if on_missing_branch == "stop":
+                    logger.warning(
+                        "条件节点 {} 暂无可用出边（缺选边或未命中），停在本节点等待人工选择",
+                        node_id,
+                    )
+                    instance.current_node = str(node_id) if node_id else instance.current_node
+                    await instance.save()
+                    return []
                 instance.status = "approved"
                 instance.completed_at = resolve_business_datetime()
                 instance.current_node = None
@@ -2641,7 +2670,11 @@ class ApprovalInstanceService:
             instance.current_node = next_node.get("id")
             await instance.save()
             return await ApprovalInstanceService._create_node_tasks(
-                tenant_id, instance, next_node, route_action_by=route_action_by
+                tenant_id,
+                instance,
+                next_node,
+                route_action_by=route_action_by,
+                on_missing_branch=on_missing_branch,
             )
 
         if node_type == "cc":
@@ -2679,7 +2712,12 @@ class ApprovalInstanceService:
                 return []
             instance.current_node = next_node.get("id")
             await instance.save()
-            return await ApprovalInstanceService._create_node_tasks(tenant_id, instance, next_node)
+            return await ApprovalInstanceService._create_node_tasks(
+                tenant_id,
+                instance,
+                next_node,
+                on_missing_branch=on_missing_branch,
+            )
 
         node_data = node.get("data") if isinstance(node.get("data"), dict) else {}
         approver_type = str(
@@ -2722,7 +2760,10 @@ class ApprovalInstanceService:
                     resolve_err,
                 )
                 return await ApprovalInstanceService._auto_pass_empty_approval_node(
-                    tenant_id, instance, node
+                    tenant_id,
+                    instance,
+                    node,
+                    on_missing_branch=on_missing_branch,
                 )
             if empty_policy == "escalate_admin":
                 approvers = await ApprovalInstanceService._resolve_tenant_admin_approver_ids(
@@ -2764,7 +2805,10 @@ class ApprovalInstanceService:
                     node_id,
                 )
                 return await ApprovalInstanceService._auto_pass_empty_approval_node(
-                    tenant_id, instance, node
+                    tenant_id,
+                    instance,
+                    node,
+                    on_missing_branch=on_missing_branch,
                 )
             if empty_policy == "escalate_admin":
                 approvers = await ApprovalInstanceService._resolve_tenant_admin_approver_ids(
@@ -2800,6 +2844,8 @@ class ApprovalInstanceService:
         tenant_id: int,
         instance: ApprovalInstance,
         node: dict,
+        *,
+        on_missing_branch: str = "raise",
     ) -> List[ApprovalTask]:
         """空审批人且策略为 auto_pass：记历史并推进到下一节点（或直接通过）。"""
         node_id = node.get("id")
@@ -2816,8 +2862,11 @@ class ApprovalInstanceService:
             instance.process.nodes if instance.process else {},
             node_id,
             instance=instance,
+            on_missing_branch=on_missing_branch,
         )
         if not next_node:
+            if on_missing_branch == "stop":
+                return []
             instance.status = "approved"
             instance.completed_at = resolve_business_datetime()
             instance.current_node = None
@@ -2836,7 +2885,12 @@ class ApprovalInstanceService:
             return []
         instance.current_node = next_node.get("id")
         await instance.save()
-        return await ApprovalInstanceService._create_node_tasks(tenant_id, instance, next_node)
+        return await ApprovalInstanceService._create_node_tasks(
+            tenant_id,
+            instance,
+            next_node,
+            on_missing_branch=on_missing_branch,
+        )
 
     @staticmethod
     async def _sync_node_approver_tasks(
@@ -3079,6 +3133,57 @@ class ApprovalInstanceService:
         for key in list(out.keys()):
             sk = str(key)
             if sk.startswith("__branch_true_") or sk.startswith("__branch_index_"):
+                out.pop(key, None)
+        return out
+
+    @staticmethod
+    def _strip_branch_keys_after_recall(
+        data: Optional[Dict[str, Any]],
+        graph: Dict[str, Any],
+        recall_node_id: str,
+    ) -> Dict[str, Any]:
+        """撤回本级后清选边：保留发起人提交时的 initiator 分支，只清撤回点之后需重选的边。"""
+        out: Dict[str, Any] = dict(data or {})
+        out.pop(ApprovalInstanceService.BRANCH_DECIDED_BY_KEY, None)
+        downstream = ApprovalInstanceService._graph_node_ids_reachable_from(
+            graph, str(recall_node_id or "")
+        )
+        for key in list(out.keys()):
+            sk = str(key)
+            cond_id = ""
+            if sk.startswith("__branch_index_"):
+                cond_id = sk[len("__branch_index_") :]
+            elif sk.startswith("__branch_true_"):
+                cond_id = sk[len("__branch_true_") :]
+            else:
+                continue
+            if not cond_id:
+                out.pop(key, None)
+                continue
+            node = next(
+                (
+                    n
+                    for n in (graph.get("nodes") or [])
+                    if isinstance(n, dict) and str(n.get("id") or "") == cond_id
+                ),
+                None,
+            )
+            keep_initiator = False
+            if node and str(node.get("type") or "") == "condition":
+                edges = [
+                    e
+                    for e in (graph.get("edges") or [])
+                    if isinstance(e, dict) and str(e.get("source") or "") == cond_id
+                ]
+                route_mode = ApprovalInstanceService._condition_node_route_mode(
+                    node, out_edge_count=len(edges)
+                )
+                # 发起人提交时已选定，撤回本级不得清掉，否则流程卡死在条件节点
+                keep_initiator = route_mode == "initiator"
+            if keep_initiator:
+                continue
+            # 未知键、或撤回点之后的 previous_approver/formula 选边一律清掉
+            if (not node) or cond_id in downstream:
                 out.pop(key, None)
         return out
 
@@ -4142,9 +4247,15 @@ class ApprovalInstanceService:
         nodes: dict,
         current_node_id: Optional[str],
         instance: Optional[ApprovalInstance] = None,
+        *,
+        on_missing_branch: str = "raise",
     ) -> Optional[dict]:
         """
         获取下一个节点。支持 ProFlow 格式；当前节点为 condition 时按 instance.data 与 conditions 选边。
+
+        on_missing_branch:
+          - raise：缺选边时抛 ValidationError（审核执行路径）
+          - stop：缺选边时返回 None（bootstrap 补齐路径，禁止把概况接口打挂）
         """
         if not nodes or not current_node_id:
             return None
@@ -4169,6 +4280,8 @@ class ApprovalInstanceService:
                     inst_data, str(current_node_id), len(out_edges)
                 )
                 if edge_index is None:
+                    if on_missing_branch == "stop":
+                        return None
                     if route_mode == "previous_approver":
                         raise ValidationError(
                             f"请先由前序审批人选择「{cond_label}」后再继续，禁止默认跳转"
@@ -4181,6 +4294,8 @@ class ApprovalInstanceService:
                 conditions = data.get("conditions") or data.get("condition_list") or []
                 edge_index = ApprovalInstanceService._evaluate_conditions(instance, conditions)
                 if edge_index < 0 or edge_index >= len(out_edges):
+                    if on_missing_branch == "stop":
+                        return None
                     raise ValidationError(
                         f"条件节点「{cond_label}」未命中任何规则且未配置其余分支，流程无法继续"
                     )
@@ -4193,6 +4308,8 @@ class ApprovalInstanceService:
                     conditions = data.get("conditions") or data.get("condition_list") or []
                     edge_index = ApprovalInstanceService._evaluate_conditions(instance, conditions)
                     if edge_index < 0 or edge_index >= len(out_edges):
+                        if on_missing_branch == "stop":
+                            return None
                         raise ValidationError(
                             f"条件节点「{cond_label}」无法确定出边，禁止默认走第一条"
                         )

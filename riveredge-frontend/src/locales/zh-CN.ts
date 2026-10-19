@@ -5582,6 +5582,7 @@ export default {
   'app.kuaiplm.sampleProcess.createButton': '新建样品加工',
   'app.kuaiplm.sampleProcess.fields.code': '申请单号',
   'app.kuaiplm.sampleProcess.fields.project': '研发项目',
+  'app.kuaiplm.sampleProcess.fields.projectPlaceholder': '可选，选择项目或手填项目代号',
   'app.kuaiplm.sampleProcess.fields.requestKind': '申请种类',
   'app.kuaiplm.sampleProcess.fields.title': '标题',
   'app.kuaiplm.sampleProcess.fields.materialCode': '物料编码',
@@ -5619,6 +5620,7 @@ export default {
   'app.kuaiplm.materialReview.editTitle': '编辑物料评审',
   'app.kuaiplm.materialReview.fields.code': '评审单号',
   'app.kuaiplm.materialReview.fields.project': '研发项目',
+  'app.kuaiplm.materialReview.fields.projectPlaceholder': '可选，选择项目或手填项目代号',
   'app.kuaiplm.materialReview.fields.title': '标题',
   'app.kuaiplm.materialReview.fields.lineCount': '物料行数',
   'app.kuaiplm.materialReview.fields.lines': '评审物料',
@@ -5666,6 +5668,7 @@ export default {
   'app.kuaiplm.bomCollab.capabilities.clerkEntered': '录入',
   'app.kuaiplm.bomCollab.fields.code': '协同单号',
   'app.kuaiplm.bomCollab.fields.project': '研发项目',
+  'app.kuaiplm.bomCollab.fields.projectPlaceholder': '可选，选择项目或手填项目代号',
   'app.kuaiplm.bomCollab.fields.title': '标题',
   'app.kuaiplm.bomCollab.fields.electronics': '分区一',
   'app.kuaiplm.bomCollab.fields.structure': '分区二',
@@ -5742,6 +5745,7 @@ export default {
   'app.kuaiplm.moldSample.createButton': '新建开模打样',
   'app.kuaiplm.moldSample.fields.code': '合同/订单单号',
   'app.kuaiplm.moldSample.fields.project': '研发项目',
+  'app.kuaiplm.moldSample.fields.projectPlaceholder': '可选，选择项目或手填项目代号',
   'app.kuaiplm.moldSample.fields.docKind': '单据种类',
   'app.kuaiplm.moldSample.fields.title': '标题',
   'app.kuaiplm.moldSample.fields.contractNo': '外部合同号',
@@ -5834,6 +5838,7 @@ export default {
   'app.kuaiplm.ecn.title': '工程变更',
   'app.kuaiplm.ecn.fields.code': '变更单号',
   'app.kuaiplm.ecn.fields.project': '研发项目',
+  'app.kuaiplm.ecn.fields.projectPlaceholder': '可选，选择项目或手填项目代号',
   'app.kuaiplm.ecn.fields.changeKind': '更改种类',
   'app.kuaiplm.ecn.fields.entrySource': '发起类型',
   'app.kuaiplm.menu.prototype-build-sheets': '样机制作书',
@@ -5841,6 +5846,7 @@ export default {
   'app.kuaiplm.prototypeBuildSheet.createButton': '新建样机制作书',
   'app.kuaiplm.prototypeBuildSheet.fields.code': '单号',
   'app.kuaiplm.prototypeBuildSheet.fields.project': '项目',
+  'app.kuaiplm.prototypeBuildSheet.fields.projectPlaceholder': '可选，选择项目或手填项目代号',
   'app.kuaiplm.prototypeBuildSheet.fields.round': '样机轮次',
   'app.kuaiplm.prototypeBuildSheet.fields.title': '标题',
   'app.kuaiplm.prototypeBuildSheet.fields.projectRequirements': '项目相关要求',
@@ -6222,6 +6228,7 @@ export default {
   'app.kuaiplm.rdDeliverables.messages.deleteOnlyPending':
     '仅待提交或已驳回的交付物可删除；已提交或已有发布履历的请升版',
   'app.kuaiplm.rdDeliverables.form.projectOptional': '关联研发项目（可选）',
+  'app.kuaiplm.rdDeliverables.form.projectPlaceholder': '可选，选择项目或手填项目代号',
   'app.kuaiplm.rdDeliverables.form.projectCode': '项目代号',
   'app.kuaiplm.rdDeliverables.form.projectCodeRequired': '无项目归档时须填写项目代号',
   'app.kuaiplm.rdDeliverables.form.projectCodePlaceholder': '用于软件规格等文件命名',
@@ -44125,6 +44132,10 @@ export default {
   'components.uniAudit.urge': '催办',
   'components.uniAudit.recallOwnAction': '撤销审核',
   'components.uniAudit.submitterAwaitingOthers': '您为发起人，请等待当前节点审批人处理',
+  'pages.dashboard.updateLog.entries.kuaiplm-design-docs-optional-project-title-first-r01.title':
+    '快研发设计类单据统一标题优先与可选项目',
+  'pages.dashboard.updateLog.entries.kuaiplm-design-docs-optional-project-title-first-r01.description':
+    '物料评审、打样订单、BOM 协同、样机制作书、样品加工、工程变更与交付物等新建表单标题排在最前；研发项目可选，支持选择项目或手填项目代号。',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-optional-project-title-first-r01.title':
     '试流单研发项目改为可选且标题优先',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-optional-project-title-first-r01.description':
@@ -44133,6 +44144,10 @@ export default {
     '试流单研发项目支持关联或手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.description':
     '新建试流单时研发项目与产品固件、样品加工一致：可从列表选择项目，也可直接手填项目代号（无需先建项目档案）。',
+  'pages.dashboard.updateLog.entries.audit-recall-keep-initiator-branch-r01.title':
+    '二级撤销审核后仍可再审',
+  'pages.dashboard.updateLog.entries.audit-recall-keep-initiator-branch-r01.description':
+    '撤回本级保留发起人已选的「是否总经理特批」等分支；不再误清撤回人待办；打开审核概况时缺选边不会把弹窗显示成未绑定流程。',
   'pages.dashboard.updateLog.entries.audit-revoke-reopen-keep-nodes-r01.title':
     '多级审批撤销后保留流程图节点',
   'pages.dashboard.updateLog.entries.audit-revoke-reopen-keep-nodes-r01.description':
