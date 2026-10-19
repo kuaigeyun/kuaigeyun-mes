@@ -267,6 +267,24 @@ class PermissionRegistryService:
                 order[norm] = spec.manifest_index
         return order
 
+    @classmethod
+    def collect_definitions_for_app(cls, app_code: str) -> dict[str, PermissionDefinition]:
+        """仅聚合单个应用 manifest（及该应用引用回显）的权限定义。
+
+        供启用/菜单同步热路径使用；禁止在此路径再走全租户 collect_definitions。
+        """
+        code = (app_code or "").strip().lower()
+        if not code:
+            return {}
+        enabled = {code}
+        definitions: dict[str, PermissionDefinition] = {}
+        for item in cls._load_manifest_permissions(enabled_apps=enabled):
+            definitions[item.code] = item
+        for item in cls._load_reference_display_permissions(enabled_apps=enabled):
+            if item.code not in definitions:
+                definitions[item.code] = item
+        return definitions
+
     @staticmethod
     def _load_manifest_permissions(enabled_apps: set[str]) -> list[PermissionDefinition]:
         out: dict[str, PermissionDefinition] = {}

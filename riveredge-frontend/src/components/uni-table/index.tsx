@@ -163,6 +163,7 @@ import {
   isUniTableStatusBadgeColumn,
   resolveUniTableAuditStackedColumnWidth,
   resolveUniTableDetailProgressColumnWidth,
+  resolveUniTableAuditPhaseColumnWidth,
   resolveUniTableLifecycleColumnWidth,
   resolveUniTableMarkerBadgeColumnWidth,
   resolveUniTableProgressColumnWidth,
@@ -670,7 +671,14 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 禁止仅用本回调打开第二个导入弹窗。
    */
   /** 返回 false 表示校验/导入未成功，保留导入弹窗 */
-  onImport?: (data: any[][]) => void | boolean | Promise<void | boolean>
+  onImport?: (
+    data: any[][],
+    context?: import('../uni-import/uni-import-duplicate-types').UniImportCommitContext,
+  ) => void | boolean | Promise<void | boolean>
+  /**
+   * 导入重复键策略（编码/单号等）：预检弹窗可选更新、跳过、遇重复失败
+   */
+  importDuplicateConfig?: import('../uni-import/uni-import-duplicate-types').UniImportDuplicateConfig
   /**
    * 导入入库前预检（UniImport 预览弹窗内调用；返回 errors 时禁止确认入库）
    */
@@ -1184,6 +1192,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   showImportButton = true,
   onImport,
   onImportPrecheck,
+  importDuplicateConfig,
   importHeaders,
   importExampleRow,
   importColumnOptions,
@@ -1674,7 +1683,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       // 单位列：主数据单位目录为唯一真源（禁止 DictionaryLabel "unit"，该码不存在会渲染空串）
       // ProTable render 首参是已渲染 dom，须从 record 取真值（否则 String(ReactNode)=[object Object]）
-      const unitFields = ['material_unit', 'unit', 'baseUnit', 'base_unit'];
+      const unitFields = [
+        'material_unit',
+        'unit',
+        'baseUnit',
+        'base_unit',
+        'product_unit',
+        'productUnit',
+      ];
       if (typeof col.dataIndex === 'string' && unitFields.includes(col.dataIndex) && !col.render) {
         const dataIndex = col.dataIndex
         const unitWidth = typeof col.width === 'number' ? col.width : 80
@@ -1714,13 +1730,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           uniTableKeepWidth: true,
         }
       }
-      /** 审核状态列：与 lifecycle 同宽，屏蔽页面手写 width 漂移 */
+      /** 审核状态列：四字「待我审核 / 您已审核」，屏蔽页面手写 width 漂移 */
       if (isUniTableAuditPhaseColumn(col)) {
         const { width: _w, minWidth: _mw, sorter: _sorter, defaultSortOrder: _dso, ...auditRest } = col
         return {
           ...auditRest,
-          width: resolveUniTableLifecycleColumnWidth(),
-          minWidth: resolveUniTableLifecycleColumnWidth(),
+          width: resolveUniTableAuditPhaseColumnWidth(),
+          minWidth: resolveUniTableAuditPhaseColumnWidth(),
           resizable: false,
           align: 'center' as const,
           uniTableKeepWidth: true,
@@ -4372,9 +4388,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           <LazyUniImport
             visible={importModalVisible}
             onCancel={() => setImportModalVisible(false)}
-            onConfirm={async (data) => {
+            onConfirm={async (data, context) => {
               // 必须 await：否则校验失败/接口抛错会被当成成功立刻关窗，表现为「点确认无反应」
-              const result = await Promise.resolve(onImport(data))
+              const result = await Promise.resolve(onImport(data, context))
               if (result === false) return false
               setImportModalVisible(false)
               void reloadWithTanstackCacheBust()
@@ -4395,6 +4411,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             onRelationImportSubmit={onRelationImportSubmit}
             templateDocumentName={importTemplateDocumentName}
             onImportPrecheck={onImportPrecheck}
+            importDuplicateConfig={importDuplicateConfig}
           />
         </Suspense>
       )}

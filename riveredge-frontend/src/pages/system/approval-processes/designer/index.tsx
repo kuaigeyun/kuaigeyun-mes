@@ -38,13 +38,21 @@ import {
 } from '../../../../services/approvalProcess';
 import { CanvasPageTemplate } from '../../../../components/layout-templates/CanvasPageTemplate';
 import UniFlowNode from '../../../../components/common/uni-flow-node';
-import { CANVAS_GRID_REACTFLOW } from '../../../../components/layout-templates/constants';
+import {
+  CANVAS_GRID_REACTFLOW,
+  CANVAS_GRID_REACTFLOW_FRAMED_INNER,
+} from '../../../../components/layout-templates/constants';
 import {
   normalizeFlowGraph,
   normalizeNodeData,
   nodeDataToFormValues,
   validateFlowGraph,
 } from '../../../../types/approvalFlowSchema';
+import {
+  APPROVAL_FLOW_EDGE_STYLE,
+  applyVerticalLayout,
+  enrichApprovalFlowGraph,
+} from '../../../../utils/approvalFlowLayout';
 import {
   ApprovalNodeForm,
   CcNodeForm,
@@ -53,107 +61,6 @@ import {
 } from './properties/NodePropertyForms';
 
 const { useToken } = theme;
-
-/** 垂直布局常量 */
-const LAYOUT_CENTER_X = 280;
-const LAYOUT_BASE_Y = 60;
-const LAYOUT_GAP = 120;
-const LAYOUT_BRANCH_GAP = 48;
-const BRANCH_COLUMN_WIDTH = 200;
-
-const NODE_WIDTH_BY_TYPE: Record<string, number> = {
-  start: 100,
-  end: 100,
-  approval: 200,
-  cc: 200,
-  condition: 160,
-};
-
-function getNodeLayoutWidth(node: Node): number {
-  return NODE_WIDTH_BY_TYPE[node.type as string] ?? 200;
-}
-
-function getSubtreeFrom(nodeId: string, edges: Edge[]): Set<string> {
-  const out = new Set<string>();
-  const queue = [nodeId];
-  while (queue.length > 0) {
-    const curr = queue.shift()!;
-    edges.filter((e) => e.source === curr).forEach((e) => {
-      if (!out.has(e.target)) {
-        out.add(e.target);
-        queue.push(e.target);
-      }
-    });
-  }
-  return out;
-}
-
-function getConditionIds(edges: Edge[]): Set<string> {
-  const outCount: Record<string, number> = {};
-  edges.forEach((e) => { outCount[e.source] = (outCount[e.source] || 0) + 1; });
-  const ids = new Set<string>();
-  Object.keys(outCount).forEach((id) => { if (outCount[id] > 1) ids.add(id); });
-  return ids;
-}
-
-function getLayersAndBranches(edges: Edge[]): { layers: string[][]; branchIndex: Map<string, number> } {
-  const conditionIds = getConditionIds(edges);
-  const branchIndex = new Map<string, number>();
-  branchIndex.set('start', 0);
-  const layers: string[][] = [['start']];
-  const seen = new Set<string>(['start']);
-  let i = 0;
-  while (i < layers.length) {
-    const curr = layers[i];
-    const nextIds: string[] = [];
-    for (const src of curr) {
-      if (src === 'end') continue;
-      const outEdges = edges.filter((e) => e.source === src);
-      outEdges.forEach((e, edgeIdx) => {
-        const t = e.target;
-        if (!seen.has(t)) {
-          seen.add(t);
-          nextIds.push(t);
-          if (conditionIds.has(src)) branchIndex.set(t, edgeIdx);
-          else branchIndex.set(t, branchIndex.get(src) || 0);
-        }
-      });
-    }
-    if (nextIds.length > 0) layers.push(nextIds);
-    i++;
-  }
-  return { layers, branchIndex };
-}
-
-function applyVerticalLayout(nodes: Node[], edges: Edge[]): Node[] {
-  const { layers, branchIndex } = getLayersAndBranches(edges);
-  const conditionIds = getConditionIds(edges);
-  const allIds = new Set(nodes.map((n) => n.id));
-  const inLayers = new Set(layers.flat());
-  const missing = [...allIds].filter((id) => !inLayers.has(id));
-  if (missing.length > 0) {
-    const endLayerIndex = layers.findIndex((arr) => arr.includes('end'));
-    if (endLayerIndex >= 0) layers.splice(endLayerIndex, 0, missing);
-    else layers.push(missing);
-    missing.forEach((id) => branchIndex.set(id, 0));
-  }
-  const idToLayer = new Map<string, number>();
-  layers.forEach((layer, layerIdx) => { layer.forEach((id) => idToLayer.set(id, layerIdx)); });
-  const maxBranch = branchIndex.size > 0 ? Math.max(...Array.from(branchIndex.values())) : 0;
-  const numBranches = Math.max(1, maxBranch + 1);
-  const totalBranchWidth = numBranches * BRANCH_COLUMN_WIDTH + (numBranches - 1) * LAYOUT_BRANCH_GAP;
-  const branchCenterX = (b: number) => LAYOUT_CENTER_X - totalBranchWidth / 2 + b * (BRANCH_COLUMN_WIDTH + LAYOUT_BRANCH_GAP) + BRANCH_COLUMN_WIDTH / 2;
-  const inAnyConditionSubtree = new Set<string>();
-  conditionIds.forEach((cid) => { getSubtreeFrom(cid, edges).forEach((id) => inAnyConditionSubtree.add(id)); });
-  return nodes.map((node) => {
-    const layerIndex = idToLayer.get(node.id) ?? layers.length;
-    const y = LAYOUT_BASE_Y + layerIndex * LAYOUT_GAP;
-    const w = getNodeLayoutWidth(node);
-    const onAxis = node.id === 'start' || node.id === 'end' || conditionIds.has(node.id) || !inAnyConditionSubtree.has(node.id);
-    const x = onAxis ? LAYOUT_CENTER_X - w / 2 : branchCenterX(branchIndex.get(node.id) ?? 0) - w / 2;
-    return { ...node, position: { x, y } };
-  });
-}
 
 const ApprovalProcessDesignerPage: React.FC = () => {
   const { t } = useTranslation();
@@ -219,9 +126,18 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       });
       setNodeDataMap(initialDataMap);
 
-      const normalizedEdges = edgesData.map((e, i) => ({ ...e, id: e.id || `e-${e.source}-${e.target}-${i}`, type: 'default' }));
-      setNodes(applyVerticalLayout(nodesData, normalizedEdges) as any);
-      setEdges(normalizedEdges);
+      const normalizedEdges = edgesData.map((e, i) => ({
+        ...e,
+        id: e.id || `e-${e.source}-${e.target}-${i}`,
+        type: e.type || 'default',
+      }));
+      const { nodes: laidOutNodes, edges: laidOutEdges } = enrichApprovalFlowGraph(
+        nodesData as Node[],
+        normalizedEdges as Edge[],
+        { relayout: true },
+      );
+      setNodes(laidOutNodes as any);
+      setEdges(laidOutEdges as any);
     } catch (error: any) {
       messageApi.error(error.message || t('common.loadFailed'));
       navigate('/system/approval-processes');
@@ -246,11 +162,13 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     const outEdges = edges.filter((e) => e.source === sourceNodeId);
     let newEdges = edges.filter((e) => e.source !== sourceNodeId);
     newEdges.push({ id: `e-${sourceNodeId}-${newId}`, source: sourceNodeId, target: newId, type: 'default' });
-    outEdges.forEach((e, i) => { newEdges.push({ id: `e-${newId}-${e.target}-${i}`, source: newId, target: e.target, type: 'default' }); });
+    outEdges.forEach((e, i) => {
+      newEdges.push({ id: `e-${newId}-${e.target}-${i}`, source: newId, target: e.target, type: 'default' });
+    });
     
     setNodeDataMap(prev => ({ ...prev, [newId]: { label } }));
     const newNodes = [...nodes, newNode];
-    setNodes(applyVerticalLayout(newNodes as any, newEdges) as any);
+    setNodes(enrichApprovalFlowGraph(newNodes as Node[], newEdges as Edge[], { relayout: true }).nodes as any);
     setEdges(newEdges);
   }, [nodes, edges, setNodes, setEdges, t]);
 
@@ -260,11 +178,15 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     const newId = `${type}_${Math.random().toString(36).substr(2, 9)}`;
     const label = t(`pages.approval.designer.${type}Node`);
     const newNode: Node = { id: newId, type, position: { x: 0, y: 0 }, data: { label } };
-    const newEdges = [...edges, { id: `e-${sourceNodeId}-${newId}`, source: sourceNodeId, target: newId, type: 'default' }, { id: `e-${newId}-end`, source: newId, target: 'end', type: 'default' }];
+    const newEdges = [
+      ...edges,
+      { id: `e-${sourceNodeId}-${newId}`, source: sourceNodeId, target: newId, type: 'default' },
+      { id: `e-${newId}-end`, source: newId, target: 'end', type: 'default' },
+    ];
     
     setNodeDataMap(prev => ({ ...prev, [newId]: { label } }));
     const newNodes = [...nodes, newNode];
-    setNodes(applyVerticalLayout(newNodes as any, newEdges) as any);
+    setNodes(enrichApprovalFlowGraph(newNodes as Node[], newEdges as Edge[], { relayout: true }).nodes as any);
     setEdges(newEdges);
   }, [selectedNode, nodes, edges, setNodes, setEdges, t]);
 
@@ -281,7 +203,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     
     setNodeDataMap(prev => ({ ...prev, [newId]: { label } }));
     const newNodes = [...nodes, newNode];
-    setNodes(applyVerticalLayout(newNodes as any, newEdges) as any);
+    setNodes(enrichApprovalFlowGraph(newNodes as Node[], newEdges as Edge[], { relayout: true }).nodes as any);
     setEdges(newEdges);
     setSelectedEdge(null);
   }, [selectedEdge, nodes, edges, setNodes, setEdges, t]);
@@ -314,21 +236,29 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       if (Object.keys(livePatch).length > 0) {
         setNodeDataMap(latestMap);
       }
-      const strippedNodes = nodes.map((node) => {
-        const merged = mergeFormToNodeData(String(node.type), {
-          ...node.data,
-          ...latestMap[node.id],
-        });
-        delete merged.approvers;
-        delete merged.roles;
-        const data = normalizeNodeData(String(node.type), merged);
-        return {
-          id: node.id,
-          type: node.type,
-          position: node.position,
-          data,
-        };
-      });
+      const strippedNodes = applyVerticalLayout(
+        nodes.map((node) => {
+          const merged = mergeFormToNodeData(String(node.type), {
+            ...node.data,
+            ...latestMap[node.id],
+          });
+          delete merged.approvers;
+          delete merged.roles;
+          const data = normalizeNodeData(String(node.type), merged);
+          return {
+            id: node.id,
+            type: node.type,
+            position: node.position,
+            data,
+          };
+        }) as Node[],
+        edges as Edge[],
+      ).map((node) => ({
+        id: node.id,
+        type: node.type,
+        position: node.position,
+        data: node.data,
+      }));
       const graph = normalizeFlowGraph({ nodes: strippedNodes, edges });
       const validationErrors = validateFlowGraph(graph);
       if (validationErrors.length > 0) {
@@ -346,8 +276,35 @@ const ApprovalProcessDesignerPage: React.FC = () => {
   };
 
   const handleOrganizeNodes = useCallback(() => {
-    setNodes((nds) => applyVerticalLayout(nds as Node[], edges) as any);
-  }, [edges, setNodes]);
+    const laid = applyVerticalLayout(nodes as Node[], edges as Edge[]);
+    const enriched = enrichApprovalFlowGraph(laid, edges as Edge[], { relayout: false });
+    setNodes(enriched.nodes as any);
+    setEdges(enriched.edges as any);
+  }, [nodes, edges, setNodes, setEdges]);
+
+  const { flowNodes, flowEdges } = useMemo(() => {
+    const merged = (nodes as Node[]).map((n) => ({
+      ...n,
+      selected: selectedNode?.id === n.id,
+      data: { ...n.data, ...nodeDataMap[n.id] },
+    }));
+    const { nodes: laid, edges: enriched } = enrichApprovalFlowGraph(merged, edges as Edge[], {
+      relayout: true,
+    });
+    return {
+      flowNodes: laid,
+      flowEdges: enriched.map((e) => ({
+        ...e,
+        type: 'default',
+        style: {
+          ...APPROVAL_FLOW_EDGE_STYLE,
+          stroke: selectedEdge?.id === e.id ? token.colorPrimary : APPROVAL_FLOW_EDGE_STYLE.stroke,
+          strokeWidth: selectedEdge?.id === e.id ? 3 : APPROVAL_FLOW_EDGE_STYLE.strokeWidth,
+          ...(e.style || {}),
+        },
+      })),
+    };
+  }, [nodes, edges, nodeDataMap, selectedNode, selectedEdge, token.colorPrimary]);
 
   const nodeTypes = useMemo(() => ({
     start: (p: any) => <UniFlowNode {...p} type="start" selected={p.selected} />,
@@ -454,10 +411,12 @@ const ApprovalProcessDesignerPage: React.FC = () => {
   );
 
   const canvas = (
-    <div style={{ width: '100%', height: '100%', ...CANVAS_GRID_REACTFLOW.style }}>
+    <div style={{ width: '100%', height: '100%', ...CANVAS_GRID_REACTFLOW_FRAMED_INNER }}>
       <ReactFlow
-        nodes={nodes.map((n) => ({ ...n, selected: selectedNode?.id === n.id, data: { ...n.data, ...nodeDataMap[n.id] } })) as any}
-        edges={edges.map((e) => ({ ...e, style: { ...e.style, stroke: selectedEdge?.id === e.id ? token.colorPrimary : '#475569', strokeWidth: selectedEdge?.id === e.id ? 3 : 2 } }))}
+        nodes={flowNodes as any}
+        edges={flowEdges}
+        defaultEdgeOptions={{ type: 'default', style: { ...APPROVAL_FLOW_EDGE_STYLE } }}
+        nodesDraggable={false}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}

@@ -49,7 +49,16 @@ class PaymentApplicationCreate(BaseModel):
     supplier_account_name: Optional[str] = Field(None, alias="supplierAccountName")
     supplier_bank_name: Optional[str] = Field(None, alias="supplierBankName")
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
+    payment_reason: Optional[str] = Field(None, alias="paymentReason")
+    payment_method: Optional[str] = Field(None, alias="paymentMethod")
+    invoice_status: Optional[str] = Field(None, alias="invoiceStatus")
+    payment_terms: Optional[str] = Field(None, alias="paymentTerms")
     notes: Optional[str] = None
+    require_payment_voucher: bool = Field(
+        False,
+        alias="requirePaymentVoucher",
+        description="是否要求后续付款单上传付款凭证",
+    )
     attachments: Optional[List[dict]] = None
     items: List[PaymentApplicationLineCreate] = Field(..., min_length=1)
 
@@ -65,7 +74,16 @@ class PaymentApplicationUpdate(BaseModel):
     supplier_account_name: Optional[str] = Field(None, alias="supplierAccountName")
     supplier_bank_name: Optional[str] = Field(None, alias="supplierBankName")
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
+    payment_reason: Optional[str] = Field(None, alias="paymentReason")
+    payment_method: Optional[str] = Field(None, alias="paymentMethod")
+    invoice_status: Optional[str] = Field(None, alias="invoiceStatus")
+    payment_terms: Optional[str] = Field(None, alias="paymentTerms")
     notes: Optional[str] = None
+    require_payment_voucher: Optional[bool] = Field(
+        None,
+        alias="requirePaymentVoucher",
+        description="是否要求后续付款单上传付款凭证",
+    )
     attachments: Optional[List[dict]] = None
     items: Optional[List[PaymentApplicationLineCreate]] = None
 
@@ -96,9 +114,19 @@ class PaymentApplicationResponse(UuidStrCoerceMixin, BaseSchema):
     supplier_account_name: Optional[str] = Field(None, alias="supplierAccountName")
     supplier_bank_name: Optional[str] = Field(None, alias="supplierBankName")
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
+    payment_reason: Optional[str] = Field(None, alias="paymentReason")
+    payment_method: Optional[str] = Field(None, alias="paymentMethod")
+    invoice_status: Optional[str] = Field(None, alias="invoiceStatus")
+    payment_terms: Optional[str] = Field(None, alias="paymentTerms")
     notes: Optional[str] = None
+    require_payment_voucher: bool = Field(
+        False,
+        alias="requirePaymentVoucher",
+        description="是否要求后续付款单上传付款凭证",
+    )
     attachments: Optional[List[dict]] = None
     items: List[PaymentApplicationLineResponse] = []
+    linked_payments: Optional[List[Dict[str, Any]]] = Field(None, alias="linkedPayments")
     capabilities: Optional[Dict[str, Any]] = None
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")

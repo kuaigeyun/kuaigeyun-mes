@@ -4,7 +4,7 @@
  * 提供出库单的管理功能，支持多种出库类型：生产领料、销售出库、退货出库等。
  */
 
-import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
@@ -36,8 +36,11 @@ import { buildHubMergedCustomFieldColumns } from '../../../../../components/cust
 import { ListPageTemplate, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { LinkedDocumentCodesFromFields } from '../../../../../components/linked-document-code';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
-import { OutboundDetailDrawer } from './components/OutboundDetailDrawer';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
+
+const LazyOutboundDetailDrawer = lazy(() =>
+  import('./components/OutboundDetailDrawer').then((m) => ({ default: m.OutboundDetailDrawer })),
+);
 import { warehouseApi, workOrderApi, outsourceMaterialIssueApi } from '../../../services/production';
 import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
@@ -1689,131 +1692,133 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         onSuccess={() => void handleConfirmPreviewSuccess()}
       />
 
-      <OutboundDetailDrawer
-        open={detailDrawerVisible}
-        zIndex={outboundDetailDrawerZIndex}
-        order={currentOrder}
-        loading={detailLoading}
-        error={detailError}
-        onRetry={() => {
-          const record = detailRetryRecordRef.current;
-          if (record) void handleDetail(record);
-        }}
-        trackingRefreshKey={outboundTrackingRefreshKey}
-        onClose={() => {
-          setDetailDrawerVisible(false);
-          setCurrentOrder(null);
-          setDetailError(null);
-          resetSalesDeliveryDetailFieldValues();
-          resetProductionPickingDetailFieldValues();
-        }}
-        extra={
-          currentOrder ? (
-            <Space>
-              {(isEditableProductionPicking(currentOrder) || isEditableSalesDelivery(currentOrder)) ? (
-                <Button
-                  {...rowActionKind('update')}
-                  onClick={() => {
-                    const order = currentOrder;
-                    setDetailDrawerVisible(false);
-                    handleEdit(order);
-                  }}
-                />
-              ) : null}
-              {currentOrder.outbound_type === 'production_picking' && productionPickingAuditEnabled ? (
-                <UniWorkflowActions
-                  record={currentOrder}
-                  entityName={t('app.kuaizhizao.warehouseOutbound.picking.entityName')}
-                  entityType="production_picking"
-                  auditNodeKey="production_picking"
-                  unifiedAudit
-                  resourcePrefix={OUTBOUND_RESOURCE}
-                  statusField="status"
-                  reviewStatusField="review_status"
-                  draftStatuses={OUTBOUND_WORKFLOW_DRAFT_STATUSES}
-                  pendingStatuses={OUTBOUND_WORKFLOW_PENDING_STATUSES}
-                  approvedStatuses={OUTBOUND_WORKFLOW_APPROVED_STATUSES}
-                  rejectedStatuses={OUTBOUND_WORKFLOW_REJECTED_STATUSES}
-                  onSuccess={() => {
-                    void handleProductionPickingAuditSuccess();
-                  }}
-                  confirmMessages={{
-                    submit: isManualAuditEnabled(currentOrder.audit)
-                      ? t('app.kuaizhizao.warehouseOutbound.picking.submitConfirmAudit')
-                      : t('app.kuaizhizao.warehouseOutbound.picking.submitConfirmAuto'),
-                  }}
-                />
-              ) : null}
-              {currentOrder.outbound_type === 'sales_delivery' && salesDeliveryAuditEnabled ? (
-                <UniWorkflowActions
-                  record={currentOrder}
-                  entityName={t('app.kuaizhizao.warehouseOutbound.delivery.entityName')}
-                  entityType="sales_delivery"
-                  auditNodeKey="sales_delivery"
-                  unifiedAudit
-                  resourcePrefix={OUTBOUND_RESOURCE}
-                  statusField="status"
-                  reviewStatusField="review_status"
-                  draftStatuses={OUTBOUND_WORKFLOW_DRAFT_STATUSES}
-                  pendingStatuses={OUTBOUND_WORKFLOW_PENDING_STATUSES}
-                  approvedStatuses={OUTBOUND_WORKFLOW_APPROVED_STATUSES}
-                  rejectedStatuses={OUTBOUND_WORKFLOW_REJECTED_STATUSES}
-                  onSuccess={() => {
-                    void handleSalesDeliveryAuditSuccess();
-                  }}
-                  confirmMessages={{
-                    submit: isManualAuditEnabled(currentOrder.audit)
-                      ? t('app.kuaizhizao.warehouseOutbound.delivery.submitConfirmAudit')
-                      : t('app.kuaizhizao.warehouseOutbound.delivery.submitConfirmAuto'),
-                  }}
-                />
-              ) : null}
-              {isOutboundConfirmable(currentOrder) && currentOrder.outbound_type !== 'outsource_issue' && (
-                <Tooltip title={getOutboundConfirmBlockedReason(currentOrder)}>
+      <Suspense fallback={null}>
+        <LazyOutboundDetailDrawer
+          open={detailDrawerVisible}
+          zIndex={outboundDetailDrawerZIndex}
+          order={currentOrder}
+          loading={detailLoading}
+          error={detailError}
+          onRetry={() => {
+            const record = detailRetryRecordRef.current;
+            if (record) void handleDetail(record);
+          }}
+          trackingRefreshKey={outboundTrackingRefreshKey}
+          onClose={() => {
+            setDetailDrawerVisible(false);
+            setCurrentOrder(null);
+            setDetailError(null);
+            resetSalesDeliveryDetailFieldValues();
+            resetProductionPickingDetailFieldValues();
+          }}
+          extra={
+            currentOrder ? (
+              <Space>
+                {(isEditableProductionPicking(currentOrder) || isEditableSalesDelivery(currentOrder)) ? (
                   <Button
-                    type="primary"
-                    icon={<CheckCircleOutlined />}
-                    onClick={() => void handleConfirm(currentOrder)}
-                    disabled={!!getOutboundConfirmBlockedReason(currentOrder)}
-                  >
-                    {getOutboundConfirmLabel(currentOrder)}
+                    {...rowActionKind('update')}
+                    onClick={() => {
+                      const order = currentOrder;
+                      setDetailDrawerVisible(false);
+                      handleEdit(order);
+                    }}
+                  />
+                ) : null}
+                {currentOrder.outbound_type === 'production_picking' && productionPickingAuditEnabled ? (
+                  <UniWorkflowActions
+                    record={currentOrder}
+                    entityName={t('app.kuaizhizao.warehouseOutbound.picking.entityName')}
+                    entityType="production_picking"
+                    auditNodeKey="production_picking"
+                    unifiedAudit
+                    resourcePrefix={OUTBOUND_RESOURCE}
+                    statusField="status"
+                    reviewStatusField="review_status"
+                    draftStatuses={OUTBOUND_WORKFLOW_DRAFT_STATUSES}
+                    pendingStatuses={OUTBOUND_WORKFLOW_PENDING_STATUSES}
+                    approvedStatuses={OUTBOUND_WORKFLOW_APPROVED_STATUSES}
+                    rejectedStatuses={OUTBOUND_WORKFLOW_REJECTED_STATUSES}
+                    onSuccess={() => {
+                      void handleProductionPickingAuditSuccess();
+                    }}
+                    confirmMessages={{
+                      submit: isManualAuditEnabled(currentOrder.audit)
+                        ? t('app.kuaizhizao.warehouseOutbound.picking.submitConfirmAudit')
+                        : t('app.kuaizhizao.warehouseOutbound.picking.submitConfirmAuto'),
+                    }}
+                  />
+                ) : null}
+                {currentOrder.outbound_type === 'sales_delivery' && salesDeliveryAuditEnabled ? (
+                  <UniWorkflowActions
+                    record={currentOrder}
+                    entityName={t('app.kuaizhizao.warehouseOutbound.delivery.entityName')}
+                    entityType="sales_delivery"
+                    auditNodeKey="sales_delivery"
+                    unifiedAudit
+                    resourcePrefix={OUTBOUND_RESOURCE}
+                    statusField="status"
+                    reviewStatusField="review_status"
+                    draftStatuses={OUTBOUND_WORKFLOW_DRAFT_STATUSES}
+                    pendingStatuses={OUTBOUND_WORKFLOW_PENDING_STATUSES}
+                    approvedStatuses={OUTBOUND_WORKFLOW_APPROVED_STATUSES}
+                    rejectedStatuses={OUTBOUND_WORKFLOW_REJECTED_STATUSES}
+                    onSuccess={() => {
+                      void handleSalesDeliveryAuditSuccess();
+                    }}
+                    confirmMessages={{
+                      submit: isManualAuditEnabled(currentOrder.audit)
+                        ? t('app.kuaizhizao.warehouseOutbound.delivery.submitConfirmAudit')
+                        : t('app.kuaizhizao.warehouseOutbound.delivery.submitConfirmAuto'),
+                    }}
+                  />
+                ) : null}
+                {isOutboundConfirmable(currentOrder) && currentOrder.outbound_type !== 'outsource_issue' && (
+                  <Tooltip title={getOutboundConfirmBlockedReason(currentOrder)}>
+                    <Button
+                      type="primary"
+                      icon={<CheckCircleOutlined />}
+                      onClick={() => void handleConfirm(currentOrder)}
+                      disabled={!!getOutboundConfirmBlockedReason(currentOrder)}
+                    >
+                      {getOutboundConfirmLabel(currentOrder)}
+                    </Button>
+                  </Tooltip>
+                )}
+                {isOutboundWithdrawable(currentOrder) && currentOrder.outbound_type !== 'outsource_issue' && (
+                  <Button danger icon={<RollbackOutlined />} onClick={() => handleWithdraw(currentOrder)}>
+                    {t('app.kuaizhizao.warehouseOutbound.action.withdraw')}
                   </Button>
-                </Tooltip>
-              )}
-              {isOutboundWithdrawable(currentOrder) && currentOrder.outbound_type !== 'outsource_issue' && (
-                <Button danger icon={<RollbackOutlined />} onClick={() => handleWithdraw(currentOrder)}>
-                  {t('app.kuaizhizao.warehouseOutbound.action.withdraw')}
-                </Button>
-              )}
-            </Space>
-          ) : null
-        }
-        traceDocument={outboundTraceDocument}
-        supplementary={outboundDetailSupplementary}
-        linesTitle={t('app.kuaizhizao.warehouseOutbound.section.outboundDetails')}
-        lines={
-          currentOrder?.items && currentOrder.items.length > 0 ? (
-            <>
-              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-              <Table
-                className="warehouse-detail-table"
-                size="small"
-                rowKey={(record, idx) => {
-                  const r = record as OutboundOrderItem;
-                  return r.id != null ? String(r.id) : `row-${idx ?? 0}`;
-                }}
-                pagination={false}
-                columns={
-                  currentOrder.outbound_type === 'production_picking'
-                    ? pickingDetailColumns
-                    : deliveryDetailColumns
-                }
-                dataSource={currentOrder.items}
-              />
-            </>
-          ) : undefined
-        }
-      />
+                )}
+              </Space>
+            ) : null
+          }
+          traceDocument={outboundTraceDocument}
+          supplementary={outboundDetailSupplementary}
+          linesTitle={t('app.kuaizhizao.warehouseOutbound.section.outboundDetails')}
+          lines={
+            currentOrder?.items && currentOrder.items.length > 0 ? (
+              <>
+                <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                <Table
+                  className="warehouse-detail-table"
+                  size="small"
+                  rowKey={(record, idx) => {
+                    const r = record as OutboundOrderItem;
+                    return r.id != null ? String(r.id) : `row-${idx ?? 0}`;
+                  }}
+                  pagination={false}
+                  columns={
+                    currentOrder.outbound_type === 'production_picking'
+                      ? pickingDetailColumns
+                      : deliveryDetailColumns
+                  }
+                  dataSource={currentOrder.items}
+                />
+              </>
+            ) : undefined
+          }
+        />
+      </Suspense>
 
       <OutboundHubEditModal
         open={editModalRecord != null}

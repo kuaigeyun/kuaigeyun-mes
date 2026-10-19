@@ -2,7 +2,7 @@ import { apiRequest } from '../../../../services/api';
 
 export const OTHER_INCOME_RESOURCE = 'kuaicaiwu:other-income';
 
-const base = '/apps/kuaicaiwu/other-incomes';
+const base = '/apps/kuaizhizao/other-incomes';
 
 export type OtherVoucherLine = {
   id?: number;

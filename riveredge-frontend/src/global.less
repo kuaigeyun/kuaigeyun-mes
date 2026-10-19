@@ -153,6 +153,14 @@
   overflow-y: auto;
 }
 
+/*
+ * antd 6 默认 .ant-modal-mask { pointer-events: none }，遮罩仅视觉、不接手势。
+ * 恢复为可命中，避免点遮罩区域落到下层页面（与 patches/isolatedRcDialog 冒泡隔离配套）。
+ */
+.ant-modal-mask {
+  pointer-events: auto !important;
+}
+
 /* 表单 Modal：与标准 Modal 一致，沿用全局 .ant-modal-body 的限高与滚动；内层仅保证宽度 */
 .form-modal-template .form-modal-content-inner,
 .form-modal-template-fixed-footer .form-modal-content-inner {
@@ -1999,6 +2007,18 @@ code {
 /* 工单树形表：展开加号相对堆叠主列（品名+单号）垂直居中 */
 .kuaizhizao-work-orders-table .ant-table-tbody > tr > td {
   vertical-align: middle !important;
+}
+/* 数量列：表头排序条默认把标题挤在左侧，这里表头与数字都靠右 */
+.kuaizhizao-work-orders-table .ant-table-thead > tr > th.wo-quantity-cell,
+.kuaizhizao-work-orders-table .ant-table-tbody > tr > td.wo-quantity-cell {
+  text-align: right !important;
+}
+.kuaizhizao-work-orders-table .ant-table-thead > tr > th.wo-quantity-cell .ant-table-column-sorters {
+  justify-content: flex-end;
+}
+.kuaizhizao-work-orders-table .ant-table-thead > tr > th.wo-quantity-cell .ant-table-column-title {
+  flex: none;
+  text-align: right;
 }
 /* 齐套率圆环：行增高时在单元格内垂直居中 */
 .kuaizhizao-work-orders-table .ant-table-tbody > tr > td.wo-readiness-cell {

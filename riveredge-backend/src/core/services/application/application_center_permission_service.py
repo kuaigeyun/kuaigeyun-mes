@@ -64,13 +64,17 @@ class ApplicationCenterPermissionService:
         code = str(application.get("code") or "")
         manifest = ApplicationService._get_manifest_by_code(code) if code else None
         manifest_is_pro = bool(manifest.get("is_pro", False)) if manifest else False
+        # 列表/详情已 enrich 的 is_pro、market_category 优先，避免磁盘 manifest 缺失时误判为 basic
+        app_is_pro = bool(application.get("is_pro")) or manifest_is_pro
         is_dedicated = ApplicationService.effective_is_dedicated(application)
-        market_category = ApplicationService.resolve_market_category_for_code(code)
+        market_category = application.get("market_category") or (
+            ApplicationService.resolve_market_category_for_code(code)
+        )
         return resolve_app_center_category(
             code,
             is_dedicated=is_dedicated,
-            manifest_is_pro=manifest_is_pro,
-            market_category=market_category,
+            manifest_is_pro=app_is_pro,
+            market_category=str(market_category) if market_category else None,
         )
 
     @staticmethod

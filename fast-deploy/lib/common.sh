@@ -7827,8 +7827,16 @@ run_workspace_compose() {
         }
     fi
     write_workspace_yaml_from_deploy_env "$compose_scope" || return 1
-    log_info "执行 workspace compose..."
+    log_info "执行 workspace compose（专业仓含行业包 ind-* / spoke-wheel）..."
     (cd "$PROJECT_ROOT" && "$python_bin" "$py") || return 1
+    # 行业包与专业 APP 同仓组装；缺后端目录时应用中心启用会报「后端包未部署」
+    if [ -f "$PROJECT_ROOT/fast-deploy/tools/workspace/workspace.yaml" ]; then
+        if grep -qE 'ind-|spoke-wheel' "$PROJECT_ROOT/fast-deploy/tools/workspace/workspace.yaml" 2>/dev/null; then
+            log_ok "workspace.yaml 已包含行业包清单"
+        elif [ "$(read_deploy_env_value PRO_ENABLED || echo 0)" = "1" ]; then
+            log_warn "workspace.yaml 未列出行业包；请确认专业仓含 frontend/apps/ind-* 后重跑 pro-apps pro"
+        fi
+    fi
 }
 
 cmd_pro_apps_status() {

@@ -35,6 +35,9 @@ export type ProcessMasterDetailDrawerProps<T extends Record<string, any>> = {
   onRetry?: () => void;
   extra?: React.ReactNode;
   basicExtra?: React.ReactNode;
+  /** 基本信息之后的独立板块（如图纸文件）；与自定义字段 supplementary 分开 */
+  afterBasicTitle?: React.ReactNode;
+  afterBasic?: React.ReactNode;
   customFields?: CustomField[];
   customFieldValues?: Record<string, unknown>;
   supplementaryTitle?: string;
@@ -59,6 +62,8 @@ export function ProcessMasterDetailDrawer<T extends Record<string, any>>({
   onRetry,
   extra,
   basicExtra,
+  afterBasicTitle,
+  afterBasic,
   customFields,
   customFieldValues,
   supplementaryTitle,
@@ -106,6 +111,8 @@ export function ProcessMasterDetailDrawer<T extends Record<string, any>>({
       loading={showLoading}
       extra={contentReady ? extra ?? null : null}
       basicExtra={contentReady ? basicExtra : undefined}
+      afterBasicTitle={contentReady ? afterBasicTitle : undefined}
+      afterBasic={contentReady ? afterBasic : undefined}
       plainBody={
         showError ? (
           <Result

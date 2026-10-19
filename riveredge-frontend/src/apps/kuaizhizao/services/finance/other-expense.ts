@@ -2,7 +2,7 @@ import { apiRequest } from '../../../../services/api';
 
 export const OTHER_EXPENSE_RESOURCE = 'kuaicaiwu:other-expense';
 
-const base = '/apps/kuaicaiwu/other-expenses';
+const base = '/apps/kuaizhizao/other-expenses';
 
 export type OtherVoucherLine = {
   id?: number;
@@ -29,6 +29,11 @@ export type OtherExpenseVoucher = {
   attachments?: unknown[];
   lines: OtherVoucherLine[];
   capabilities?: Record<string, { allowed: boolean; reason?: string }>;
+  /** 审核后 MiscVoucherFinanceBridge 回写 */
+  payable_id?: number;
+  payable_code?: string;
+  payment_id?: number;
+  payment_code?: string;
 };
 
 export const otherExpenseService = {

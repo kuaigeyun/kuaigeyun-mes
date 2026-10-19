@@ -2539,7 +2539,11 @@ class ReportService:
                     "material_id": b.material_id,
                     "material_code": b.material.main_code if b.material else "UNKNOWN",
                     "material_name": b.material.name if b.material else "UNKNOWN",
-                    "material_unit": getattr(b.material, "unit", None) if b.material else None,
+                    "material_unit": (
+                        str(getattr(b.material, "base_unit", None) or "").strip() or None
+                        if b.material
+                        else None
+                    ),
                     "batch_no": self._normalize_batch_no_for_report(b.batch_no),
                     "production_date": to_api_isoformat(b.production_date) if b.production_date else None,
                     "expiry_date": expiry_iso,
@@ -2633,7 +2637,10 @@ class ReportService:
                 balance["brand"] = getattr(material, "brand", None)
                 balance["texture"] = getattr(material, "texture", None)
                 balance["model"] = getattr(material, "model", None)
-                balance["material_unit"] = balance.get("material_unit") or getattr(material, "base_unit", None)
+                # 即时库存单位跟当前物料基础单位，不用线边快照残留的旧编码
+                base_unit = str(getattr(material, "base_unit", None) or "").strip()
+                if base_unit:
+                    balance["material_unit"] = base_unit
 
             transit = in_transit_map.get(mid_int) or {
                 "purchase_quantity": 0.0,

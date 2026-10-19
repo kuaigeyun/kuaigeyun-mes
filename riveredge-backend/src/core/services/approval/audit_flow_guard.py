@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
@@ -19,6 +19,8 @@ async def start_document_approval_or_raise(
     content: str,
     doc_label: str,
     send_notification: bool = True,
+    selected_approver_user_ids: Optional[List[int]] = None,
+    selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
 ) -> Any:
     """审核已开时必须创建审批实例；失败即暴露，禁止空壳待审。"""
     from core.services.approval.approval_instance_service import ApprovalInstanceService
@@ -33,6 +35,8 @@ async def start_document_approval_or_raise(
         title=title,
         content=content,
         send_notification=send_notification,
+        selected_approver_user_ids=selected_approver_user_ids,
+        selected_approver_by_node=selected_approver_by_node,
     )
     if not instance:
         raise BusinessLogicError(
@@ -48,18 +52,28 @@ async def get_approval_gate_status(
     entity_type: str,
     entity_id: int,
 ) -> dict:
-    """读取审批实例门控：pending / 已通过 / 已驳回。"""
+    """
+    读取审批实例门控：pending / 已通过 / 已驳回。
+
+    只读 instance 状态，禁止走 get_approval_status 的 bootstrap/reconcile。
+    审核/驳回前若再 reconcile，可能在真正投票前推进节点并取消待办，导致要点两次。
+    """
     from core.services.approval.approval_instance_service import ApprovalInstanceService
 
-    approval_status = await ApprovalInstanceService.get_approval_status(
+    instance = await ApprovalInstanceService.get_instance_by_entity(
         tenant_id=tenant_id,
         entity_type=entity_type,
         entity_id=entity_id,
     )
-    has_instance = bool(approval_status.get("has_instance"))
-    status = approval_status.get("status")
+    has_instance = instance is not None
+    status = instance.status if instance else None
     return {
-        "approval_status": approval_status,
+        "approval_status": {
+            "has_instance": has_instance,
+            "has_flow": has_instance,
+            "status": status,
+            "current_node": instance.current_node if instance else None,
+        },
         "has_pending_flow": has_instance and status == "pending",
         "flow_completed_approved": has_instance and status == "approved",
         "flow_completed_rejected": has_instance and status == "rejected",

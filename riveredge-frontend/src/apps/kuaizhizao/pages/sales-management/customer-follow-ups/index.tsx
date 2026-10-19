@@ -400,6 +400,7 @@ const CustomerFollowUpsPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
+      key: 'follow_up_customer_name',
       dataIndex: 'customer_name',
       width: 240,
       minWidth: 240,
@@ -472,8 +473,9 @@ const CustomerFollowUpsPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colContent'),
+      key: 'follow_up_content',
       dataIndex: 'content',
-      // RemainderFlex：跟进内容长度不确定；身份仍用 content（rank），不另起 key
+      // RemainderFlex：跟进内容长度不确定；key=follow_up_content 进跟进段位，勿用裸 content
       minWidth: 160,
       uniTablePrimaryFlex: true,
       uniTableRemainderFlex: true,
@@ -615,7 +617,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       `}</style>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<CustomerFollowUp>
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups-rank-v4"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerFollowUps')}
           selectedRowKeys={selectedRowKeys}

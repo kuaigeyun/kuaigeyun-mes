@@ -70,6 +70,14 @@ export interface DetailDrawerTemplateProps<T extends Record<string, any> = Recor
    */
   basicExtra?: ReactNode;
 
+  /**
+   * 基本信息之后、协作之前的独立板块（如工程图纸「图纸文件」）。
+   * 与 supplementary 同级，勿把主文件塞回 basic Descriptions。
+   */
+  afterBasic?: ReactNode;
+  afterBasicTitle?: ReactNode;
+  afterBasicVisible?: boolean;
+
   collaboration?: ReactNode;
   collaborationMetrics?: ReactNode;
   collaborationLifecycle?: ReactNode;
@@ -204,6 +212,9 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   basicTitle,
   basicVisible,
   basicExtra,
+  afterBasic,
+  afterBasicTitle,
+  afterBasicVisible,
   collaboration,
   collaborationMetrics,
   collaborationLifecycle,
@@ -343,6 +354,10 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   const hasBasicContent = basic != null && basic !== false;
   const showBasic = basicVisible !== false && (basicVisible === true || hasBasicContent);
 
+  const hasAfterBasicContent = afterBasic != null && afterBasic !== false;
+  const showAfterBasic =
+    afterBasicVisible !== false && (afterBasicVisible === true || hasAfterBasicContent);
+
   const stackedCollaboration = useMemo(
     () =>
       collaboration ??
@@ -370,6 +385,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
 
   const usesStructuredSections =
     showBasic ||
+    showAfterBasic ||
     showCollaboration ||
     showSupplementary ||
     showLines ||
@@ -401,6 +417,11 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       {showBasic ? (
         <DetailDrawerSection titleAccent title={resolvedBasicTitle}>
           {withBasicSideExtra(basic, basicExtra)}
+        </DetailDrawerSection>
+      ) : null}
+      {showAfterBasic ? (
+        <DetailDrawerSection titleAccent title={afterBasicTitle}>
+          {afterBasic}
         </DetailDrawerSection>
       ) : null}
       {showCollaboration ? (

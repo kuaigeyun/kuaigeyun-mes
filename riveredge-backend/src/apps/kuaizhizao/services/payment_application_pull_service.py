@@ -81,17 +81,27 @@ class PaymentApplicationPullService:
         order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=purchase_order_id)
         if not order:
             raise NotFoundError(f"采购订单不存在: {purchase_order_id}")
+        from infra.services.business_config_service import BusinessConfigService
+
         prepay_map = await _order_prepayment_linked_by_ids(
             tenant_id, [purchase_order_id], source_type="purchase_order", target_type="payment"
         )
-        caps = derive_purchase_order_capabilities(
-            order, has_prepayment_payment=prepay_map.get(purchase_order_id, False)
-        )
-        prepay_cap = caps.push_prepayment
         amount = Decimal(str(order.prepayment_amount or 0))
         reserved = await self._sum_prepayment_application_reserved(tenant_id, purchase_order_id)
         max_push = max(Decimal("0"), amount - reserved)
-        allowed = prepay_cap.allowed and max_push > 0
+        require_app = await BusinessConfigService().get_finance_require_payment_application(
+            tenant_id
+        )
+        # 须用 push_payment_application（与列表 capabilities / 取单勾选同源），
+        # 禁止误用 push_prepayment：组织开启「预付款须走付款申请」时后者恒为否。
+        caps = derive_purchase_order_capabilities(
+            order,
+            has_prepayment_payment=prepay_map.get(purchase_order_id, False),
+            require_payment_application=require_app,
+            prepayment_application_remaining=max_push,
+        )
+        app_cap = caps.push_payment_application
+        allowed = bool(app_cap.allowed) and max_push > 0
         return {
             "target_type": "payment_application",
             "source_type": "purchase_order",
@@ -106,7 +116,7 @@ class PaymentApplicationPullService:
             ),
             "items": [],
             "has_blocking_issues": not allowed,
-            "blocking_reason": prepay_cap.reason if not prepay_cap.allowed else (
+            "blocking_reason": app_cap.reason if not app_cap.allowed else (
                 "payment_application.pull_from_purchase_order.no_amount" if max_push <= 0 else None
             ),
             "supplier_id": order.supplier_id,
@@ -144,6 +154,38 @@ class PaymentApplicationPullService:
             ],
         )
         return await self._apps.create_application(tenant_id, create, created_by)
+
+    async def push_payment_application_open_by_receipt_ids(
+        self, tenant_id: int, receipt_ids: List[int]
+    ) -> Dict[int, bool]:
+        result: Dict[int, bool] = {int(rid): False for rid in receipt_ids}
+        if not receipt_ids:
+            return result
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="purchase_receipt",
+            source_id__in=receipt_ids,
+            target_type="payable",
+        ).all()
+        payable_ids = {int(r.target_id) for r in rels if r.target_id}
+        if not payable_ids:
+            return result
+        payables = await Payable.filter(
+            tenant_id=tenant_id, id__in=list(payable_ids), deleted_at__isnull=True
+        ).all()
+        payable_by_id = {int(p.id): p for p in payables}
+        for rel in rels:
+            rid = int(rel.source_id or 0)
+            pid = int(rel.target_id or 0)
+            payable = payable_by_id.get(pid)
+            if not payable or rid not in result:
+                continue
+            max_req = await self._open.max_request_for_payable(tenant_id, payable)
+            if max_req > 0:
+                result[rid] = True
+        return result
 
     async def _payable_for_receipt(self, tenant_id: int, receipt_id: int) -> Payable:
         from apps.kuaizhizao.models.document_relation import DocumentRelation

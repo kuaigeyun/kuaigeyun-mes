@@ -130,8 +130,21 @@ class UserService:
             
             role_ids = [role.id for role in roles]
         
-        # 加密密码
-        password_hash = User.hash_password(data.password)
+        from core.domain.security.password_policy import validate_login_password
+        from core.services.security.password_policy_service import PasswordPolicyService
+        from core.utils.timezone_utils import resolve_business_datetime
+
+        policy = await PasswordPolicyService.get_policy(tenant_id)
+        validate_login_password(
+            data.password,
+            policy,
+            user_context={
+                "username": data.username,
+                "full_name": data.full_name,
+                "phone": getattr(data, "phone", None),
+            },
+        )
+        password_changed_at = resolve_business_datetime()
 
         # 创建用户与角色分配放在同一事务中，并显式使用同一连接
         async with in_transaction() as conn:
@@ -145,7 +158,7 @@ class UserService:
                 tenant_id=tenant_id,
                 username=data.username,
                 email=data.email,
-                password_hash=password_hash,
+                password_hash=User.hash_password(data.password),
                 full_name=data.full_name,
                 phone=getattr(data, 'phone', None),
                 department_id=department_id,
@@ -153,6 +166,8 @@ class UserService:
                 is_active=data.is_active if data.is_active is not None else True,
                 is_tenant_admin=data.is_tenant_admin if data.is_tenant_admin is not None else False,
                 remark=getattr(data, 'remark', None),
+                password_changed_at=password_changed_at,
+                must_change_password=False,
                 using_db=conn,
             )
             if role_ids:
@@ -452,14 +467,25 @@ class UserService:
                 tenant_id=tenant_id,
                 increment=1,
             )
+        password_to_set: Optional[str] = None
         if "password" in update_data:
-            password = update_data.pop("password")
-            if password:
-                update_data["password_hash"] = User.hash_password(password)
+            password_to_set = update_data.pop("password") or None
         for key, value in update_data.items():
             if hasattr(user, key):
                 setattr(user, key, value)
         
+        if password_to_set:
+            from core.services.security.password_policy_service import PasswordPolicyService
+            from core.services.security.password_user_utils import apply_login_password_to_user
+
+            policy = await PasswordPolicyService.get_policy(tenant_id)
+            await apply_login_password_to_user(
+                user,
+                password_to_set,
+                policy,
+                must_change_password=False,
+            )
+
         # 用户保存与角色更新放在同一事务中，并显式使用同一连接
         async with in_transaction() as conn:
             await user.save(using_db=conn)
@@ -734,8 +760,8 @@ class UserService:
         tenant_id: int,
         user_uuid: str,
         new_password: Optional[str] = None,
-        current_user_id: int = None
-    ) -> User:
+        current_user_id: int = None,
+    ) -> tuple[User, Optional[str]]:
         """
         重置用户密码
         
@@ -761,11 +787,29 @@ class UserService:
         if not user:
             raise NotFoundError(f"用户不存在: {user_uuid}")
         
-        # 设置新密码
-        password = new_password if new_password else "123456"
-        user.password_hash = User.hash_password(password)
-        
-        # 保存用户
+        from core.domain.security.password_policy import generate_temporary_password
+        from core.services.security.password_policy_service import PasswordPolicyService
+        from core.services.security.password_user_utils import apply_login_password_to_user
+
+        policy = await PasswordPolicyService.get_policy(tenant_id)
+        generated: Optional[str] = None
+        if new_password:
+            password = new_password
+            must_change = policy.is_strengthened
+        elif policy.is_strengthened:
+            password = generate_temporary_password(policy)
+            generated = password
+            must_change = True
+        else:
+            password = "123456"
+            must_change = False
+
+        await apply_login_password_to_user(
+            user,
+            password,
+            policy,
+            must_change_password=must_change,
+        )
         await user.save()
         
         # 清除在线用户信息（强制重新登录）
@@ -777,7 +821,7 @@ class UserService:
             )
         )
         
-        return user
+        return user, generated
     
     _USER_IMPORT_HEADER_MAP = {
         '用户名': 'username',
@@ -1058,6 +1102,22 @@ class UserService:
                             failure_count += 1
                             continue
                 
+                from core.domain.security.password_policy import validate_login_password
+                from core.services.security.password_policy_service import PasswordPolicyService
+                from core.utils.timezone_utils import resolve_business_datetime
+
+                import_policy = await PasswordPolicyService.get_policy(tenant_id)
+                validate_login_password(
+                    user_data["password"],
+                    import_policy,
+                    user_context={
+                        "username": user_data.get("username"),
+                        "full_name": user_data.get("full_name"),
+                        "phone": user_data.get("phone"),
+                    },
+                )
+                password_changed_at = resolve_business_datetime()
+
                 # 创建用户
                 password_hash = User.hash_password(user_data['password'])
                 await TenantService().assert_shared_user_quota_capacity(
@@ -1075,6 +1135,8 @@ class UserService:
                     department_id=department_id,
                     position_id=position_id,
                     is_active=True,
+                    password_changed_at=password_changed_at,
+                    must_change_password=False,
                 )
                 
                 # 分配角色

@@ -20,6 +20,7 @@ from apps.master_data.schemas.drawing_loan_schemas import (
     DrawingLoanResponse,
     DrawingLoanUpdate,
 )
+from apps.master_data.services.performance_scope_service import PerformanceScopeService
 from apps.master_data.services.drawing_security import (
     DrawingSecurityService,
     normalize_security_level,
@@ -41,7 +42,21 @@ def _line_response(line: DrawingLoanLine) -> DrawingLoanLineResponse:
     )
 
 
-def _to_response(row: DrawingLoan, lines: Optional[List[DrawingLoanLine]] = None) -> DrawingLoanResponse:
+async def _user_uuid_map(tenant_id: int, user_ids: List[int]) -> dict[int, str]:
+    if not user_ids:
+        return {}
+    users = await User.filter(
+        tenant_id=tenant_id, id__in=user_ids, deleted_at__isnull=True
+    ).all()
+    return {user.id: user.uuid for user in users}
+
+
+def _to_response(
+    row: DrawingLoan,
+    lines: Optional[List[DrawingLoanLine]] = None,
+    *,
+    borrower_user_uuid: Optional[str] = None,
+) -> DrawingLoanResponse:
     audit = audit_response_fields(row)
     return DrawingLoanResponse(
         id=row.id,
@@ -50,6 +65,11 @@ def _to_response(row: DrawingLoan, lines: Optional[List[DrawingLoanLine]] = None
         code=row.code,
         name=row.name,
         purpose=row.purpose,
+        borrower_department_id=row.borrower_department_id,
+        borrower_department_name=row.borrower_department_name,
+        borrower_user_id=row.borrower_user_id,
+        borrower_user_name=row.borrower_user_name,
+        borrower_user_uuid=borrower_user_uuid,
         due_at=row.due_at,
         status=row.status,
         returned_at=row.returned_at,
@@ -63,6 +83,23 @@ def _to_response(row: DrawingLoan, lines: Optional[List[DrawingLoanLine]] = None
 
 
 class DrawingLoanService:
+    @staticmethod
+    async def _apply_party_fields(
+        tenant_id: int,
+        payload: dict,
+        *,
+        borrower_department_id: int,
+        borrower_user_id: int,
+    ) -> None:
+        payload["borrower_department_id"] = borrower_department_id
+        payload["borrower_department_name"] = await PerformanceScopeService.resolve_department_name(
+            tenant_id, borrower_department_id
+        )
+        payload["borrower_user_id"] = borrower_user_id
+        payload["borrower_user_name"] = await PerformanceScopeService.resolve_employee_name(
+            tenant_id, borrower_user_id
+        )
+
     @staticmethod
     async def has_active_loan(tenant_id: int, user_id: int, drawing_id: int) -> bool:
         loans = await DrawingLoan.filter(
@@ -160,10 +197,21 @@ class DrawingLoanService:
             "due_at": due_at,
             "status": "Draft",
         }
+        await DrawingLoanService._apply_party_fields(
+            tenant_id,
+            payload,
+            borrower_department_id=data.borrower_department_id,
+            borrower_user_id=data.borrower_user_id,
+        )
         apply_create_audit(payload, current_user)
         row = await DrawingLoan.create(**payload)
         lines = await DrawingLoanService._replace_lines(tenant_id, row, data.lines, current_user)
-        return _to_response(row, lines)
+        uuid_map = await _user_uuid_map(tenant_id, [row.borrower_user_id] if row.borrower_user_id else [])
+        return _to_response(
+            row,
+            lines,
+            borrower_user_uuid=uuid_map.get(row.borrower_user_id) if row.borrower_user_id else None,
+        )
 
     @staticmethod
     async def update(
@@ -187,17 +235,47 @@ class DrawingLoanService:
             if due_at is None:
                 raise ValidationError("请填写应还时间")
             row.due_at = due_at
+        if data.borrower_department_id is not None or data.borrower_user_id is not None:
+            dept_id = (
+                data.borrower_department_id
+                if data.borrower_department_id is not None
+                else row.borrower_department_id
+            )
+            user_id = data.borrower_user_id if data.borrower_user_id is not None else row.borrower_user_id
+            if dept_id is None or user_id is None:
+                raise ValidationError("请填写借阅部门与借阅人")
+            party_payload: dict = {}
+            await DrawingLoanService._apply_party_fields(
+                tenant_id,
+                party_payload,
+                borrower_department_id=int(dept_id),
+                borrower_user_id=int(user_id),
+            )
+            row.borrower_department_id = party_payload["borrower_department_id"]
+            row.borrower_department_name = party_payload["borrower_department_name"]
+            row.borrower_user_id = party_payload["borrower_user_id"]
+            row.borrower_user_name = party_payload["borrower_user_name"]
         apply_update_audit(row, current_user)
         await row.save()
         lines = await DrawingLoanService._lines(tenant_id, row.id)
         if data.lines is not None:
             lines = await DrawingLoanService._replace_lines(tenant_id, row, data.lines, current_user)
-        return _to_response(row, lines)
+        uuid_map = await _user_uuid_map(tenant_id, [row.borrower_user_id] if row.borrower_user_id else [])
+        return _to_response(
+            row,
+            lines,
+            borrower_user_uuid=uuid_map.get(row.borrower_user_id) if row.borrower_user_id else None,
+        )
 
     @staticmethod
     async def get(tenant_id: int, loan_uuid: str) -> DrawingLoanResponse:
         row = await DrawingLoanService._get_or_404(tenant_id, loan_uuid)
-        return _to_response(row, await DrawingLoanService._lines(tenant_id, row.id))
+        uuid_map = await _user_uuid_map(tenant_id, [row.borrower_user_id] if row.borrower_user_id else [])
+        return _to_response(
+            row,
+            await DrawingLoanService._lines(tenant_id, row.id),
+            borrower_user_uuid=uuid_map.get(row.borrower_user_id) if row.borrower_user_id else None,
+        )
 
     @staticmethod
     async def list_loans(
@@ -227,6 +305,8 @@ class DrawingLoanService:
         lines = await DrawingLoanService._lines(tenant_id, row.id)
         if not lines:
             raise ValidationError("请至少选择一张已发布图纸")
+        if not row.borrower_department_id or not row.borrower_user_id:
+            raise ValidationError("请填写借阅部门与借阅人")
         row.status = "Pending"
         apply_update_audit(row, current_user)
         await row.save()

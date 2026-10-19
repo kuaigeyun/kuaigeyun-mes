@@ -3,12 +3,13 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { App, Modal, Progress, Typography, Spin } from 'antd';
+import { Button, Modal, Progress, Typography, Spin } from 'antd';
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   LoadingOutlined,
   ClockCircleOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +17,6 @@ import {
   completeBootstrap,
   getBootstrapStatus,
   runBootstrapStep,
-  type BootstrapStep,
 } from '../../services/tenantInit';
 import { NAVIGATION_MENU_TREE_QUERY_KEY } from '../../hooks/useUnifiedMenuData';
 import { useGlobalStore } from '../../stores/globalStore';
@@ -30,7 +30,6 @@ type StepStatus = 'pending' | 'running' | 'success' | 'error';
 
 const TenantBootstrapModal: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
   const startedRef = useRef(false);
 
@@ -44,6 +43,8 @@ const TenantBootstrapModal: React.FC = () => {
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
   const [stepStatus, setStepStatus] = useState<Record<string, StepStatus>>({});
+  const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
+  const [bootstrapError, setBootstrapError] = useState<string>();
 
   const steps = status?.steps ?? [];
   const completedCount = steps.filter((s) => stepStatus[s.key] === 'success').length;
@@ -60,29 +61,36 @@ const TenantBootstrapModal: React.FC = () => {
     if (!steps.length) return;
     setRunning(true);
     setFinished(false);
+    setBootstrapError(undefined);
 
-    const nextStatus: Record<string, StepStatus> = {};
-    for (const step of steps) {
-      nextStatus[step.key] = 'pending';
-    }
-    setStepStatus(nextStatus);
+    const pendingSteps = steps.filter((step) => stepStatus[step.key] !== 'success');
+    setStepStatus((prev) => ({
+      ...prev, ...Object.fromEntries(pendingSteps.map((step) => [step.key, 'pending' as const])),
+    }));
 
     let hasError = false;
-    for (const step of steps) {
+    for (const step of pendingSteps) {
       setStepStatus((prev) => ({ ...prev, [step.key]: 'running' }));
+      setStepErrors((prev) => ({ ...prev, [step.key]: '' }));
       try {
         const result = await runBootstrapStep(step.key);
         if (!result.success) {
           hasError = true;
           setStepStatus((prev) => ({ ...prev, [step.key]: 'error' }));
+          setStepErrors((prev) => ({ ...prev, [step.key]: result.error || t('components.tenantBootstrap.stepFailed') }));
           continue;
         }
         setStepStatus((prev) => ({ ...prev, [step.key]: 'success' }));
       } catch (error: any) {
         hasError = true;
         setStepStatus((prev) => ({ ...prev, [step.key]: 'error' }));
-        messageApi.error(error?.message || t('components.tenantBootstrap.stepFailed'));
+        setStepErrors((prev) => ({ ...prev, [step.key]: error?.message || t('components.tenantBootstrap.stepFailed') }));
       }
+    }
+
+    if (hasError) {
+      setRunning(false);
+      return;
     }
 
     try {
@@ -90,15 +98,12 @@ const TenantBootstrapModal: React.FC = () => {
       refreshMenus();
       await refetchStatus();
       setFinished(true);
-      if (hasError) {
-        messageApi.warning(t('components.tenantBootstrap.partialSuccess'));
-      }
     } catch (error: any) {
-      messageApi.error(error?.message || t('components.tenantBootstrap.completeFailed'));
+      setBootstrapError(error?.message || t('components.tenantBootstrap.completeFailed'));
     } finally {
       setRunning(false);
     }
-  }, [messageApi, refetchStatus, refreshMenus, steps, t]);
+  }, [refetchStatus, refreshMenus, stepStatus, steps, t]);
 
   useEffect(() => {
     if (status?.pending) {
@@ -132,7 +137,11 @@ const TenantBootstrapModal: React.FC = () => {
       closable={false}
       mask={{ closable: false }}
       keyboard={false}
-      footer={finished ? undefined : null}
+      footer={running ? null : finished ? undefined : (
+        <Button type="primary" icon={<ReloadOutlined />} onClick={() => void runBootstrap()}>
+          {t('common.retry')}
+        </Button>
+      )}
       okText={t('components.tenantBootstrap.enterSystem')}
       cancelButtonProps={{ style: { display: 'none' } }}
       onOk={handleEnter}
@@ -145,8 +154,9 @@ const TenantBootstrapModal: React.FC = () => {
       </Typography.Paragraph>
 
       <Progress
-        percent={running ? progressPercent : finished ? 100 : progressPercent}
-        status={finished ? 'success' : running ? 'active' : 'normal'}
+        percent={progressPercent}
+        status={finished ? 'success' : running ? 'active' :
+          bootstrapError || Object.values(stepStatus).includes('error') ? 'exception' : 'normal'}
         style={{ marginBottom: 16 }}
       />
 
@@ -170,12 +180,18 @@ const TenantBootstrapModal: React.FC = () => {
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   {tenantBootstrapStepDescription(t, step)}
                 </Typography.Text>
+                {stepErrors[step.key] && (
+                  <Typography.Paragraph type="danger" style={{ marginBottom: 0, overflowWrap: 'anywhere' }}>
+                    {stepErrors[step.key]}
+                  </Typography.Paragraph>
+                )}
               </div>
             </div>
           );
         })}
       </div>
 
+      {bootstrapError && <Typography.Paragraph type="danger">{bootstrapError}</Typography.Paragraph>}
       {running && !finished ? (
         <div style={{ textAlign: 'center', marginTop: 8 }}>
           <Spin size="small" />

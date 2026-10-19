@@ -310,6 +310,7 @@ class InboundHubCapabilities(BaseModel):
     withdraw: ActionCapability
     update: ActionCapability
     print: ActionCapability
+    push_payment_application: Optional[ActionCapability] = None
 
 
 class OutboundHubCapabilities(BaseModel):
@@ -608,6 +609,8 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "purchase_order.push_prepayment.require_application": "组织已启用「预付款须走付款申请」，请下推付款申请单",
     "purchase_order.push_payment_application.not_audited": "只有已审核或已确认的采购单才能下推付款申请",
     "purchase_order.push_payment_application.no_amount": "采购单未填写预付款金额或无可请款预付额度",
+    "purchase_receipt.push_payment_application.not_posted": "仅已过账的采购入库可下推付款申请",
+    "purchase_receipt.push_payment_application.no_open_amount": "该入库应付无可请款余额",
     "payment_application.pull_from_purchase_order.no_amount": "该采购订单预付请款额度已用尽",
     "payment.pull_from_payment_application.not_allowed": "付款申请单不可取单生成付款（须已批准且有余额）",
     "payment_application.update.not_allowed": "当前状态不可编辑付款申请",
@@ -616,6 +619,32 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "payment_application.approve.not_allowed": "当前状态不可审核",
     "payment_application.withdraw.not_allowed": "当前状态不可撤回提交",
     "payment_application.push_payment.not_allowed": "须已批准且有余额才可下推付款单",
+    "other_expense.update.not_allowed": "仅草稿或已驳回的其他费用支出可编辑",
+    "other_expense.delete.not_allowed": "仅草稿状态的其他费用支出可删除",
+    "other_expense.submit.not_allowed": "仅草稿或已驳回的其他费用支出可提交",
+    "other_expense.approve.not_allowed": "仅待审核的其他费用支出可审核",
+    "other_expense.reject.not_allowed": "仅待审核的其他费用支出可驳回",
+    "other_expense.confirm.not_allowed": "当前状态不可确认过账",
+    "other_expense.confirm.need_supplier": "往来类型须为供应商才可确认付款过账",
+    "other_expense.confirm.no_payable": "尚未生成应付单，请先完成审核挂账",
+    "other_expense.confirm.need_bank": "请先选择出账银行账户后再确认过账",
+    "other_expense.confirm.already_posted": "已确认过账，请勿重复操作",
+    "other_expense.unconfirm.not_allowed": "仅已确认的其他费用支出可取消确认",
+    "other_expense.cancel.not_allowed": "当前状态不可作废",
+    "other_expense.action.not_allowed": "当前不可执行该操作",
+    "other_income.update.not_allowed": "仅草稿或已驳回的其他费用收入可编辑",
+    "other_income.delete.not_allowed": "仅草稿状态的其他费用收入可删除",
+    "other_income.submit.not_allowed": "仅草稿或已驳回的其他费用收入可提交",
+    "other_income.approve.not_allowed": "仅待审核的其他费用收入可审核",
+    "other_income.reject.not_allowed": "仅待审核的其他费用收入可驳回",
+    "other_income.confirm.not_allowed": "当前状态不可确认过账",
+    "other_income.confirm.need_customer": "往来类型须为客户才可确认收款过账",
+    "other_income.confirm.no_receivable": "尚未生成应收单，请先完成审核挂账",
+    "other_income.confirm.need_bank": "请先选择入账银行账户后再确认过账",
+    "other_income.confirm.already_posted": "已确认过账，请勿重复操作",
+    "other_income.unconfirm.not_allowed": "仅已确认的其他费用收入可取消确认",
+    "other_income.cancel.not_allowed": "当前状态不可作废",
+    "other_income.action.not_allowed": "当前不可执行该操作",
     "sales_order.push_prepayment.not_audited": "只有已审核或已确认的销售订单才能下推预收收款单",
     "sales_order.push_prepayment.no_amount": "销售订单未填写预收款金额，无法下推预收收款单",
     "sales_order.push_prepayment.already_exists": "该销售订单已关联预收收款单",

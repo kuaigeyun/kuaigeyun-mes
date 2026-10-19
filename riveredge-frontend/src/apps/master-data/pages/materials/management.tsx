@@ -1364,7 +1364,10 @@ const MaterialsManagementPage: React.FC = () => {
       setLoadingBaseUnitOptions(true)
       const res = await materialUnitApi.list({ skip: 0, limit: 500, is_active: true })
       setBaseUnitOptions(
-        (res.items ?? []).map((u) => ({ label: u.name || u.code, value: u.code })),
+        (res.items ?? []).map((u) => {
+          const name = String(u.name || u.code || '').trim()
+          return { label: name, value: name }
+        }),
       )
     } catch (error: any) {
       console.error('加载基础单位选项失败:', error)

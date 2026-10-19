@@ -13,6 +13,12 @@ export type {
 } from './UniPullQuerySelectionBar';
 export { useUniPullQuery } from './useUniPullQuery';
 export {
+  PULL_SOURCE_REFERENCE,
+  loadPullSourceReferenceOptions,
+  loadPullWarehouseReferenceOptions,
+} from './loadPullSourceReferenceOptions';
+export type { PullSourceSelectOption } from './loadPullSourceReferenceOptions';
+export {
   UNI_PULL_SCOPE_ALL,
   UNI_PULL_SCOPE_PULLABLE,
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,

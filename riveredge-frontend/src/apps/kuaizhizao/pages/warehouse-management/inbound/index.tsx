@@ -51,7 +51,6 @@ import {
 import { LinkedIqcPanel, LinkedFqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
 import {
-  warehouseApi as masterWarehouseApi,
   storageAreaApi,
   storageLocationApi,
 } from '../../../../master-data/services/warehouse';
@@ -63,6 +62,7 @@ import {
 } from '../../../../master-data/services/material';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
+import { loadPullWarehouseReferenceOptions } from '../../../../../components/uni-pull-query';
 import {
   loadConfirmPreviewMaterialMeta,
   type ConfirmPreviewMaterialMeta,
@@ -79,6 +79,9 @@ import { formatBusinessDateOnly, formatQuantity } from '../../../../../utils/for
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { renderWarehouseLineQuantity, renderWarehouseHeaderQuantity } from '../shared/warehouseListQuantity';
 import { formatApiErrorDetail } from '../../../../../services/api';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+
+const INBOUND_HOST_RESOURCE = 'kuaizhizao:inbound';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import {
   DocumentPushProgressBar,
@@ -118,6 +121,7 @@ import { fetchPurchaseReceiptIqcEnsure } from './inboundPurchaseIqcGate';
 import { pullPaymentApplicationFromPurchaseReceipt } from '../../../services/payment-application';
 import { PurchaseReceiptIqcReviewModal } from './PurchaseReceiptIqcReviewModal';
 import PurchaseReceiptEditModal from './PurchaseReceiptEditModal';
+import OtherInboundEditModal from './OtherInboundEditModal';
 import { fetchCustomerMaterialIqcEnsure } from './inboundCustomerMaterialIqcGate';
 import { CustomerMaterialIqcReviewModal } from './CustomerMaterialIqcReviewModal';
 import {
@@ -191,6 +195,7 @@ interface InboundOrderItem {
   material_code?: string;
   material_name?: string;
   material_spec?: string;
+  material_model?: string;
   material_unit?: string;
   purchase_order_item_id?: number;
   receipt_quantity?: number;
@@ -361,39 +366,87 @@ function formatStorageAreaOrLocationLabel(code?: string, name?: string): string 
   return [c, n].filter(Boolean).join(' ').trim();
 }
 
-/** 按仓库拉取库区下全部库位，供确认入库预览行内选择；展示为「库区 - 库位」 */
+/** 按仓库拉取库区下全部库位，供确认入库预览行内选择；展示为「库区 - 库位」。无查看权时返回空，不阻断确认预览。 */
 async function fetchStorageLocationsForWarehouse(
   warehouseId: number
 ): Promise<{ value: number; label: string; code: string }[]> {
-  const saRes = await storageAreaApi.list({
-    warehouse_id: warehouseId,
-    limit: 500,
-    is_active: true,
-  } as any);
-  const areas = (saRes as { items?: { id: number; code?: string; name?: string }[] })?.items ?? [];
-  const parts = await Promise.all(
-    areas.map(async (a) => {
-      const locRes = await storageLocationApi.list({
-        storage_area_id: a.id,
-        limit: 500,
-        is_active: true,
-      } as any);
-      const locs = (locRes as { items?: { id: number; code?: string; name?: string }[] })?.items ?? [];
-      const areaLabel = formatStorageAreaOrLocationLabel(a.code, a.name) || `库区${a.id}`;
-      return locs.map((l) => {
-        const locLabel = formatStorageAreaOrLocationLabel(l.code, l.name) || String(l.id);
-        return {
-          value: l.id,
-          label: `${areaLabel} - ${locLabel}`,
-          code: String(l.code || ''),
-        };
-      });
-    })
-  );
-  return parts.flat().sort((a, b) => a.label.localeCompare(b.label));
+  try {
+    const saRes = await storageAreaApi.list({
+      warehouse_id: warehouseId,
+      limit: 500,
+      is_active: true,
+    } as any);
+    const areas = (saRes as { items?: { id: number; code?: string; name?: string }[] })?.items ?? [];
+    const parts = await Promise.all(
+      areas.map(async (a) => {
+        try {
+          const locRes = await storageLocationApi.list({
+            storage_area_id: a.id,
+            limit: 500,
+            is_active: true,
+          } as any);
+          const locs = (locRes as { items?: { id: number; code?: string; name?: string }[] })?.items ?? [];
+          const areaLabel = formatStorageAreaOrLocationLabel(a.code, a.name) || `库区${a.id}`;
+          return locs.map((l) => {
+            const locLabel = formatStorageAreaOrLocationLabel(l.code, l.name) || String(l.id);
+            return {
+              value: l.id,
+              label: `${areaLabel} - ${locLabel}`,
+              code: String(l.code || ''),
+            };
+          });
+        } catch {
+          return [];
+        }
+      }),
+    );
+    return parts.flat().sort((a, b) => a.label.localeCompare(b.label));
+  } catch {
+    return [];
+  }
 }
 
-const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1280;
+const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1480;
+
+/** 详情明细：物料编码/名称后接规格、型号（与库存即时查询列一致） */
+function buildInboundDetailMaterialCols(t: (key: string) => string) {
+  const dash = (v: unknown) => (v != null && String(v).trim() ? String(v) : '—');
+  return [
+    { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+    { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.spec'),
+      dataIndex: 'material_spec',
+      width: 120,
+      ellipsis: true,
+      render: (v: unknown) => dash(v),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.model'),
+      dataIndex: 'material_model',
+      width: 100,
+      ellipsis: true,
+      render: (v: unknown) => dash(v),
+    },
+  ];
+}
+
+/** 打开详情时用已预取的物料档案补齐规格/型号（行无快照时） */
+function enrichInboundItemsMaterialSpecModel<T extends Record<string, unknown>>(
+  items: T[],
+  materialById: Map<string, { specification?: string; model?: string }>,
+): T[] {
+  return items.map((it) => {
+    const mid = it.material_id;
+    const m = mid != null && mid !== '' ? materialById.get(String(mid)) : undefined;
+    const spec =
+      String(it.material_spec ?? '').trim() || String(m?.specification ?? '').trim() || undefined;
+    const model =
+      String(it.material_model ?? it.model ?? '').trim() || String(m?.model ?? '').trim() || undefined;
+    if (spec === it.material_spec && model === it.material_model) return it;
+    return { ...it, material_spec: spec, material_model: model };
+  });
+}
 
 function renderInboundDetailSerialCell(t: (key: string, options?: { count?: number }) => string, val: unknown): string {
   if (!Array.isArray(val) || val.length === 0) return '—';
@@ -741,12 +794,21 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         detailData = await outsourceProductReturnApi.get(record.id!.toString());
       }
       if (detailData) {
-        await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
+        const rawItems = Array.isArray(detailData.items) ? detailData.items : [];
+        const materialById = await prefetchMaterialsForUnitSelect(
+          rawItems.map((it: { material_id?: number }) => it?.material_id),
+        );
+        const items = enrichInboundItemsMaterialSpecModel(rawItems, materialById);
+        const detailWithItems = { ...detailData, items };
         if (record.receipt_type === 'purchase') {
-          setPurchaseReceiptAttachments(mapAttachmentsToUploadList(detailData.attachments));
+          setPurchaseReceiptAttachments(mapAttachmentsToUploadList(detailWithItems.attachments));
         }
         setCurrentOrder(
-          normalizeInboundHubDetail(record.receipt_type!, detailData as Record<string, unknown>, record),
+          normalizeInboundHubDetail(
+            record.receipt_type!,
+            detailWithItems as Record<string, unknown>,
+            record,
+          ),
         );
         setInboundTrackingRefreshKey((k) => k + 1);
         if (record.receipt_type === 'purchase' && record.id != null) {
@@ -773,6 +835,12 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
 
   const isEditablePurchaseReceipt = (order?: InboundOrder | null) =>
     order?.receipt_type === 'purchase' && isInboundEditable(order);
+
+  const isEditableOtherInbound = (order?: InboundOrder | null) =>
+    order?.receipt_type === 'other_inbound' && isInboundEditable(order);
+
+  const isInboundHubEditable = (order?: InboundOrder | null) =>
+    isEditablePurchaseReceipt(order) || isEditableOtherInbound(order);
 
   const handleEdit = useCallback((record: InboundOrder) => {
     setEditModalRecord(record);
@@ -855,18 +923,18 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         return warehouseApi.purchaseReceipt.get(idStr);
       };
 
-      const [whRes, detailData] = await Promise.all([
-        masterWarehouseApi.list({ is_active: true, limit: 500 }),
+      const [whOptions, detailData] = await Promise.all([
+        // 与取单一致：仓库走 reference-display（read|display），禁止直调 warehouses list 要求 :read
+        loadPullWarehouseReferenceOptions(INBOUND_HOST_RESOURCE),
         fetchDetail(),
       ]);
-      const whList = Array.isArray(whRes) ? whRes : (whRes as any)?.data ?? (whRes as any)?.items ?? whRes ?? [];
       const materialById = await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
       setPurchaseConfirmWarehouseOptions(
-        (Array.isArray(whList) ? whList : []).map((w: any) => ({
-          label: `${w.code || ''} ${w.name || ''}`.trim() || String(w.id),
-          value: w.id,
-          name: w.name || '',
-        }))
+        whOptions.map((w) => ({
+          label: w.label,
+          value: w.value,
+          name: w.label,
+        })),
       );
       const qty: Record<number, number> = {};
       const batch: Record<number, string> = {};
@@ -975,8 +1043,10 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         const fieldFormValues = await loadProductionReturnFormFieldValues(record.id);
         productionReturnConfirmFormRef.current?.setFieldsValue(fieldFormValues);
       }
-    } catch {
-      messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadConfirmPreviewFailed'));
+    } catch (error: unknown) {
+      messageApi.error(
+        getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.msg.loadConfirmPreviewFailed')),
+      );
       resetPurchaseConfirmPreview();
     } finally {
       setPurchaseConfirmPreviewLoading(false);
@@ -1951,11 +2021,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         const nodes: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="detail" onClick={() => void handleDetail(record)} />,
         ];
-        if (
-          record.receipt_type === 'purchase' &&
-          isInboundEditable(record) &&
-          inboundPerms.canUpdate
-        ) {
+        if (isInboundHubEditable(record) && inboundPerms.canUpdate) {
           nodes.push(
             <Button
               {...rowActionKind('update')}
@@ -2042,7 +2108,8 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           record.receipt_type === 'purchase' &&
           posted &&
           record.id &&
-          paymentApplicationPerms.canCreate
+          paymentApplicationPerms.canCreate &&
+          record.capabilities?.push_payment_application?.allowed === true
         ) {
           nodes.push(
             <Button
@@ -2230,11 +2297,11 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
 
   const inboundDetailLineColumns = useMemo(() => {
     if (!currentOrder) return [];
+    const materialCols = buildInboundDetailMaterialCols(t);
     if (currentOrder.receipt_type === 'production_return') {
       return appendWarehouseLineAmountColumns(
         [
-          { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-          { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+          ...materialCols,
           {
             title: t('common.unit'),
             dataIndex: 'material_unit',
@@ -2260,8 +2327,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     if (currentOrder.receipt_type === 'purchase') {
       return appendWarehouseLineAmountColumns(
         [
-          { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-          { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+          ...materialCols,
           {
             title: t('app.kuaizhizao.warehouseInbound.col.actualQty'),
             dataIndex: 'receipt_quantity',
@@ -2292,8 +2358,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     if (currentOrder.receipt_type === 'outsource_receipt') {
       return appendWarehouseLineAmountColumns(
         [
-          { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-          { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+          ...materialCols,
           {
             title: t('app.kuaizhizao.warehouseInbound.col.thisReceiptOutsource'),
             dataIndex: 'receipt_quantity',
@@ -2344,8 +2409,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     }
     return appendWarehouseLineAmountColumns(
       [
-        { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+        ...materialCols,
         {
           title: t('common.quantity'),
           dataIndex: 'receipt_quantity',
@@ -2898,7 +2962,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         extra={
           currentOrder ? (
             <Space>
-              {isEditablePurchaseReceipt(currentOrder) && inboundPerms.canUpdate ? (
+              {isInboundHubEditable(currentOrder) && inboundPerms.canUpdate ? (
                 <Button
                   {...rowActionKind('update')}
                   onClick={() => {
@@ -3029,8 +3093,14 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         onContinue={() => void handleFqcReviewContinue()}
       />
       <PurchaseReceiptEditModal
-        open={editModalRecord != null}
-        record={editModalRecord}
+        open={editModalRecord?.receipt_type === 'purchase'}
+        record={editModalRecord?.receipt_type === 'purchase' ? editModalRecord : null}
+        onClose={handleEditModalClose}
+        onSuccess={handleEditModalSuccess}
+      />
+      <OtherInboundEditModal
+        open={editModalRecord?.receipt_type === 'other_inbound'}
+        record={editModalRecord?.receipt_type === 'other_inbound' ? editModalRecord : null}
         onClose={handleEditModalClose}
         onSuccess={handleEditModalSuccess}
       />

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { App, Button, Space } from 'antd';
 import { AuditOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../services/api';
@@ -14,15 +14,24 @@ import { useGlobalStore } from '../../stores';
 import { hasModulePermission, hasReviewPermission } from '../../utils/permissionContract';
 import { isAdminBypass, resolveUserForMenuPermission } from '../../utils/permission';
 import UniAuditModal, { type UniAuditHubAction } from './UniAuditModal';
+import UniAuditInitiatorSubmitModal from './UniAuditInitiatorSubmitModal';
+import { resolveRecordDocumentCode } from './resolveRecordDocumentCode';
+import {
+  fetchSubmitInitiatorRequirements,
+  type SubmitInitiatorBranchHint,
+  type SubmitInitiatorNodeHint,
+} from '../../services/uniAudit';
+import { getApprovalStatus } from '../../services/approvalInstance';
 import type { UniAuditAction, UniAuditActionsMap, UniAuditEndpointMap, WorkflowStatus } from './types';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
-const DEFAULT_ENDPOINTS: Record<UniAuditAction, string> = {
+const DEFAULT_ENDPOINTS: Partial<Record<UniAuditAction, string>> = {
   submit: 'submit',
   withdraw: 'withdraw',
   approve: 'approve',
   reject: 'reject',
   revoke: 'unapprove',
+  recall_own: 'recall_own',
 };
 
 export interface UniAuditActionsProps {
@@ -195,9 +204,16 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const [loadingAction, setLoadingAction] = useState<UniAuditAction | null>(null);
   const [activeAction, setActiveAction] = useState<UniAuditAction | null>(null);
   const [auditHubOpen, setAuditHubOpen] = useState(false);
+  const [initiatorSubmitOpen, setInitiatorSubmitOpen] = useState(false);
+  const [initiatorNodes, setInitiatorNodes] = useState<SubmitInitiatorNodeHint[]>([]);
+  const [initiatorBranchConditions, setInitiatorBranchConditions] = useState<SubmitInitiatorBranchHint[]>(
+    [],
+  );
+  const [initiatorLoading, setInitiatorLoading] = useState(false);
   const rawCurrentUser = useCurrentUser();
   const currentUser = useMemo(() => resolveUserForMenuPermission(rawCurrentUser), [rawCurrentUser]);
   const adminOpen = isAdminBypass(currentUser);
+  const documentCode = useMemo(() => resolveRecordDocumentCode(record), [record]);
 
   const inferredNodeKey = useMemo(() => auditNodeKey || inferAuditNodeKey(apiPrefix), [auditNodeKey, apiPrefix]);
 
@@ -206,9 +222,13 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
       ? (record.audit as { phase: string; enabled?: boolean; allowed_actions?: string[]; entity_type?: string })
       : null;
   const auditEntityType = (auditState?.entity_type || '').trim();
-  const resolvedEntityType = entityType || inferredNodeKey || auditEntityType;
+  const resolvedEntityType = (entityType || inferredNodeKey || auditEntityType || '').trim();
 
-  const inferredAuditEnabled = useAuditRequired(inferredNodeKey || auditEntityType, false);
+  // 列表行可能无 record.audit：须用 entityType / nodeKey 查业务配置，禁止空 key → false 误跳过发起人自选
+  const inferredAuditEnabled = useAuditRequired(
+    inferredNodeKey || (entityType || '').trim() || auditEntityType,
+    false,
+  );
   const fallbackManualAuditEnabled = workflowAuditEnabled ?? (resolvedEntityType ? inferredAuditEnabled : false);
   const resolvedResource = (
     resourcePrefix
@@ -250,6 +270,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     showApprove,
     showReject,
     showRevoke,
+    showRecallOwn,
     showAuditHub,
   } = actionVisibility;
 
@@ -288,6 +309,14 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
       || (auditAuthoritative && Boolean(resolvedEntityType))
       || Boolean(actions.revoke)
       || Boolean(apiPrefix),
+    recall_own:
+      routeViaUnified('recall_own')
+      || (auditAuthoritative && Boolean(resolvedEntityType)),
+    transfer: false,
+    add_sign: false,
+    delegate: false,
+    urge: false,
+    edit: false,
   };
   const recordViewerActions = readAuditViewerActions(auditState);
   const flowApprove = resolveAuditFlowExecutePermission('approve', {
@@ -303,12 +332,21 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     liveViewerActions: recordViewerActions,
   });
 
+  const viewerCanRevoke = auditState?.viewer_can_revoke;
+  const viewerCanWithdraw = auditState?.viewer_can_withdraw_submit;
+
   const canExecuteByAction: Record<UniAuditAction, boolean> = {
     submit: canSubmit,
-    withdraw: canSubmit,
+    withdraw: canSubmit && viewerCanWithdraw !== false,
     approve: flowApprove.canExecute,
     reject: flowReject.canExecute,
-    revoke: canRevoke,
+    revoke: canRevoke && viewerCanRevoke !== false,
+    recall_own: canReview,
+    transfer: canReview,
+    add_sign: canReview,
+    delegate: canReview,
+    urge: canSubmit,
+    edit: canReview,
   };
 
   const enabledForLabels = auditFeatureEnabled;
@@ -333,11 +371,21 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     if (showWithdraw && channelByAction.withdraw) {
       items.push({ action: 'withdraw', title: '撤回提交', canExecute: canExecuteByAction.withdraw });
     }
+    if (showRecallOwn && channelByAction.recall_own) {
+      items.push({
+        action: 'recall_own',
+        title: '撤销审核',
+        canExecute: canExecuteByAction.recall_own,
+        rbacAllowed: canReview,
+      });
+    }
     if (showApprove && channelByAction.approve) {
       items.push({
         action: 'approve',
         title: approveLabel,
+        // 列表态可能尚无待办；弹窗 getApprovalStatus 会补齐并用 live viewer_actions 再裁
         canExecute: canExecuteByAction.approve,
+        rbacAllowed: canReview,
         disabledReason: flowApprove.blockReason,
         primary: true,
       });
@@ -347,6 +395,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
         action: 'reject',
         title: '驳回',
         canExecute: canExecuteByAction.reject,
+        rbacAllowed: canReview,
         disabledReason: flowReject.blockReason,
         danger: true,
       });
@@ -354,14 +403,17 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     return items;
   }, [
     showWithdraw,
+    showRecallOwn,
     showApprove,
     showReject,
     channelByAction.withdraw,
+    channelByAction.recall_own,
     channelByAction.approve,
     channelByAction.reject,
     canExecuteByAction.withdraw,
     canExecuteByAction.approve,
     canExecuteByAction.reject,
+    canReview,
     flowApprove.blockReason,
     flowReject.blockReason,
     approveLabel,
@@ -404,6 +456,31 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   const openActionModal = (action: UniAuditAction) => setActiveAction(action);
 
+  const beginSubmit = useCallback(async () => {
+    if (!auditFeatureEnabled || !resolvedEntityType) {
+      openActionModal('submit');
+      return;
+    }
+    setInitiatorLoading(true);
+    try {
+      const { nodes, branch_conditions: branchConditions } = await fetchSubmitInitiatorRequirements(
+        resolvedEntityType,
+      );
+      if (nodes.length > 0 || branchConditions.length > 0) {
+        setInitiatorNodes(nodes);
+        setInitiatorBranchConditions(branchConditions);
+        setInitiatorSubmitOpen(true);
+      } else {
+        openActionModal('submit');
+      }
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      message.error(`加载提交审批选项失败: ${errMsg}`);
+    } finally {
+      setInitiatorLoading(false);
+    }
+  }, [auditFeatureEnabled, resolvedEntityType, message]);
+
   const getActionTitle = (action: UniAuditAction): string => {
     if (action === 'submit') return effectiveSubmitLabel;
     if (action === 'approve') return approveLabel;
@@ -414,6 +491,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     if (action === 'delegate') return '委托';
     if (action === 'urge') return '催办';
     if (action === 'withdraw') return '撤回提交';
+    if (action === 'recall_own') return '撤销审核';
     return '操作';
   };
 
@@ -421,6 +499,9 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     if (adminOpen) return true;
     if (action === 'urge') return canSubmit;
     if (action === 'transfer' || action === 'add_sign' || action === 'delegate') return canReview;
+    // approve/reject：此处只验 RBAC。列表态 viewer_actions 可能尚未补齐待办（batch 只读），
+    // 弹窗 getApprovalStatus 会同步任务后再用 live 门控按钮；后端 execute_approval 仍校验待办人。
+    if (action === 'approve' || action === 'reject') return canReview;
     return Boolean(canExecuteByAction[action as keyof typeof canExecuteByAction]);
   };
 
@@ -428,10 +509,14 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     action: UniAuditAction,
     reason?: string,
     payload?: Record<string, unknown>,
-  ) => {
+  ): Promise<boolean> => {
     if (!canRunAction(action)) {
-      message.warning('您没有该操作权限，仅可查看审核流程');
-      return;
+      message.warning(
+        action === 'approve' || action === 'reject'
+          ? '您的角色未开通本单据的审核权限'
+          : '您没有该操作权限，仅可查看审核流程',
+      );
+      return false;
     }
     setLoadingAction(action);
     try {
@@ -441,27 +526,54 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
       } else {
         message.success(`${getActionTitle(action)}成功`);
       }
+      onSuccess?.();
+
+      // 多级审核：本级通过 / 撤回本级后若仍 pending，保持弹窗并刷新节点图
+      if (
+        auditHubOpen
+        && (action === 'approve' || action === 'reject' || action === 'recall_own')
+        && resolvedEntityType
+      ) {
+        try {
+          const status = await getApprovalStatus(resolvedEntityType, recordId);
+          const stillPending = status?.has_instance && status.status === 'pending';
+          if (action === 'recall_own' && stillPending) {
+            return true;
+          }
+          const stillMine =
+            Boolean(status?.viewer_actions?.has_my_pending_task)
+            || Boolean(status?.has_my_pending_task)
+            || Boolean(status?.viewer_actions?.approve);
+          if (stillPending && (stillMine || adminOpen)) {
+            return true;
+          }
+        } catch {
+          // 状态刷新失败则按原路径关闭弹窗
+        }
+      }
+
       setActiveAction(null);
       setAuditHubOpen(false);
-      onSuccess?.();
+      return false;
     } catch (error: any) {
       message.error(`${getActionTitle(action)}失败: ${error.message || '未知错误'}`);
+      return false;
     } finally {
       setLoadingAction(null);
     }
   };
 
-  const handleConfirm = async (reason?: string) => {
+  const handleConfirm = async (reason?: string, payload?: Record<string, unknown>) => {
     if (!activeAction) return;
-    await runAction(activeAction, reason);
+    await runAction(activeAction, reason, payload);
   };
 
   const handleHubAction = async (
     action: UniAuditAction,
     reason?: string,
     payload?: Record<string, unknown>,
-  ) => {
-    await runAction(action, reason, payload);
+  ): Promise<boolean> => {
+    return runAction(action, reason, payload);
   };
 
   const isBusy = !!loadingAction;
@@ -478,18 +590,25 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
       labelKeep?: boolean;
       loading?: boolean;
       disabled?: boolean;
+      title?: string;
+      keepVisibleWhenDisabled?: boolean;
       onClick: () => void;
       danger?: boolean;
     },
   ) => {
+    const visibleWhenDisabled = config.keepVisibleWhenDisabled
+      ? { 'data-row-action-visible-when-disabled': true as const }
+      : {};
     if (!isToolbarTheme) {
       return prepareRowActionButton(kind, {
         key: config.key,
         labelKeep: config.labelKeep,
         loading: config.loading,
         disabled: config.disabled,
+        title: config.title,
         onClick: config.onClick,
         children: config.label,
+        ...visibleWhenDisabled,
       });
     }
     const iconByKind: Partial<Record<RowActionPermissionKind, React.ReactNode>> = {
@@ -511,7 +630,9 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
         icon={iconByKind[kind]}
         loading={config.loading}
         disabled={config.disabled}
+        title={config.title}
         onClick={config.onClick}
+        {...visibleWhenDisabled}
       >
         {text}
       </Button>
@@ -528,19 +649,31 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
         key: 'audit-submit',
         label: effectiveSubmitLabel,
         labelKeep: submitUsesCustomLabel,
-        loading: loadingAction === 'submit',
-        disabled: isBusy && loadingAction !== 'submit',
-        onClick: () => openActionModal('submit'),
+        loading: loadingAction === 'submit' || initiatorLoading,
+        disabled: (isBusy && loadingAction !== 'submit') || initiatorLoading,
+        onClick: () => void beginSubmit(),
       }),
     );
   }
 
   if (showAuditHub) {
+    const mine = flowApprove.canExecute;
+    const acted = Boolean(recordViewerActions?.my_acted) && !mine;
+    const waitingReason = recordViewerActions?.block_reason
+      || flowApprove.blockReason
+      || undefined;
+    // 已审过：按钮改文案，仍可打开弹窗（提交人撤回/查看进度）
+    // 未轮到我且没有其它入口：置灰并保留，悬停说明当前待办人
+    const grayBecauseNotMine = !mine && !acted && !showWithdraw;
     inlineButtons.push(
       renderActionButton('audit', {
         key: 'audit-hub',
+        label: acted ? '您已审核' : approveLabel,
+        labelKeep: acted || approveLabel !== '审核',
         loading: isBusy && auditHubOpen,
-        disabled: isBusy && !auditHubOpen,
+        disabled: grayBecauseNotMine || (isBusy && !auditHubOpen),
+        keepVisibleWhenDisabled: grayBecauseNotMine,
+        title: !mine ? waitingReason : undefined,
         onClick: () => setAuditHubOpen(true),
       }),
     );
@@ -586,9 +719,11 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
           mode="hub"
           hubTitle="审核"
           entityName={entityName}
+          documentCode={documentCode}
           entityType={resolvedEntityType || undefined}
           entityId={recordId}
           hubActions={hubActions}
+          rbacAllowed={canReview}
           onCancel={() => setAuditHubOpen(false)}
           onAction={handleHubAction}
         />
@@ -599,6 +734,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
           open
           action={activeAction}
           entityName={entityName}
+          documentCode={documentCode}
           actionTitle={getActionTitle(activeAction)}
           actionDescription={
             confirmMessages[activeAction]
@@ -609,6 +745,25 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
           canExecute={canExecuteByAction[activeAction]}
           onCancel={() => setActiveAction(null)}
           onConfirm={handleConfirm}
+        />
+      )}
+
+      {initiatorSubmitOpen && (
+        <UniAuditInitiatorSubmitModal
+          open
+          entityName={entityName}
+          submitTitle={effectiveSubmitLabel}
+          nodes={initiatorNodes}
+          branchConditions={initiatorBranchConditions}
+          loading={loadingAction === 'submit'}
+          onCancel={() => setInitiatorSubmitOpen(false)}
+          onConfirm={async (selectedByNode, branchByCondition) => {
+            await runAction('submit', undefined, {
+              selected_approver_by_node: selectedByNode,
+              initiator_branch_by_node: branchByCondition,
+            });
+            setInitiatorSubmitOpen(false);
+          }}
         />
       )}
     </>

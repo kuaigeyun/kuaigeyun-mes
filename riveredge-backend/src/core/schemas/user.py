@@ -22,7 +22,7 @@ class UserCreateRequest(BaseModel):
     """
     username: str = Field(..., min_length=2, max_length=50, description="用户名（2-50 字符）")
     email: Optional[str] = Field(None, description="用户邮箱（可选）")
-    password: str = Field(..., min_length=8, description="密码（至少8个字符）")
+    password: str = Field(..., min_length=1, max_length=128, description="登录密码")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填）")
     department_uuid: Optional[str] = Field(None, description="所属部门UUID（可选）")

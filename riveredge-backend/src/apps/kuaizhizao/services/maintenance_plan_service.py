@@ -7,15 +7,18 @@ Author: Luigi Lu
 Date: 2026-01-05
 """
 
-from typing import List, Optional, Any
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from decimal import Decimal
 from tortoise.exceptions import IntegrityError
-from tortoise.expressions import Q
 
 from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
 from apps.kuaizhizao.models.equipment import Equipment
-from apps.kuaizhizao.models.equipment_ops import EquipmentMaintenanceScheme
+from apps.kuaizhizao.models.equipment_ops import (
+    EquipmentMaintenanceItem,
+    EquipmentMaintenanceScheme,
+    EquipmentSchemeBinding,
+)
 from apps.kuaizhizao.services.spare_part_service import SparePartService
 from apps.kuaizhizao.schemas.maintenance_plan import (
     MaintenancePlanCreate,
@@ -31,6 +34,12 @@ from core.utils.timezone_utils import resolve_business_datetime
 
 
 class MaintenancePlanService:
+    """
+    维护保养计划服务类
+
+    设备 / 维护类型 / 周期真源：保养方案 + EquipmentSchemeBinding(scheme_type=maintenance)。
+    """
+
     @staticmethod
     async def _resolve_maintenance_scheme(
         tenant_id: int, scheme_id: int
@@ -44,86 +53,93 @@ class MaintenancePlanService:
             raise ValidationError(f"保养方案不存在: {scheme_id}")
         if not scheme.is_active:
             raise ValidationError(f"保养方案已停用: {scheme.code or scheme_id}")
+        if not (scheme.maintenance_type or "").strip():
+            raise ValidationError(
+                f"保养方案「{scheme.code or scheme_id}」未配置维护类型，请先在方案中维护"
+            )
+        if not (scheme.cycle_type or "").strip():
+            raise ValidationError(
+                f"保养方案「{scheme.code or scheme_id}」未配置周期类型，请先在方案中维护"
+            )
         return scheme
 
-    """
-    维护保养计划服务类
-    
-    提供维护保养计划的 CRUD 操作。
-    """
-
     @staticmethod
-    async def _resolve_equipment_items(tenant_id: int, equipment_uuids: List[str]) -> List[dict[str, Any]]:
-        ordered: list[str] = []
-        seen: set[str] = set()
-        for raw in equipment_uuids:
-            value = str(raw).strip()
-            if not value or value in seen:
-                continue
-            seen.add(value)
-            ordered.append(value)
-        if not ordered:
-            raise ValidationError("至少选择一个关联设备")
+    async def _list_bound_equipment(
+        tenant_id: int, scheme_id: int
+    ) -> List[dict[str, Any]]:
+        bindings = await EquipmentSchemeBinding.filter(
+            tenant_id=tenant_id,
+            scheme_id=scheme_id,
+            scheme_type="maintenance",
+            deleted_at__isnull=True,
+        ).order_by("id").all()
+        if not bindings:
+            return []
 
+        equipment_ids = [b.equipment_id for b in bindings]
         rows = await Equipment.filter(
             tenant_id=tenant_id,
-            uuid__in=ordered,
+            id__in=equipment_ids,
             deleted_at__isnull=True,
         ).all()
-        by_uuid = {row.uuid: row for row in rows}
-        missing = [uuid for uuid in ordered if uuid not in by_uuid]
-        if missing:
-            raise ValidationError(f"设备不存在: {', '.join(missing)}")
-
-        return [
-            {
-                "id": by_uuid[uuid].id,
-                "uuid": by_uuid[uuid].uuid,
-                "code": by_uuid[uuid].code,
-                "name": by_uuid[uuid].name,
-            }
-            for uuid in ordered
-        ]
-
-    @staticmethod
-    def _apply_equipment_items(plan: MaintenancePlan, items: List[dict[str, Any]]) -> None:
-        primary = items[0]
-        plan.equipment_id = primary["id"]
-        plan.equipment_uuid = primary["uuid"]
-        plan.equipment_name = (
-            primary["name"]
-            if len(items) == 1
-            else f"{primary['name']} 等{len(items)}台"
-        )
-        plan.equipment_items = items
-
-    @staticmethod
-    def _fallback_equipment_items(plan: MaintenancePlan) -> List[dict[str, Any]]:
-        if plan.equipment_items:
-            return list(plan.equipment_items)
-        if plan.equipment_uuid:
-            return [
+        by_id = {row.id: row for row in rows}
+        items: list[dict[str, Any]] = []
+        seen: set[int] = set()
+        for binding in bindings:
+            equip = by_id.get(binding.equipment_id)
+            if not equip or equip.id in seen:
+                continue
+            seen.add(equip.id)
+            items.append(
                 {
-                    "id": plan.equipment_id,
-                    "uuid": plan.equipment_uuid,
-                    "code": None,
-                    "name": plan.equipment_name,
+                    "id": equip.id,
+                    "uuid": equip.uuid,
+                    "code": equip.code,
+                    "name": equip.name,
                 }
-            ]
-        return []
+            )
+        return items
 
     @staticmethod
-    def serialize_plan_response(plan: MaintenancePlan):
+    def _apply_scheme_snapshots(
+        plan: MaintenancePlan, scheme: EquipmentMaintenanceScheme
+    ) -> None:
+        plan.maintenance_scheme_id = scheme.id
+        plan.scheme_code = scheme.code
+        plan.scheme_name = scheme.name
+        plan.maintenance_type = scheme.maintenance_type
+        plan.cycle_type = scheme.cycle_type
+        plan.cycle_value = scheme.cycle_value
+        plan.cycle_unit = scheme.cycle_unit
+
+    @staticmethod
+    async def serialize_plan_response(plan: MaintenancePlan):
         from apps.kuaizhizao.schemas.maintenance_plan import MaintenancePlanResponse
 
-        items = MaintenancePlanService._fallback_equipment_items(plan)
         resp = MaintenancePlanResponse.model_validate(plan)
-        resp.equipment_items = items
-        resp.equipment_uuids = [str(item.get("uuid")) for item in items if item.get("uuid")]
-        if resp.equipment_uuids and not resp.equipment_uuid:
-            resp.equipment_uuid = resp.equipment_uuids[0]
+        scheme_id = plan.maintenance_scheme_id
+        bound: List[dict[str, Any]] = []
+        if scheme_id:
+            bound = await MaintenancePlanService._list_bound_equipment(
+                plan.tenant_id, int(scheme_id)
+            )
+        resp.bound_equipment_count = len(bound)
+        resp.equipment_items = bound
+        resp.equipment_uuids = [str(item["uuid"]) for item in bound if item.get("uuid")]
+        if bound:
+            resp.equipment_id = bound[0]["id"]
+            resp.equipment_uuid = bound[0]["uuid"]
+            resp.equipment_name = (
+                bound[0]["name"]
+                if len(bound) == 1
+                else f"{bound[0]['name']} 等{len(bound)}台"
+            )
+        else:
+            resp.equipment_id = None
+            resp.equipment_uuid = None
+            resp.equipment_name = None
         return resp
-    
+
     @staticmethod
     async def create_maintenance_plan(
         tenant_id: int,
@@ -131,49 +147,17 @@ class MaintenancePlanService:
         created_by: Optional[int] = None
     ) -> MaintenancePlan:
         """
-        创建维护计划
-        
-        Args:
-            tenant_id: 组织ID
-            data: 维护计划创建数据
-            created_by: 创建人ID（可选）
-            
-        Returns:
-            MaintenancePlan: 创建的维护计划对象
-            
-        Raises:
-            ValidationError: 当设备不存在或计划编号已存在时抛出
+        创建维护计划（必绑保养方案；设备/类型/周期取自方案与绑定）。
         """
         try:
             payload = data.model_dump(exclude_none=True)
-            equipment_uuids = payload.pop("equipment_uuids", None) or []
-            legacy_uuid = payload.pop("equipment_uuid", None)
-            if legacy_uuid and legacy_uuid not in equipment_uuids:
-                equipment_uuids.insert(0, legacy_uuid)
-            equipment_items = await MaintenancePlanService._resolve_equipment_items(
-                tenant_id,
-                equipment_uuids,
-            )
-            primary = equipment_items[0]
-            equipment = await Equipment.filter(
-                tenant_id=tenant_id,
-                uuid=primary["uuid"],
-                deleted_at__isnull=True,
-            ).first()
-            if not equipment:
-                raise ValidationError(f"设备不存在: {primary['uuid']}")
-
             scheme_id = payload.get("maintenance_scheme_id")
             if scheme_id is None:
                 raise ValidationError("请绑定保养方案")
             scheme = await MaintenancePlanService._resolve_maintenance_scheme(
                 tenant_id, int(scheme_id)
             )
-            payload["maintenance_scheme_id"] = scheme.id
-            payload["scheme_code"] = scheme.code
-            payload["scheme_name"] = scheme.name
-            
-            # 如果没有提供计划编号，自动生成（必须写回 payload，勿只改 data）
+
             plan_no = str(payload.get("plan_no") or "").strip()
             if not plan_no:
                 try:
@@ -183,7 +167,6 @@ class MaintenancePlanService:
                         context=None,
                     )
                 except Exception:
-                    # 编码规则缺失/未启用时降级，避免创建失败
                     plan_no = f"MP{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}"
                 plan_no = str(plan_no or "").strip()
                 if not plan_no:
@@ -195,7 +178,11 @@ class MaintenancePlanService:
                 tenant_id=tenant_id,
                 **payload,
             )
-            MaintenancePlanService._apply_equipment_items(plan, equipment_items)
+            MaintenancePlanService._apply_scheme_snapshots(plan, scheme)
+            plan.equipment_id = None
+            plan.equipment_uuid = None
+            plan.equipment_name = None
+            plan.equipment_items = None
             actor = None
             if created_by is not None:
                 actor = await User.filter(id=created_by, tenant_id=tenant_id).first()
@@ -234,7 +221,7 @@ class MaintenancePlanService:
         from apps.kuaizhizao.schemas.maintenance_plan import MaintenancePlanResponse
 
         milestones = await get_document_milestones(plan.tenant_id, "maintenance_plan", plan.id)
-        resp = MaintenancePlanService.serialize_plan_response(plan)
+        resp = await MaintenancePlanService.serialize_plan_response(plan)
         resp.lifecycle = get_maintenance_plan_lifecycle(plan, milestones=milestones)
         return resp
     
@@ -278,12 +265,24 @@ class MaintenancePlanService:
             deleted_at__isnull=True
         )
         
-        # 筛选条件
+        # 按设备筛：走保养方案绑定（与点检计划一致）
         if equipment_uuid:
-            query = query.filter(
-                Q(equipment_uuid=equipment_uuid)
-                | Q(equipment_items__contains=[{"uuid": equipment_uuid}])
-            )
+            equipment = await Equipment.filter(
+                tenant_id=tenant_id,
+                uuid=equipment_uuid,
+                deleted_at__isnull=True,
+            ).first()
+            if not equipment:
+                return [], 0
+            scheme_ids = await EquipmentSchemeBinding.filter(
+                tenant_id=tenant_id,
+                equipment_id=equipment.id,
+                scheme_type="maintenance",
+                deleted_at__isnull=True,
+            ).values_list("scheme_id", flat=True)
+            if not scheme_ids:
+                return [], 0
+            query = query.filter(maintenance_scheme_id__in=list(scheme_ids))
         if status:
             query = query.filter(status=status)
         if plan_type:
@@ -356,27 +355,26 @@ class MaintenancePlanService:
             NotFoundError: 当维护计划不存在时抛出
         """
         plan = await MaintenancePlanService.get_maintenance_plan_by_uuid(tenant_id, uuid)
-        
+
         update_data = data.model_dump(exclude_unset=True, exclude_none=True)
-        equipment_uuids = update_data.pop("equipment_uuids", None)
+        # 设备/类型/周期不再接受计划侧写入
+        update_data.pop("equipment_uuids", None)
         update_data.pop("equipment_uuid", None)
-        if equipment_uuids is not None:
-            items = await MaintenancePlanService._resolve_equipment_items(tenant_id, equipment_uuids)
-            MaintenancePlanService._apply_equipment_items(plan, items)
+        update_data.pop("maintenance_type", None)
+        update_data.pop("cycle_type", None)
+        update_data.pop("cycle_value", None)
+        update_data.pop("cycle_unit", None)
 
         if "maintenance_scheme_id" in update_data:
             scheme = await MaintenancePlanService._resolve_maintenance_scheme(
                 tenant_id, int(update_data["maintenance_scheme_id"])
             )
-            plan.maintenance_scheme_id = scheme.id
-            plan.scheme_code = scheme.code
-            plan.scheme_name = scheme.name
+            MaintenancePlanService._apply_scheme_snapshots(plan, scheme)
             update_data.pop("maintenance_scheme_id")
-        
-        # 更新字段
+
         for key, value in update_data.items():
             setattr(plan, key, value)
-        
+
         await plan.save()
         return plan
     
@@ -408,6 +406,43 @@ class MaintenanceExecutionService:
     
     提供维护执行记录的 CRUD 操作。
     """
+
+    @staticmethod
+    async def enrich_executed_items_requirements(
+        tenant_id: int,
+        executed_items: Optional[List[Dict[str, Any]]],
+    ) -> Optional[List[Dict[str, Any]]]:
+        """为已执行保养项补全「要求」：JSON 未存时按 item_id 读保养项主数据。"""
+        if not executed_items:
+            return executed_items
+        item_ids = sorted(
+            {
+                int(row.get("item_id"))
+                for row in executed_items
+                if row.get("item_id") is not None and int(row.get("item_id")) > 0
+            }
+        )
+        by_id: Dict[int, EquipmentMaintenanceItem] = {}
+        if item_ids:
+            rows = await EquipmentMaintenanceItem.filter(
+                tenant_id=tenant_id,
+                id__in=item_ids,
+                deleted_at__isnull=True,
+            ).all()
+            by_id = {int(r.id): r for r in rows}
+
+        enriched: List[Dict[str, Any]] = []
+        for row in executed_items:
+            copy = dict(row)
+            req = str(copy.get("requirement") or "").strip()
+            if not req:
+                item_id = copy.get("item_id")
+                if item_id is not None:
+                    master = by_id.get(int(item_id))
+                    if master and master.requirement:
+                        copy["requirement"] = str(master.requirement).strip()
+            enriched.append(copy)
+        return enriched
     
     @staticmethod
     async def create_maintenance_execution(
@@ -486,6 +521,23 @@ class MaintenanceExecutionService:
                 if linked_fault.equipment_id != equipment.id:
                     raise ValidationError("故障单关联设备与保养执行设备不一致")
 
+            create_payload = data.model_dump(
+                exclude_none=True,
+                exclude={
+                    "equipment_uuid",
+                    "maintenance_plan_uuid",
+                    "source_type",
+                    "source_uuid",
+                },
+            )
+            if create_payload.get("executed_items"):
+                create_payload["executed_items"] = (
+                    await MaintenanceExecutionService.enrich_executed_items_requirements(
+                        tenant_id,
+                        create_payload["executed_items"],
+                    )
+                )
+
             execution = MaintenanceExecution(
                 tenant_id=tenant_id,
                 equipment_id=equipment.id,
@@ -493,15 +545,7 @@ class MaintenanceExecutionService:
                 equipment_name=equipment.name,
                 maintenance_plan_id=maintenance_plan.id if maintenance_plan else None,
                 maintenance_plan_uuid=maintenance_plan.uuid if maintenance_plan else None,
-                **data.model_dump(
-                    exclude_none=True,
-                    exclude={
-                        "equipment_uuid",
-                        "maintenance_plan_uuid",
-                        "source_type",
-                        "source_uuid",
-                    },
-                ),
+                **create_payload,
                 source_type=source_type,
                 source_uuid=source_uuid,
             )
@@ -564,6 +608,14 @@ class MaintenanceExecutionService:
         
         if not execution:
             raise NotFoundError("维护执行记录不存在")
+
+        if execution.executed_items:
+            execution.executed_items = (
+                await MaintenanceExecutionService.enrich_executed_items_requirements(
+                    tenant_id,
+                    execution.executed_items,
+                )
+            )
         
         return execution
     

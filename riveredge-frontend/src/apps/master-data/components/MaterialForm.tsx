@@ -51,6 +51,7 @@ import { processRouteApi, operationApi } from '../services/process';
 import { materialCodeMappingApi, bomApi } from '../services/material';
 import { materialMarketPriceApi } from '../services/material-market-price';
 import { todaySiteDateString } from '../../../utils/format';
+import { pruneMaterialScenarioUnits } from '../../../utils/materialScenarioUnit';
 import type { Warehouse, StorageLocation, StorageArea } from '../types/warehouse';
 import type { ProcessRoute, Operation } from '../types/process';
 import {
@@ -1182,7 +1183,16 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
             : ((material as any)?.process_route_id ?? (material as any)?.processRouteId),
         specification: restValues.specification,
         base_unit: restValues.baseUnit, // 关键：转换为 base_unit
-        units: restValues.units,
+        units: (() => {
+          const raw = restValues.units as MaterialUnits | undefined;
+          if (!raw) return raw;
+          const aux = raw.units ?? [];
+          const scenarios = pruneMaterialScenarioUnits(String(restValues.baseUnit ?? ''), raw);
+          if (!aux.length || !Object.keys(scenarios).length) {
+            return { units: aux };
+          }
+          return { units: aux, scenarios };
+        })(),
         batch_managed: restValues.batchManaged,
         default_batch_rule_id: restValues.batchManaged
           ? (restValues.defaultBatchRuleId === SYSTEM_DEFAULT_RULE_VALUE || restValues.defaultBatchRuleId == null
@@ -1885,8 +1895,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
   const form = Form.useFormInstance();
   const units = value?.units ?? [];
   const scenarios = value?.scenarios ?? {};
-  const { options: unitOptions, valueToLabel: unitValueToLabel, isLoading: loadingUnits } =
-    useMaterialUnitOptions();
+  const { options: unitOptions, isLoading: loadingUnits } = useMaterialUnitOptions();
 
   const baseUnit = (Form.useWatch('baseUnit', form) ?? '') as string;
 
@@ -1894,8 +1903,41 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
     nextUnits: MaterialUnit[],
     nextScenarios: NonNullable<MaterialUnits['scenarios']> = scenarios,
   ) => {
-    onChange?.({ units: nextUnits, scenarios: nextScenarios });
+    // 无辅助单位时场景映射区会隐藏；必须清掉残留 production，避免工单仍读旧吨
+    const pruned = pruneMaterialScenarioUnits(baseUnit, {
+      units: nextUnits,
+      scenarios: nextScenarios,
+    });
+    onChange?.(
+      Object.keys(pruned).length
+        ? { units: nextUnits, scenarios: pruned }
+        : { units: nextUnits },
+    );
   };
+
+  // 基础单位变更后，裁掉已不在可选集合中的场景单位（删辅助单位走 commitUnits）
+  useEffect(() => {
+    if (!value) return;
+    const pruned = pruneMaterialScenarioUnits(baseUnit, value);
+    const prev = value.scenarios ?? {};
+    const prevKeys = Object.keys(prev);
+    const nextKeys = Object.keys(pruned);
+    const same =
+      prevKeys.length === nextKeys.length &&
+      nextKeys.every(
+        (k) =>
+          String((prev as Record<string, string>)[k] ?? '') ===
+          String((pruned as Record<string, string>)[k] ?? ''),
+      );
+    if (same) return;
+    onChange?.(
+      Object.keys(pruned).length
+        ? { units: value.units ?? [], scenarios: pruned }
+        : { units: value.units ?? [] },
+    );
+    // 仅跟踪 baseUnit；units 变更由 commitUnits 裁剪
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid onChange identity loops
+  }, [baseUnit]);
 
   const handleAddUnit = () => {
     commitUnits([
@@ -1915,10 +1957,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
   };
 
   const handleScenarioChange = (scenario: string, unit: string) => {
-    onChange?.({
-      units,
-      scenarios: { ...scenarios, [scenario]: unit },
-    });
+    commitUnits(units, { ...scenarios, [scenario]: unit });
   };
 
   const allUnits = baseUnit ? [baseUnit, ...units.map(u => u.unit).filter(Boolean)] : [];
@@ -1954,7 +1993,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
         const conversionRate = numerator / denominator;
         const isInteger = Number.isInteger(conversionRate);
         const previewText = baseUnit
-          ? `= ${isInteger ? conversionRate : `${numerator}/${denominator}`} ${unitValueToLabel[baseUnit] || baseUnit}`
+          ? `= ${isInteger ? conversionRate : `${numerator}/${denominator}`} ${baseUnit}`
           : '';
 
         return (
@@ -2054,7 +2093,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
             fontSize: '12px',
             color: '#1890ff',
           }}>
-            {t('app.master-data.materialForm.baseUnitColon')}<strong>{unitValueToLabel[baseUnit] || baseUnit}</strong>
+            {t('app.master-data.materialForm.baseUnitColon')}<strong>{baseUnit}</strong>
           </div>
         )}
       </div>
@@ -2134,7 +2173,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
             <Col span={6}>
               <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.inventoryUnit')}</div>
               <Input
-                value={baseUnit ? (unitValueToLabel[baseUnit] || baseUnit) : ''}
+                value={baseUnit || ''}
                 disabled
                 placeholder={t('app.master-data.materialForm.baseUnitLabel')}
               />

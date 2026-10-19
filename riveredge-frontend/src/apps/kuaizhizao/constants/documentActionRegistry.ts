@@ -58,7 +58,12 @@ export type KuaizhizaoDocumentActionKey =
   | 'inbound.pull_from_incoming_inspection'
   | 'inbound.pull_from_sales_order'
   | 'inbound.pull_from_outsource_work_order'
-  | 'inbound.pull_from_work_order_for_production_return';
+  | 'inbound.pull_from_work_order_for_production_return'
+  | 'payment_application.pull_from_payable'
+  | 'payment_application.pull_from_purchase_order'
+  | 'payment_application.pull_from_purchase_receipt'
+  | 'payment_application.pull_from_partner_statement'
+  | 'payment_application.pull_from_other_expense';
 
 export interface KuaizhizaoDocumentActionDefinition {
   key: KuaizhizaoDocumentActionKey;
@@ -566,6 +571,46 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('inbound.pull_from_work_order_for_production_return', 'label'),
     sourceLabelKey: documentActionI18n('inbound.pull_from_work_order_for_production_return', 'source'),
     targetLabelKey: documentActionI18n('inbound.pull_from_work_order_for_production_return', 'target'),
+  },
+  'payment_application.pull_from_payable': {
+    key: 'payment_application.pull_from_payable',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('payment_application.pull_from_payable', 'label'),
+    sourceLabelKey: documentActionI18n('payment_application.pull_from_payable', 'source'),
+    targetLabelKey: documentActionI18n('payment_application.pull_from_payable', 'target'),
+  },
+  'payment_application.pull_from_purchase_order': {
+    key: 'payment_application.pull_from_purchase_order',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('payment_application.pull_from_purchase_order', 'label'),
+    sourceLabelKey: documentActionI18n('payment_application.pull_from_purchase_order', 'source'),
+    targetLabelKey: documentActionI18n('payment_application.pull_from_purchase_order', 'target'),
+  },
+  'payment_application.pull_from_purchase_receipt': {
+    key: 'payment_application.pull_from_purchase_receipt',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('payment_application.pull_from_purchase_receipt', 'label'),
+    sourceLabelKey: documentActionI18n('payment_application.pull_from_purchase_receipt', 'source'),
+    targetLabelKey: documentActionI18n('payment_application.pull_from_purchase_receipt', 'target'),
+  },
+  'payment_application.pull_from_partner_statement': {
+    key: 'payment_application.pull_from_partner_statement',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('payment_application.pull_from_partner_statement', 'label'),
+    sourceLabelKey: documentActionI18n('payment_application.pull_from_partner_statement', 'source'),
+    targetLabelKey: documentActionI18n('payment_application.pull_from_partner_statement', 'target'),
+  },
+  'payment_application.pull_from_other_expense': {
+    key: 'payment_application.pull_from_other_expense',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('payment_application.pull_from_other_expense', 'label'),
+    sourceLabelKey: documentActionI18n('payment_application.pull_from_other_expense', 'source'),
+    targetLabelKey: documentActionI18n('payment_application.pull_from_other_expense', 'target'),
   },
 };
 

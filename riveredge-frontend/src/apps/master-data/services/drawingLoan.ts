@@ -24,6 +24,11 @@ export interface DrawingLoan {
   code: string;
   name: string;
   purpose?: string;
+  borrowerDepartmentId?: number;
+  borrowerDepartmentName?: string;
+  borrowerUserId?: number;
+  borrowerUserName?: string;
+  borrowerUserUuid?: string;
   dueAt: string;
   status: DrawingLoanStatus;
   returnedAt?: string;
@@ -74,6 +79,8 @@ export const drawingLoanApi = {
     code?: string;
     name: string;
     purpose?: string;
+    borrowerDepartmentId: number;
+    borrowerUserId: number;
     dueAt: string;
     lines: Array<{ drawingUuid: string }>;
   }): Promise<DrawingLoan> => {
@@ -82,7 +89,14 @@ export const drawingLoanApi = {
 
   update: async (
     uuid: string,
-    data: { name?: string; purpose?: string; dueAt?: string; lines?: Array<{ drawingUuid: string }> },
+    data: {
+      name?: string;
+      purpose?: string;
+      borrowerDepartmentId?: number;
+      borrowerUserId?: number;
+      dueAt?: string;
+      lines?: Array<{ drawingUuid: string }>;
+    },
   ): Promise<DrawingLoan> => {
     return api.put<DrawingLoan>(`${BASE}/${uuid}`, data);
   },

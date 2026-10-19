@@ -473,29 +473,6 @@ async def notify_delivery_task_overdue(
     )
 
 
-async def notify_salesman_split_delivery_plan(
-    tenant_id: int,
-    *,
-    order_code: str,
-    sales_order_id: int,
-    salesman_user_id: Optional[int],
-) -> int:
-    if not salesman_user_id:
-        return 0
-    subject = f"请拆分交付计划 {order_code}"
-    content = f"销售订单 {order_code} 已审核，请拆分交付计划。"
-    return await _send_delivery_project_internal(
-        tenant_id,
-        recipient_user_ids=[salesman_user_id],
-        subject=subject,
-        content=content,
-        detail_path=(
-            f"/apps/kuaizhizao/sales-management/sales-orders"
-            f"?highlight={sales_order_id}&split_delivery=1"
-        ),
-    )
-
-
 FQC_EXECUTE_PERMISSION = "kuaizhizao:quality-management-finished-goods-inspection:execute"
 
 

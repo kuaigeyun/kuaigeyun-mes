@@ -517,7 +517,7 @@ const SalesInvoicesPage: React.FC = () => {
     setEditVisible(true);
   };
 
-  const handleEditSubmit = async (values: { invoice_number?: string }) => {
+  const handleEditSubmit = async (values: { invoice_number?: string; invoice_date?: unknown; attachments?: unknown }) => {
     if (!editingRecord) return false;
     setEditSubmitting(true);
     try {
@@ -525,6 +525,10 @@ const SalesInvoicesPage: React.FC = () => {
         method: 'PUT',
         data: {
           invoice_number: String(values.invoice_number ?? '').trim(),
+          invoice_date: formatDateTime(
+            values.invoice_date || editingRecord.invoice_date || dayjs(),
+            'YYYY-MM-DD',
+          ),
           attachments: normalizeDocumentAttachments(values.attachments),
         },
       });
@@ -1233,8 +1237,9 @@ const SalesInvoicesPage: React.FC = () => {
                 <ProFormDatePicker
                   name="invoice_date"
                   label={t('app.kuaicaiwu.common.invoiceDate')}
+                  tooltip={t('app.kuaicaiwu.common.invoiceDateTip')}
                   rules={[{ required: true, message: t(`${P}.form.selectInvoiceDate`) }]}
-                  fieldProps={{ style: { width: '100%' } }}
+                  fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
                   colProps={financeColHalf}
                 />
                 <ProFormSelect
@@ -1374,6 +1379,7 @@ const SalesInvoicesPage: React.FC = () => {
         submitter={{ submitButtonProps: { loading: editSubmitting } }}
         initialValues={{
           invoice_number: faceInvoiceNumberForEdit(editingRecord?.invoice_number),
+          invoice_date: editingRecord?.invoice_date ? dayjs(editingRecord.invoice_date) : dayjs(),
           attachments: mapAttachmentsToUploadList((editingRecord as any)?.attachments),
         }}
       >
@@ -1382,6 +1388,13 @@ const SalesInvoicesPage: React.FC = () => {
           label={t('app.kuaicaiwu.invoice.col.invoiceNumber')}
           rules={[{ required: true, message: t(`${P}.form.invoiceNumberRequired`) }]}
           placeholder={t(`${P}.form.invoiceNumberRequired`)}
+        />
+        <ProFormDatePicker
+          name="invoice_date"
+          label={t('app.kuaicaiwu.common.invoiceDate')}
+          tooltip={t('app.kuaicaiwu.common.invoiceDateTip')}
+          rules={[{ required: true, message: t(`${P}.form.selectInvoiceDate`) }]}
+          fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
         />
         <DocumentAttachmentsField category="sales_invoice_attachments" />
       </ModalForm>
@@ -1393,6 +1406,7 @@ const SalesInvoicesPage: React.FC = () => {
         onFinish={handleCreate}
         formRef={createFormRef}
         width={MODAL_CONFIG.STANDARD_WIDTH}
+        modalProps={{ destroyOnHidden: true }}
         {...financeFormGridProps}
       >
         <ProFormSelect
@@ -1443,15 +1457,16 @@ const SalesInvoicesPage: React.FC = () => {
           label={t(`${P}.col.invoiceType`)}
           options={invoiceTypeOptions}
           initialValue="增值税专用发票"
-          rules={[{ required: true }]}
+          rules={[{ required: true, message: t(`${P}.form.selectInvoiceType`) }]}
           colProps={financeColHalf}
         />
         <ProFormDatePicker
           name="invoice_date"
           label={t('app.kuaicaiwu.common.invoiceDate')}
-          rules={[{ required: true }]}
+          tooltip={t('app.kuaicaiwu.common.invoiceDateTip')}
+          rules={[{ required: true, message: t(`${P}.form.selectInvoiceDate`) }]}
           initialValue={dayjs()}
-          fieldProps={{ style: { width: '100%' } }}
+          fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
           colProps={financeColHalf}
         />
         <ProFormSelect
@@ -1459,7 +1474,7 @@ const SalesInvoicesPage: React.FC = () => {
           label={t(`${P}.form.taxRate`)}
           options={TAX_RATE_OPTIONS}
           initialValue={13}
-          rules={[{ required: true }]}
+          rules={[{ required: true, message: t(`${P}.form.selectTaxRate`) }]}
           colProps={financeColHalf}
         />
         <ProFormDigit

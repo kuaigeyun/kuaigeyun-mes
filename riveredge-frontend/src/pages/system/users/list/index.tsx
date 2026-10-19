@@ -368,8 +368,16 @@ const UserListPage: React.FC = () => {
    */
   const executeResetPassword = useCallback(async (record: User) => {
     try {
-          await resetUserPassword(record.uuid);
-          messageApi.success(t('field.user.resetPasswordSuccess'));
+          const result = await resetUserPassword(record.uuid);
+          if (result.temporary_password) {
+            messageApi.success(
+              t('field.user.resetPasswordSuccessTemporary', {
+                password: result.temporary_password,
+              }),
+            );
+          } else {
+            messageApi.success(t('field.user.resetPasswordSuccessSimple'));
+          }
         } catch (error: any) {
           messageApi.error(error.message || t('field.user.resetPasswordFailed'));
         }

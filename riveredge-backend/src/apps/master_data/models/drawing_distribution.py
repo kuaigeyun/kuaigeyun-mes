@@ -31,6 +31,10 @@ class DrawingDistribution(BaseModel):
     id = fields.IntField(pk=True, description="主键ID")
     code = fields.CharField(max_length=50, description="发放单号")
     name = fields.CharField(max_length=200, description="发放单名称")
+    issue_department_id = fields.IntField(null=True, description="发放部门ID")
+    issue_department_name = fields.CharField(max_length=200, null=True, description="发放部门名称")
+    recipient_user_id = fields.IntField(null=True, description="使用人用户ID")
+    recipient_user_name = fields.CharField(max_length=100, null=True, description="使用人姓名")
     status = fields.CharField(
         max_length=20,
         default="Draft",

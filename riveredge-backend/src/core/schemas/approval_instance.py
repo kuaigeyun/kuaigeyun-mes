@@ -71,7 +71,15 @@ class ApprovalInstanceAction(BaseModel):
     action: str = Field(..., description="操作类型（approve、reject、cancel、transfer）")
     comment: Optional[str] = Field(None, description="审批意见")
     transfer_to_user_id: Optional[int] = Field(None, description="转交目标用户ID（仅转交时使用）")
-    
+    instance_data_patch: Optional[Dict[str, Any]] = Field(
+        None,
+        description="当前节点 decisionOnApprove 允许的 instance.data 写入（分支决策）",
+    )
+    reject_target: Optional[str] = Field(
+        None,
+        description="驳回落点：previous 驳回到上一级 approval 节点；submitter 终态驳回制单人",
+    )
+
     @field_validator('action')
     @classmethod
     def validate_action(cls, v):
@@ -80,6 +88,16 @@ class ApprovalInstanceAction(BaseModel):
         if v not in allowed_actions:
             raise ValueError(f'操作类型必须是 {allowed_actions} 之一')
         return v
+
+    @field_validator('reject_target')
+    @classmethod
+    def validate_reject_target(cls, v):
+        if v is None:
+            return v
+        val = str(v).strip().lower()
+        if val not in ('previous', 'submitter'):
+            raise ValueError('reject_target 须为 previous 或 submitter')
+        return val
 
 
 class ApprovalDocumentField(BaseModel):

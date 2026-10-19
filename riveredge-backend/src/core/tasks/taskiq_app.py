@@ -382,6 +382,14 @@ async def kuaiiot_retention_tick() -> dict:
     return await run_kuaiiot_retention_cleanup()
 
 
+@task(schedule=[{"cron": "30 3 * * *"}])
+async def kuaivision_retention_tick() -> dict:
+    """每天凌晨清理快视觉过期原图，并软删超期检测事件。"""
+    from apps.kuaivision.workflows.functions.retention_workflow import run_kuaivision_retention_cleanup
+
+    return await run_kuaivision_retention_cleanup()
+
+
 @task(schedule=[{"cron": "15 2 * * *"}])
 async def permission_governance_daily_tick() -> dict:
     """每天凌晨执行一次全租户权限治理兜底。"""

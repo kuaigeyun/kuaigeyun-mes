@@ -447,6 +447,81 @@ class _WorkshopDisplayProvider:
         return [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows]
 
 
+class _ProductionLineDisplayProvider:
+    """产线回显：附带 workshop_name，供考勤等按车间过滤产线下拉。"""
+
+    resource_key = "master-data:factory:production-line"
+
+    @staticmethod
+    def _item(row: ProductionLine) -> dict[str, Any]:
+        ws = getattr(row, "workshop", None)
+        workshop_name = (getattr(ws, "name", None) or "").strip() or None
+        return _row(
+            id=row.id,
+            uuid=row.uuid,
+            code=row.code,
+            name=row.name,
+            workshop_name=workshop_name,
+            workshop_id=getattr(row, "workshop_id", None),
+        )
+
+    async def search(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        page: int,
+        page_size: int,
+        keyword: str | None,
+        is_active: bool | None,
+        extra: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        del user, extra
+        query = ProductionLine.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
+        total = await query.count()
+        offset = (page - 1) * page_size
+        rows = (
+            await query.order_by("code")
+            .offset(offset)
+            .limit(page_size)
+            .prefetch_related("workshop")
+        )
+        return {
+            "items": [self._item(r) for r in rows],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    async def resolve(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        record_ids: list[int] | None,
+        record_uuids: list[str] | None,
+    ) -> list[dict[str, Any]]:
+        del user
+        ids = sorted({int(i) for i in (record_ids or []) if i is not None})
+        uuids = sorted({str(u).strip() for u in (record_uuids or []) if str(u).strip()})
+        if not ids and not uuids:
+            return []
+        cond = Q(tenant_id=tenant_id, deleted_at__isnull=True)
+        if ids and uuids:
+            cond &= Q(id__in=ids) | Q(uuid__in=uuids)
+        elif ids:
+            cond &= Q(id__in=ids)
+        else:
+            cond &= Q(uuid__in=uuids)
+        rows = await ProductionLine.filter(cond).prefetch_related("workshop")
+        return [self._item(r) for r in rows]
+
+
 class _PlantDisplayProvider:
     resource_key = "master-data:factory:plant"
 
@@ -749,15 +824,12 @@ _PROVIDERS = [
     _MaterialDisplayProvider(),
     _WarehouseDisplayProvider(),
     _WorkshopDisplayProvider(),
+    _ProductionLineDisplayProvider(),
     _PlantDisplayProvider(),
     _WorkCenterDisplayProvider(),
     _DepartmentDisplayProvider(),
     _PositionDisplayProvider(),
     _UserDisplayProviderAdapter(),
-    make_tenant_model_display_provider(
-        resource_key="master-data:factory:production-line",
-        model=ProductionLine,
-    ),
     make_tenant_model_display_provider(
         resource_key="master-data:factory:workstation",
         model=Workstation,

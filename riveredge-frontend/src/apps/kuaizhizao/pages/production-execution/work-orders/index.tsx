@@ -364,9 +364,7 @@ import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity, todaySiteD
 import {
   convertBaseQtyToProductionDisplay,
   convertProductionInputToBaseQty,
-  convertToBaseQuantity,
   formatWorkOrderDisplayQuantity,
-  resolveMaterialScenarioUnit,
   resolveWorkOrderFormQuantity,
 } from '../../../../../utils/materialScenarioUnit'
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay'
@@ -1910,8 +1908,21 @@ const WorkOrdersPage: React.FC = () => {
     [messageApi, enrichWorkOrderRecordsWithCustomFields]
   )
 
-  // 产品列表状态
+  // 产品列表状态（按需缓存，禁止弹窗打开时全量预拉）
   const [productList, setProductList] = useState<any[]>([])
+  const mergeProductCache = useCallback((rows: any[]) => {
+    if (!rows?.length) return
+    setProductList((prev) => {
+      const byId = new Map<number, any>()
+      for (const p of prev) {
+        if (p?.id != null) byId.set(Number(p.id), p)
+      }
+      for (const r of rows) {
+        if (r?.id != null) byId.set(Number(r.id), r)
+      }
+      return Array.from(byId.values())
+    })
+  }, [])
   // 销售订单列表状态（MTO模式）
   const [salesOrderList, setSalesOrderList] = useState<any[]>([])
   // 生产模式状态（用于控制MTO相关字段显示）
@@ -1959,6 +1970,7 @@ const WorkOrdersPage: React.FC = () => {
     canCreateWorkOrder?: boolean
   } | null>(null)
   const [formProductMaterial, setFormProductMaterial] = useState<Material | null>(null)
+  // 与物料档案基础单位下拉同一套：展示单位名称，不把单位编码原样拼进标题
   const [completeTrackingModalOpen, setCompleteTrackingModalOpen] = useState(false)
   const [completeTrackingLoading, setCompleteTrackingLoading] = useState(false)
   const [completeTrackingWorkOrder, setCompleteTrackingWorkOrder] = useState<WorkOrder | null>(null)
@@ -2267,23 +2279,38 @@ const WorkOrdersPage: React.FC = () => {
     if (so?.id) {
       setProductionMode('MTO')
     }
-    // 同步加载物料来源信息
+    // 同步加载物料来源信息与计划数量单位（须写入 formProductMaterial，禁止沿用上次弹窗缓存）
     const selectedMaterial = productSourceData.materials.find((p: any) => p.id === first.productId)
+    let cancelled = false
     if (selectedMaterial) {
       const sourceType = selectedMaterial.sourceType || selectedMaterial.source_type
       setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
+      setFormProductMaterial(selectedMaterial as Material)
+      mergeProductCache([selectedMaterial])
+      void resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [Number(first.productId)]).then(
+        (mats) => {
+          if (!cancelled && mats[0]) {
+            setFormProductMaterial(mats[0])
+            mergeProductCache([mats[0]])
+          }
+        },
+      )
     } else {
       setSelectedMaterialSourceInfo(null)
+      setFormProductMaterial(null)
     }
     // 自动加载物料绑定的工艺路线及工序
     if (selectedMaterial?.uuid) loadProcessRouteForMaterial(selectedMaterial.uuid)
+    return () => {
+      cancelled = true
+    }
   }, [productSourceData, modalVisible, isEdit, t])
 
   // 创建/编辑弹窗所需数据是否已加载
   const [modalDataLoaded, setModalDataLoaded] = useState(false)
   const [modalDataLoading, setModalDataLoading] = useState(false)
 
-  // 延迟加载：仅当打开创建/编辑弹窗时加载产品、工序、工艺路线、人员、设备等（列表页无需这些数据）
+  // 延迟加载：打开创建/编辑弹窗时拉工序/路线/人员/设备等；产品物料走 UniMaterialSelect 按需缓存（对齐销售订单）
   useEffect(() => {
     if (!modalVisible) return
     if (modalDataLoaded) return
@@ -2291,9 +2318,8 @@ const WorkOrdersPage: React.FC = () => {
     const loadData = async () => {
       setModalDataLoading(true)
       try {
-        const [products, operations, routes, usersRes, equipmentRes, moldsRes, toolsRes] =
+        const [operations, routes, usersRes, equipmentRes, moldsRes, toolsRes] =
           await Promise.all([
-            loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.workOrder),
             operationApi.list({ isActive: true, limit: 500 }).catch(() => ({ data: [], total: 0 })),
             processRouteApi.list({ isActive: true, limit: 500 }).catch(() => ({ data: [], total: 0 })),
             searchUserDisplay({ is_active: true, page_size: 100 }).catch(() => ({ items: [] })),
@@ -2302,7 +2328,6 @@ const WorkOrdersPage: React.FC = () => {
             toolApi.list({ limit: 100 }).catch(() => ({ items: [] })),
           ])
         if (cancelled) return
-        setProductList(Array.isArray(products) ? products : [])
         setOperationList(unwrapProcessPagedList(operations))
         setProcessRouteList(unwrapProcessPagedList(routes))
         setWorkerList(displayItemsToUsers(usersRes?.items || []))
@@ -2313,7 +2338,6 @@ const WorkOrdersPage: React.FC = () => {
       } catch (error) {
         if (!cancelled) {
           console.error('获取弹窗数据失败:', error)
-          setProductList([])
         }
       } finally {
         if (!cancelled) setModalDataLoading(false)
@@ -2891,6 +2915,8 @@ const WorkOrdersPage: React.FC = () => {
     setProductionMode('MTS') // 重置为MTS模式
     setSelectedOperations([]) // 清空选中的工序
     setSelectedMaterialSourceInfo(null) // 清空物料来源信息
+    setFormProductMaterial(null) // 计划数量单位依赖此缓存，须与上次编辑/选料隔离
+    setProductList([]) // 与上次弹窗选料缓存隔离；选料/编辑/来源单据时再按需 merge
     setModalVisible(true)
     // FormModalTemplate 设置了 destroyOnHidden，每次打开 ProForm 都会重新挂载为空，
     // 不需要用 setTimeout 等 ref 就绪再 resetFields
@@ -3433,7 +3459,7 @@ const WorkOrdersPage: React.FC = () => {
         console.error('加载工单工序失败', e)
         setSelectedOperations([])
       }
-      // 编辑时 product_id 禁用，仍须加载完整物料（含多单位）以便计划数量按生产单位回填
+      // 编辑时 product_id 禁用，仍须按 id 解析物料（计划数量单位），写入按需缓存
       let editProductMaterial: Material | null = null
       if (detail.product_id) {
         const mats = await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [
@@ -3441,6 +3467,7 @@ const WorkOrdersPage: React.FC = () => {
         ])
         editProductMaterial = mats[0] ?? null
         setFormProductMaterial(editProductMaterial)
+        if (editProductMaterial) mergeProductCache([editProductMaterial])
       } else {
         setFormProductMaterial(null)
       }
@@ -3455,7 +3482,9 @@ const WorkOrdersPage: React.FC = () => {
           product_id: detail.product_id,
           product_code: detail.product_code,
           product_name: detail.product_name,
-          quantity: resolveWorkOrderFormQuantity(detail, 'quantity', editProductMaterial),
+          quantity: editProductMaterial
+            ? (Number(detail.quantity) || undefined)
+            : resolveWorkOrderFormQuantity(detail, 'quantity', editProductMaterial),
           production_mode: mode,
           variant_attributes: variantAttrs != null
             ? (typeof variantAttrs === 'string' ? variantAttrs : JSON.stringify(variantAttrs, null, 2))
@@ -5206,7 +5235,8 @@ const WorkOrdersPage: React.FC = () => {
           : null)
       if (values.quantity != null && quantityContext) {
         if (formProductMaterial) {
-          values.quantity = convertToBaseQuantity(formProductMaterial, Number(values.quantity))
+          const qty = Number(values.quantity)
+          values.quantity = Number.isFinite(qty) ? qty : values.quantity
         } else {
           values.quantity = convertProductionInputToBaseQty(Number(values.quantity), quantityContext)
         }
@@ -5224,12 +5254,19 @@ const WorkOrdersPage: React.FC = () => {
         delete values.operations
       }
 
-      // 如果选择了产品，需要转换为产品编号和名称
+      // 如果选择了产品，需要转换为产品编号和名称（按需缓存 / formProductMaterial）
       if (values.product_id && !isEdit) {
-        const selectedProduct = productList.find(product => product.id === values.product_id)
+        const selectedProduct =
+          productList.find((product) => Number(product.id) === Number(values.product_id)) ??
+          (formProductMaterial && Number(formProductMaterial.id) === Number(values.product_id)
+            ? formProductMaterial
+            : null)
         if (selectedProduct) {
-          values.product_code = selectedProduct.mainCode || selectedProduct.code
-          values.product_name = selectedProduct.name
+          values.product_code =
+            (selectedProduct as any).mainCode ||
+            (selectedProduct as any).main_code ||
+            (selectedProduct as any).code
+          values.product_name = (selectedProduct as any).name
         }
       }
 
@@ -7399,11 +7436,14 @@ const WorkOrdersPage: React.FC = () => {
     {
       title: t('common.quantity'),
       dataIndex: 'quantity',
-      width: 88,
-      minWidth: 88,
+      width: 148,
+      minWidth: 148,
       uniTableKeepWidth: true,
       resizable: false,
       align: 'right',
+      className: 'wo-quantity-cell',
+      onCell: () => ({ className: 'wo-quantity-cell' }),
+      onHeaderCell: () => ({ className: 'wo-quantity-cell' }),
       sorter: true,
       render: (_, record) =>
         isWorkOrderGroupListRow(record) ? null : formatWorkOrderListQuantity(record),
@@ -8280,7 +8320,7 @@ const WorkOrdersPage: React.FC = () => {
         <UniTable<WorkOrder>
           className="kuaizhizao-work-orders-table"
           scroll={{ scrollToFirstRowOnChange: false }}
-          columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders-width-v4"
           headerTitle={t('app.kuaizhizao.workOrder.pageTitle')}
           formRef={tableSearchFormRef}
           searchParamsRef={tableSearchParamsRef}
@@ -8426,7 +8466,7 @@ const WorkOrdersPage: React.FC = () => {
                     <SyncPushHubButton
                       syncEnabled={toolbarSyncPush.syncEnabled}
                       pushEnabled={toolbarSyncPush.pushEnabled}
-                      size="middle"
+                      size="medium"
                       wrapButton={(hubButton) => (
                         <SyncFreshnessBadge
                           getBinding={loadWorkOrderSyncBinding}
@@ -9423,6 +9463,7 @@ const WorkOrdersPage: React.FC = () => {
           setCurrentWorkOrder(null)
           setCreateWorkOrderMode('normal')
           setSelectedMaterialSourceInfo(null)
+          setFormProductMaterial(null)
           setProductSourceData(null)
           setSelectedOperations([])
           setCreateProcessRouteId(undefined)
@@ -9568,6 +9609,7 @@ const WorkOrdersPage: React.FC = () => {
               required
               disabled={isEdit}
               sourceType={onlyShowMake ? 'Make' : undefined}
+              hostResource={KUAIZHIZAO_DOC_HOST.workOrder}
               formItemProps={{ style: { marginBottom: 24 } }}
               fallbackOption={
                 isEdit && currentWorkOrder?.product_id
@@ -9581,14 +9623,29 @@ const WorkOrdersPage: React.FC = () => {
               }
               onChange={async (value, material) => {
                 if (value) {
-                  if (material) {
-                    setFormProductMaterial(material as Material)
-                    const sourceType = material.sourceType || material.source_type
+                  const productId = Number(value)
+                  setFormProductMaterial(null)
+                  // 选料后按 id 重拉物料，计划数量单位用该物料的基础单位名称
+                  let resolved =
+                    material && !Array.isArray(material) ? (material as Material) : undefined
+                  if (Number.isFinite(productId) && productId > 0) {
+                    const mats = await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [
+                      productId,
+                    ])
+                    if (mats[0]) resolved = mats[0]
+                  }
+                  if (resolved) {
+                    setFormProductMaterial(resolved)
+                    mergeProductCache([resolved])
+                    const sourceType = resolved.sourceType || (resolved as any).source_type
                     setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
-                    if (material.uuid) {
-                      loadProcessRouteForMaterial(material.uuid)
+                    if (resolved.uuid) {
+                      loadProcessRouteForMaterial(resolved.uuid)
                     }
-                  } else setSelectedMaterialSourceInfo(null)
+                  } else {
+                    setSelectedMaterialSourceInfo(null)
+                    setFormProductMaterial(null)
+                  }
                 } else {
                   setSelectedMaterialSourceInfo(null)
                   setFormProductMaterial(null)
@@ -9718,13 +9775,11 @@ const WorkOrdersPage: React.FC = () => {
 
         <ProFormDigit
           name="quantity"
-          label={
-            formProductMaterial
-              ? `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${resolveMaterialScenarioUnit(formProductMaterial, 'production')}）`
-              : currentWorkOrder?.product_unit
-                ? `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${currentWorkOrder.product_unit}）`
-                : t('app.kuaizhizao.workOrder.colPlannedQty')
-          }
+          label={(() => {
+            const code = String(formProductMaterial?.baseUnit ?? '').trim()
+            if (!code) return t('app.kuaizhizao.workOrder.colPlannedQty')
+            return `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${code}）`
+          })()}
           placeholder={t('app.kuaizhizao.workOrder.formEnter')}
           min={0}
           precision={quantityDecimals}
@@ -10154,50 +10209,72 @@ const WorkOrdersPage: React.FC = () => {
             onClick: () => {
               const docId = record._doc_id
               if (!docId) return
-              try {
-                const sourceItems = productSourceDocList.filter((r: any) => r._doc_id === docId)
-                const itemsWithQty: { productId: number; quantity: number; variant_attributes?: Record<string, unknown> }[] = []
-                const materials: any[] = []
-                for (const it of sourceItems) {
-                  const product = productList.find(
-                    (m: any) =>
-                      m.id === it.material_id || (m.code || m.mainCode) === it.material_code
+              void (async () => {
+                try {
+                  const sourceItems = productSourceDocList.filter((r: any) => r._doc_id === docId)
+                  const materialIds = Array.from(
+                    new Set(
+                      sourceItems
+                        .map((it: any) => Number(it.material_id))
+                        .filter((id: number) => Number.isFinite(id) && id > 0),
+                    ),
                   )
-                  if (!product) continue
-                  const qty =
-                    productSourceModalType === 'sales_forecast'
-                      ? (it.forecast_quantity ?? 0)
-                      : (it.required_quantity ?? 0)
-                  itemsWithQty.push({
-                    productId: product.id,
-                    quantity: Number(qty) || 0,
-                    variant_attributes: it.variant_attributes ?? undefined,
+                  const resolved =
+                    materialIds.length > 0
+                      ? await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, materialIds)
+                      : []
+                  if (resolved.length) mergeProductCache(resolved)
+                  const cache = [...resolved, ...productList]
+                  const itemsWithQty: {
+                    productId: number
+                    quantity: number
+                    variant_attributes?: Record<string, unknown>
+                  }[] = []
+                  const materials: any[] = []
+                  for (const it of sourceItems) {
+                    const product = cache.find(
+                      (m: any) =>
+                        Number(m.id) === Number(it.material_id) ||
+                        (m.code || m.mainCode || m.main_code) === it.material_code,
+                    )
+                    if (!product) continue
+                    const qty =
+                      productSourceModalType === 'sales_forecast'
+                        ? (it.forecast_quantity ?? 0)
+                        : (it.required_quantity ?? 0)
+                    itemsWithQty.push({
+                      productId: product.id,
+                      quantity: Number(qty) || 0,
+                      variant_attributes: it.variant_attributes ?? undefined,
+                    })
+                    if (!materials.some((m: any) => Number(m.id) === Number(product.id))) {
+                      materials.push(product)
+                    }
+                  }
+                  setProductSourceData({
+                    type: productSourceModalType!,
+                    materials,
+                    items: itemsWithQty,
+                    ...(productSourceModalType === 'sales_order' && sourceItems[0]?._doc_id != null
+                      ? {
+                          salesOrderRef: {
+                            id: Number(sourceItems[0]._doc_id),
+                            code: sourceItems[0]._order_code,
+                            name:
+                              sourceItems[0]._order_code && sourceItems[0]._customer_name
+                                ? `${sourceItems[0]._order_code} - ${sourceItems[0]._customer_name}`
+                                : sourceItems[0]._order_code || sourceItems[0]._customer_name,
+                          },
+                        }
+                      : {}),
                   })
-                  if (!materials.some((m: any) => m.id === product.id)) materials.push(product)
+                  setProductSourceModalVisible(false)
+                  setProductSourceModalType(null)
+                  messageApi.success(`已加载 ${materials.length} 个产品`)
+                } catch (e: any) {
+                  messageApi.error(e?.message || '加载失败')
                 }
-                setProductSourceData({
-                  type: productSourceModalType!,
-                  materials,
-                  items: itemsWithQty,
-                  ...(productSourceModalType === 'sales_order' && sourceItems[0]?._doc_id != null
-                    ? {
-                        salesOrderRef: {
-                          id: Number(sourceItems[0]._doc_id),
-                          code: sourceItems[0]._order_code,
-                          name:
-                            sourceItems[0]._order_code && sourceItems[0]._customer_name
-                              ? `${sourceItems[0]._order_code} - ${sourceItems[0]._customer_name}`
-                              : sourceItems[0]._order_code || sourceItems[0]._customer_name,
-                        },
-                      }
-                    : {}),
-                })
-                setProductSourceModalVisible(false)
-                setProductSourceModalType(null)
-                messageApi.success(`已加载 ${materials.length} 个产品`)
-              } catch (e: any) {
-                messageApi.error(e?.message || '加载失败')
-              }
+              })()
             },
           })}
           columns={[

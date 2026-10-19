@@ -49,13 +49,17 @@ standard: 主仓记跨端总表；client/pro 薄入口指路；AOCI 分仓不合
 
 | 功能 | 主仓（API / PC） | client | pro | 渠道 / 权限要点 | 记忆 |
 |------|------------------|--------|-----|-----------------|------|
-| 点检/保养方案绑定执行 | BE：`EquipmentSchemeBinding`、点检计划生成、保养计划 `maintenance_scheme_id`；PC 计划页 | mobile：`spot-check-conduct` / `maintenance-execution-conduct`；station：`EquipmentStatusPanel` + 点检/保养 Modal | - | `equipment-spot-check:create` / `maintenance-plan` 执行；渠道 pc/mobile/station | `features/equip-ops-scheme-bind-clients.md` |
+| 点检/保养方案绑定执行 | BE：`EquipmentSchemeBinding`；点检无计划层（已拆除）；保养计划设备/类型/周期取自方案；PC 点检单+保养计划页 | mobile：`spot-check-conduct` / `maintenance-execution-conduct`；station：`EquipmentStatusPanel` + 点检/保养 Modal | - | `equipment-spot-check:create` / `maintenance-plan` 执行；渠道 pc/mobile/station | `features/equip-ops-scheme-bind-clients.md` + `maintenance-plan-scheme-bind.md` + `equipment-spot-check-plan.md`（已拆除） |
 | 工位 ST2 安全与报工 | BE：`/apps/kuaizhizao/station/...`；头 `X-Station-Operator`；交班摘要见 `features/station-shift-handover-summary.md` | `riveredge-app-station/`（IPC `station:apiFetch`、FaceEngine、SharedReport）；齐套缺料预警见 `features/station-shortage-andon-call.md` | - | 渠道 `station`；文档/打印走工位鉴权路径；报工 `device_info.workstation_id` | `features/station-st2-security-contract.md` |
 | 移动端 S2 门禁 | BE 对照：报工 `:assign`、仓储 `.../confirm`（勿在移动端另写闸门语义） | `riveredge-app-mobile/`（`useResourcePermissions`、`tokenRefresh`、mes/report） | - | 渠道 `android`/`ios`/`mobile_h5`/`miniprogram` | `features/mobile-v2-s2-contract-fixes.md` |
 | API 写防护 / 渠道头 | `interactive_client_guard`、`client_channel.py`；手册 `riveredge-backend/docs/api-write-protection-ops.md` | 各端写请求带 `X-Client-Channel` | 经主仓 API，同白名单 | `pc\|station\|android\|ios\|mobile_h5\|miniprogram\|integration` | `principles/api-write-protection.md` |
 | 快数采 kuaiiot | 组装态 `riveredge-*/src/apps/kuaiiot/`（gitignore）；单测可在主仓 `tests/apps/kuaiiot/`；实时桥在主仓 `core/services/realtime/` | - | `{backend,frontend}/apps/kuaiiot/` 真源 | 权限见前后端 `manifest.json`；MES 写回走 MesGuard；设备态实时见下 | `features/kuaiiot-phased-hardening.md`、`features/kuaiiot-device-status-realtime.md` |
+| KU-AI 能力矩阵/调用分析 | 组装态 `riveredge-*/src/apps/kuaiai/`；更新日志/i18n 在主仓 | - | `{backend,frontend}/apps/kuaiai/` 真源；hub 含调用分析，无独立 insights 菜单 | `kuaiai:entry:read` | `features/kuaiai-insights-in-hub.md` |
+| KU-AI 异常感知下线 | 同上组装态 | - | 无 pulse 菜单/路由/页面；`get_pulse_summary` 可留 | `kuaiai:suggestion:read`（工具） | `features/kuaiai-pulse-offline.md` |
+| KU-AI 信任中心下线 | 同上组装态 | - | 无 trust 菜单/路由/页面；无 act 能力矩阵项；`act:execute` 可留 | `kuaiai:act:execute` | `features/kuaiai-trust-offline.md` |
 | 产线 MQTT 清零 | BE：`LineClearService` + `ind_relay` 自动报工钩子；迁移 `855_..._auto_clear`；PC 自动报工页 | - | kuaiiot 接入配置方向 + 设备指令下发清零 UI | `kuaiiot:device:update` / `ind-relay:auto-report:update`；发送型 MQTT publish | `features/iot-line-clear-mqtt.md` |
 | 主仓↔client 组装 | `riveredge-app/`（gitignore）+ Junction | `riveredge-app-{mobile,station,tv,mini-program}/`（四端源码默认一并入库，见 client `client-terminals-checkin.mdc`） | - | 部署 H5 见 fast-deploy | `features/riveredge-app-client-junctions.md` |
+| 请假回写月度考勤 | 组装态 `kuaioa` `AttendanceService.apply_leave_to_attendance`；i18n/更新日志在主仓 | - | BE/FE 真源 `kuaigeyun-pro/.../kuaioa/`；haoligo 填报表真源 `kuaigeyun-custom/.../attendance/fill.tsx` | 请假模块审批/更新权限 | `features/leave-attendance-employee-match.md` |
 | 移动 H5 构建部署 | `fast-deploy/build.mobile.web.sh`、`deploy.sh install-h5` | 构建产物 `riveredge-app-mobile/web-dist`（默认不进主仓） | - | Caddy `/mobile` | `features/fast-deploy-scripts.md` |
 
 ## 交付时回写

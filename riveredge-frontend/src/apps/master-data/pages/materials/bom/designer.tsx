@@ -59,7 +59,6 @@ import {
 } from './utils';
 import { bomApi, materialApi, materialGroupApi } from '../../../services/material';
 import { processRouteApi, unwrapProcessPagedList } from '../../../services/process';
-import { getMaterialUnitDisplayMapShared } from '../../../../../utils/materialUnitDisplay';
 import type { Material, MaterialCreate, MaterialUpdate, BOMHierarchyItem, MaterialUnits, BOMVersionCompareResult } from '../../../types/material';
 import type { ProcessRoute } from '../../../types/process';
 
@@ -389,8 +388,6 @@ const BOMDesignerPage: React.FC = () => {
   const isReadOnly = useMemo(() => bomStatus === 'approved', [bomStatus]);
 
   const [materials, setMaterials] = useState<Material[]>([]);
-  /** 单位字典：value(code) -> label(显示名)，用于节点配置中单位下拉显示标签 */
-  const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
 
   // MindMap 数据
   const [mindMapData, setMindMapData] = useState<any>(null);
@@ -416,8 +413,6 @@ const BOMDesignerPage: React.FC = () => {
   // History state for Undo/Redo
   const [, setHistory] = useState<{ past: any[]; future: any[] }>({ past: [], future: [] });
   
-  const [unitMap, setUnitMap] = useState<Record<string, string>>({}); // value -> label
-
   /** 操作指南是否展开（默认收起，给画板留足空间；需要时点击键盘图标展开） */
   const [guideExpanded, setGuideExpanded] = useState(false);
 
@@ -548,20 +543,6 @@ const BOMDesignerPage: React.FC = () => {
   const [ecnSubmitting, setEcnSubmitting] = useState(false);
   const ecnFromVersionHintRef = useRef<string>('');
 
-  useEffect(() => {
-    let cancelled = false;
-    getMaterialUnitDisplayMapShared()
-      .then((map) => {
-        if (!cancelled) setUnitMap(map);
-      })
-      .catch((e) => {
-        console.error('Failed to load unit catalog', e);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const selectedMaterialId = Form.useWatch('materialId', nodeConfigForm);
   
   const unitOptions = useMemo(() => {
@@ -570,30 +551,27 @@ const BOMDesignerPage: React.FC = () => {
     if (!material) return [];
 
     const opts: { label: string; value: string }[] = [];
-    
-    // Base Unit
+
     if (material.baseUnit) {
       opts.push({
-        label: unitMap[material.baseUnit] || material.baseUnit,
+        label: material.baseUnit,
         value: material.baseUnit,
       });
     }
 
-    // Auxiliary Units
     if (material.units?.units) {
       material.units.units.forEach((u: any) => {
-        // Avoid duplicates if baseUnit is also in units list
         if (u.unit !== material.baseUnit) {
           opts.push({
-            label: unitMap[u.unit] || u.unit,
+            label: u.unit,
             value: u.unit,
           });
         }
       });
     }
-    
+
     return opts;
-  }, [selectedMaterialId, materials, unitMap]);
+  }, [selectedMaterialId, materials]);
 
   useEffect(() => {
     mindMapDataRef.current = mindMapData;
@@ -711,23 +689,6 @@ const BOMDesignerPage: React.FC = () => {
       : items;
     return filteredItems.map((item, index) => convertOne(item, [...parentPath, index], excludeComponentId));
   }, [materials]);
-
-  /**
-   * 加载单位主数据，用于节点配置中单位下拉显示标签
-   */
-  useEffect(() => {
-    let cancelled = false;
-    getMaterialUnitDisplayMapShared()
-      .then((map) => {
-        if (!cancelled) setUnitValueToLabel(map);
-      })
-      .catch((error) => {
-        console.error('加载单位主数据失败:', error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   /**
    * 加载物料分组（用于物料编辑弹窗）
@@ -2433,10 +2394,10 @@ const BOMDesignerPage: React.FC = () => {
     const values = base ? [base, ...alternates] : alternates;
     const unique = Array.from(new Set(values));
     return unique.map((u) => ({
-      label: unitValueToLabel[u] ?? u,
+      label: u,
       value: u,
     }));
-  }, [selectedMaterial, unitValueToLabel]);
+  }, [selectedMaterial]);
 
   /**
    * 打开工艺路线编辑弹窗（根据当前选中物料的 processRouteId 解析 uuid 后打开）

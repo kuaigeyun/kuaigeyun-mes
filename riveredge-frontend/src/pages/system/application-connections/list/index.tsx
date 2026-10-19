@@ -58,6 +58,7 @@ import {
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import AppConnectorMarket from '../AppConnectorMarket';
+import { WeComDeploymentGuideBlock } from '../WeComDeploymentGuideBlock';
 import type { AppConnectorDefinition } from '../connectors';
 import {
   isKingdeeCosmicOpenApiType,
@@ -713,6 +714,14 @@ const ApplicationConnectionsListPage: React.FC = () => {
       case 'wecom':
         return (
           <>
+            <ProFormDependency name={['corp_id', 'agent_id']}>
+              {({ corp_id, agent_id }) => (
+                <WeComDeploymentGuideBlock
+                  corpId={typeof corp_id === 'string' ? corp_id : undefined}
+                  agentId={agent_id != null ? String(agent_id) : undefined}
+                />
+              )}
+            </ProFormDependency>
             <ProFormText name="corp_id" label={t('pages.system.applicationConnections.formCorpIdLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
             <ProFormText.Password name="corp_secret" label="Secret" rules={[{ required: true }]} colProps={{ span: 12 }} />
             <ProFormText name="agent_id" label="Agent ID" colProps={{ span: 12 }} />

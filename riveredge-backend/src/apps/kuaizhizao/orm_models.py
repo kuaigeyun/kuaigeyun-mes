@@ -106,6 +106,8 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaizhizao.models.purchase_receipt_item",
     "apps.kuaizhizao.models.purchase_requisition",
     "apps.kuaizhizao.models.payment_application",
+    "apps.kuaizhizao.models.finance_misc_category",
+    "apps.kuaizhizao.models.other_voucher",
     "apps.kuaizhizao.models.purchase_return",
     "apps.kuaizhizao.models.purchase_return_item",
     "apps.kuaizhizao.models.qms_internal_audit",

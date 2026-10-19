@@ -328,11 +328,9 @@ function salesOrderCatchMessage(error: unknown, fallback: string): string {
 
 type SalesOrderListScope = 'all' | 'mine' | 'department';
 
-/** 列表数据范围默认值：管理员看全部，其余看「我的」（与报价单一致） */
+/** 列表数据范围默认值：全部（可再切「我的」/「我的部门」） */
 function resolveDefaultSalesOrderListScope(): SalesOrderListScope {
-  const u = useGlobalStore.getState().currentUser;
-  if (u?.is_tenant_admin || u?.is_infra_admin) return 'all';
-  return 'mine';
+  return 'all';
 }
 
 /** 新建销售订单未填归属业务员时，默认当前登录用户 */
@@ -616,7 +614,6 @@ const SalesOrdersPage: React.FC = () => {
   const pushToBackfillSalesContractAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_sales_order');
   const navigate = useNavigate();
   const location = useLocation();
-  const splitDeliveryHandlerRef = useRef<(id: number) => void>(() => undefined);
   const [searchParams] = useSearchParams();
   const isCreatePage = location.pathname.endsWith('/sales-orders/new');
   const editRouteMatch = location.pathname.match(/\/sales-orders\/(\d+)\/edit$/);
@@ -1443,17 +1440,6 @@ const SalesOrdersPage: React.FC = () => {
       leaveSalesOrderFormPage();
     }
   }
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get('split_delivery') !== '1') return;
-    const orderId = Number(params.get('highlight'));
-    if (!Number.isFinite(orderId) || orderId <= 0) return;
-    params.delete('split_delivery');
-    const query = params.toString();
-    navigate({ pathname: location.pathname, search: query ? `?${query}` : '' }, { replace: true });
-    splitDeliveryHandlerRef.current(orderId);
-  }, [location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (!isFormPage || formPageInitializedRef.current) return;
@@ -2522,7 +2508,6 @@ const SalesOrdersPage: React.FC = () => {
       messageApi.error(e?.message ?? t('common.operationFailed'));
     }
   };
-  splitDeliveryHandlerRef.current = handlePushToDeliveryProject;
 
   /** 处理下推到发货通知单 */
   const handlePushToShipmentNotice = async (id: number) => {
@@ -5733,9 +5718,11 @@ const SalesOrdersPage: React.FC = () => {
           }}
           request={async (params: any, sort: any, _filter: any, searchFormValues: any, meta?: UniTableRequestMeta): Promise<any> => {
             const isPrefetch = meta?.purpose === 'prefetch';
+            // 订单视图「明细」预览列与明细表格扁平行都依赖 items；须始终 include_items
+            //（对标报价单/采购订单列表），禁止仅在 detail 视图才带上导致预览全为「-」）
             const apiParams = resolveSalesOrderListApiParams(params, sort, searchFormValues, {
               salesmanId: resolveListSalesmanId(salesmanFilterIdRef.current, searchFormValues),
-              includeItems: dataViewModeRef.current === 'detail',
+              includeItems: true,
             }) as SalesOrderListParams;
 
             const toFlatRows = (orders: SalesOrder[], writeRowKeyMap: boolean): SalesOrderItemRow[] => {

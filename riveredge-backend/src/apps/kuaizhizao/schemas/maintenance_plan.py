@@ -7,30 +7,20 @@ Author: Luigi Lu
 Date: 2025-01-15
 """
 
-from datetime import datetime, date
-from typing import Optional, List, Dict, Any, Union
+from datetime import datetime
+from typing import Optional, List, Dict, Any
 from decimal import Decimal
-from uuid import UUID
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class MaintenancePlanBase(BaseModel):
     """
-    维护计划基础 Schema
-    
-    包含维护计划的基本字段，用于创建和更新操作。
+    维护计划基础 Schema（计划侧只保留名称/类型/日期等；设备与周期取自方案）
     """
     plan_no: Optional[str] = Field(None, max_length=100, description="维护计划编号（可选，创建时自动生成）")
     plan_name: str = Field(..., min_length=1, max_length=200, description="计划名称")
-    equipment_uuid: Optional[str] = Field(None, description="设备UUID（兼容单选，建议使用 equipment_uuids）")
-    equipment_uuids: Optional[List[str]] = Field(None, min_length=1, description="关联设备UUID列表")
-    maintenance_scheme_id: Optional[int] = Field(None, description="保养方案ID")
     plan_type: str = Field(..., max_length=50, description="计划类型（预防性维护、定期维护、临时维护）")
-    maintenance_type: str = Field(..., max_length=50, description="维护类型（日常保养、小修、中修、大修）")
-    cycle_type: str = Field(..., max_length=50, description="周期类型（按时间、按运行时长、按使用次数）")
-    cycle_value: Optional[int] = Field(None, ge=0, description="周期值")
-    cycle_unit: Optional[str] = Field(None, max_length=20, description="周期单位（天、小时、次）")
     planned_start_date: Optional[datetime] = Field(None, description="计划开始日期")
     planned_end_date: Optional[datetime] = Field(None, description="计划结束日期")
     responsible_person_id: Optional[int] = Field(None, description="负责人ID（用户ID）")
@@ -38,7 +28,7 @@ class MaintenancePlanBase(BaseModel):
     status: str = Field(default="草稿", max_length=50, description="计划状态（草稿、已发布、执行中、已完成、已取消）")
     remark: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
-    
+
     @field_validator("plan_type")
     @classmethod
     def validate_plan_type(cls, v: str) -> str:
@@ -46,15 +36,7 @@ class MaintenancePlanBase(BaseModel):
         if v not in allowed_types:
             raise ValueError(f"计划类型必须是 {allowed_types} 之一")
         return v
-    
-    @field_validator("maintenance_type")
-    @classmethod
-    def validate_maintenance_type(cls, v: str) -> str:
-        allowed_types = ["日常保养", "小修", "中修", "大修"]
-        if v not in allowed_types:
-            raise ValueError(f"维护类型必须是 {allowed_types} 之一")
-        return v
-    
+
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
@@ -65,44 +47,15 @@ class MaintenancePlanBase(BaseModel):
 
 
 class MaintenancePlanCreate(MaintenancePlanBase):
-    """
-    维护计划创建 Schema
-    
-    用于创建新维护计划的请求数据。
-    """
+    """创建维护计划：必绑保养方案；设备/维护类型/周期由方案与绑定展开。"""
     maintenance_scheme_id: int = Field(..., description="保养方案ID")
-
-    @model_validator(mode="after")
-    def normalize_equipment_uuids(self):
-        uuids = list(self.equipment_uuids or [])
-        if self.equipment_uuid and self.equipment_uuid not in uuids:
-            uuids.insert(0, self.equipment_uuid)
-        seen: list[str] = []
-        for raw in uuids:
-            value = str(raw).strip()
-            if value and value not in seen:
-                seen.append(value)
-        if not seen:
-            raise ValueError("至少选择一个关联设备")
-        object.__setattr__(self, "equipment_uuids", seen)
-        object.__setattr__(self, "equipment_uuid", seen[0])
-        return self
 
 
 class MaintenancePlanUpdate(BaseModel):
-    """
-    维护计划更新 Schema
-    
-    用于更新维护计划的请求数据，所有字段可选。
-    """
+    """更新维护计划：不可再写设备/类型/周期（改方案即刷新快照）。"""
     plan_name: Optional[str] = Field(None, min_length=1, max_length=200, description="计划名称")
-    equipment_uuids: Optional[List[str]] = Field(None, min_length=1, description="关联设备UUID列表")
     maintenance_scheme_id: Optional[int] = Field(None, description="保养方案ID")
     plan_type: Optional[str] = Field(None, max_length=50, description="计划类型")
-    maintenance_type: Optional[str] = Field(None, max_length=50, description="维护类型")
-    cycle_type: Optional[str] = Field(None, max_length=50, description="周期类型")
-    cycle_value: Optional[int] = Field(None, ge=0, description="周期值")
-    cycle_unit: Optional[str] = Field(None, max_length=20, description="周期单位")
     planned_start_date: Optional[datetime] = Field(None, description="计划开始日期")
     planned_end_date: Optional[datetime] = Field(None, description="计划结束日期")
     responsible_person_id: Optional[int] = Field(None, description="负责人ID")
@@ -111,25 +64,47 @@ class MaintenancePlanUpdate(BaseModel):
     remark: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
+    @field_validator("plan_type")
+    @classmethod
+    def validate_plan_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed_types = ["预防性维护", "定期维护", "临时维护"]
+        if v not in allowed_types:
+            raise ValueError(f"计划类型必须是 {allowed_types} 之一")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed_statuses = ["草稿", "已发布", "执行中", "已完成", "已取消"]
+        if v not in allowed_statuses:
+            raise ValueError(f"计划状态必须是 {allowed_statuses} 之一")
+        return v
+
 
 class MaintenancePlanResponse(MaintenancePlanBase):
-    """
-    维护计划响应 Schema
-    
-    用于返回维护计划信息的响应数据。
-    """
+    """维护计划响应：含方案快照与绑定设备展开。"""
     model_config = ConfigDict(from_attributes=True)
-    
+
     uuid: str = Field(..., description="维护计划UUID（对外暴露，业务标识）")
     id: int = Field(..., description="维护计划ID（内部使用）")
     tenant_id: int = Field(..., description="组织ID")
-    equipment_id: int = Field(..., description="设备ID")
-    equipment_name: str = Field(..., description="设备名称")
-    equipment_items: Optional[List[Dict[str, Any]]] = Field(None, description="关联设备列表")
-    equipment_uuids: Optional[List[str]] = Field(None, description="关联设备UUID列表")
+    equipment_id: Optional[int] = Field(None, description="设备ID（绑定展开首台）")
+    equipment_uuid: Optional[str] = Field(None, description="设备UUID（绑定展开首台）")
+    equipment_name: Optional[str] = Field(None, description="设备名称（绑定展开）")
+    equipment_items: Optional[List[Dict[str, Any]]] = Field(None, description="绑定设备列表")
+    equipment_uuids: Optional[List[str]] = Field(None, description="绑定设备UUID列表")
+    bound_equipment_count: Optional[int] = Field(None, description="保养方案已绑定设备数")
     maintenance_scheme_id: Optional[int] = Field(None, description="保养方案ID")
     scheme_code: Optional[str] = Field(None, description="保养方案编码快照")
     scheme_name: Optional[str] = Field(None, description="保养方案名称快照")
+    maintenance_type: Optional[str] = Field(None, description="维护类型快照（来自方案）")
+    cycle_type: Optional[str] = Field(None, description="周期类型快照（来自方案）")
+    cycle_value: Optional[int] = Field(None, description="周期值快照（来自方案）")
+    cycle_unit: Optional[str] = Field(None, description="周期单位快照（来自方案）")
     created_by: Optional[int] = None
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None
@@ -141,11 +116,7 @@ class MaintenancePlanResponse(MaintenancePlanBase):
 
 
 class MaintenanceExecutionBase(BaseModel):
-    """
-    维护执行记录基础 Schema
-    
-    包含维护执行记录的基本字段，用于创建和更新操作。
-    """
+    """维护执行记录基础 Schema"""
     execution_no: Optional[str] = Field(None, max_length=100, description="执行记录编号（可选，创建时自动生成）")
     maintenance_plan_uuid: Optional[str] = Field(None, description="维护计划UUID（可选）")
     equipment_uuid: str = Field(..., description="设备UUID")
@@ -167,7 +138,7 @@ class MaintenanceExecutionBase(BaseModel):
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     source_type: Optional[str] = Field(None, max_length=50, description="来源类型（equipment_fault 等）")
     source_uuid: Optional[str] = Field(None, max_length=36, description="来源单据 UUID")
-    
+
     @field_validator("execution_result")
     @classmethod
     def validate_execution_result(cls, v: Optional[str]) -> Optional[str]:
@@ -176,7 +147,7 @@ class MaintenanceExecutionBase(BaseModel):
             if v not in allowed_results:
                 raise ValueError(f"执行结果必须是 {allowed_results} 之一")
         return v
-    
+
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
@@ -187,20 +158,12 @@ class MaintenanceExecutionBase(BaseModel):
 
 
 class MaintenanceExecutionCreate(MaintenanceExecutionBase):
-    """
-    维护执行记录创建 Schema
-    
-    用于创建新维护执行记录的请求数据。
-    """
+    """创建维护执行记录"""
     pass
 
 
 class MaintenanceExecutionUpdate(BaseModel):
-    """
-    维护执行记录更新 Schema
-    
-    用于更新维护执行记录的请求数据，所有字段可选。
-    """
+    """更新维护执行记录"""
     execution_date: Optional[datetime] = Field(None, description="执行日期")
     executor_id: Optional[int] = Field(None, description="执行人员ID")
     executor_name: Optional[str] = Field(None, max_length=100, description="执行人员姓名")
@@ -222,19 +185,13 @@ class MaintenanceExecutionUpdate(BaseModel):
 
 
 class MaintenanceExecutionResponse(MaintenanceExecutionBase):
-    """
-    维护执行记录响应 Schema
-    
-    用于返回维护执行记录信息的响应数据。
-    """
+    """维护执行记录响应"""
     model_config = ConfigDict(from_attributes=True)
-    
-    uuid: str = Field(..., description="维护执行记录UUID（对外暴露，业务标识）")
-    id: int = Field(..., description="维护执行记录ID（内部使用）")
+
+    uuid: str = Field(..., description="维护执行记录UUID")
+    id: int = Field(..., description="维护执行记录ID")
     tenant_id: int = Field(..., description="组织ID")
     maintenance_plan_id: Optional[int] = Field(None, description="维护计划ID")
-    maintenance_scheme_id: Optional[int] = Field(None, description="保养方案ID")
-    executed_items: Optional[List[Dict[str, Any]]] = Field(None, description="已执行保养项")
     equipment_id: int = Field(..., description="设备ID")
     equipment_name: str = Field(..., description="设备名称")
     created_at: datetime = Field(..., description="创建时间")
@@ -244,16 +201,13 @@ class MaintenanceExecutionResponse(MaintenanceExecutionBase):
     updated_by: Optional[int] = Field(None, description="更新人ID")
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     deleted_at: Optional[datetime] = Field(None, description="删除时间（软删除）")
+    lifecycle: Optional[Dict[str, Any]] = Field(None, description="通用生命周期")
 
 
 class MaintenancePlanListResponse(BaseModel):
-    """
-    维护计划列表响应 Schema
-    
-    用于返回维护计划列表的响应数据。
-    """
+    """维护计划列表响应"""
     model_config = ConfigDict(from_attributes=True)
-    
+
     items: list[MaintenancePlanResponse] = Field(..., description="维护计划列表")
     total: int = Field(..., description="总数量")
     skip: int = Field(..., description="跳过数量")
@@ -261,15 +215,10 @@ class MaintenancePlanListResponse(BaseModel):
 
 
 class MaintenanceExecutionListResponse(BaseModel):
-    """
-    维护执行记录列表响应 Schema
-    
-    用于返回维护执行记录列表的响应数据。
-    """
+    """维护执行记录列表响应"""
     model_config = ConfigDict(from_attributes=True)
-    
+
     items: list[MaintenanceExecutionResponse] = Field(..., description="维护执行记录列表")
     total: int = Field(..., description="总数量")
     skip: int = Field(..., description="跳过数量")
     limit: int = Field(..., description="限制数量")
-

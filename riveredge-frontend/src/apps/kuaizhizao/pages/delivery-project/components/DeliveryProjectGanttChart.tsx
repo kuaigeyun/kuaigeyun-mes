@@ -14,6 +14,12 @@ import { useTranslation } from 'react-i18next';
 import { ensureGanttIconsCssLoaded } from '../../../../../utils/loadGanttIconsCss';
 import { formatDateTime } from '../../../../../utils/format';
 import { useThemeStore } from '../../../../../stores/themeStore';
+import { UNI_TABLE_PROGRESS_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  clampPushProgressPercent,
+  DocumentPushProgressBar,
+} from '../../sales-management/shared/DocumentPushProgressBar';
+import { resolveDeliveryProgressStatus } from '../shared/deliveryProgressColumn';
 
 export interface DeliveryProjectGanttItem {
   id: number;
@@ -40,6 +46,22 @@ interface GanttTask {
   parent?: number;
   open?: boolean;
   lazy: false;
+  node_status?: string | null;
+}
+
+function normalizeProgress(value: unknown): number {
+  return clampPushProgressPercent(Number(value ?? 0));
+}
+
+function DeliveryGanttProgressCell({ row }: { row: GanttTask }) {
+  const percent = normalizeProgress(row.progress);
+  return (
+    <DocumentPushProgressBar
+      percent={percent}
+      status={resolveDeliveryProgressStatus(row.node_status, percent)}
+      tooltipSummary={`${percent}%`}
+    />
+  );
 }
 
 export type DeliveryGanttViewMode = 'day' | 'week' | 'month';
@@ -133,7 +155,11 @@ function countVisibleGanttRows(tasks: GanttTask[], expandedSummaryIds: ReadonlyS
   return Math.max(visibleRows, 1);
 }
 
-function buildHierarchicalTasks(t: TFunction, items: DeliveryProjectGanttItem[]): GanttTask[] {
+function buildHierarchicalTasks(
+  t: TFunction,
+  items: DeliveryProjectGanttItem[],
+  defaultExpanded: boolean,
+): GanttTask[] {
   const projectOrder: number[] = [];
   const nodesByProject = new Map<number, DeliveryProjectGanttItem[]>();
 
@@ -162,11 +188,12 @@ function buildHierarchicalTasks(t: TFunction, items: DeliveryProjectGanttItem[])
         id: summaryId,
         text: buildProjectLabel(head),
         ...dates,
-        progress: Math.min(100, Math.max(0, Number(head.progress ?? 0))),
+        progress: normalizeProgress(head.progress),
         type: 'summary',
         parent: 0,
-        open: false,
+        open: defaultExpanded,
         lazy: false,
+        node_status: head.node_status,
       });
       continue;
     }
@@ -179,10 +206,11 @@ function buildHierarchicalTasks(t: TFunction, items: DeliveryProjectGanttItem[])
           id: node.id,
           text: node.node_name,
           ...dates,
-          progress: Math.min(100, Math.max(0, Number(node.progress ?? 0))),
+          progress: normalizeProgress(node.progress),
           type: 'task' as const,
           parent: summaryId,
           lazy: false as const,
+          node_status: node.node_status,
         };
       });
 
@@ -194,8 +222,9 @@ function buildHierarchicalTasks(t: TFunction, items: DeliveryProjectGanttItem[])
     const end = new Date(Math.max(...nodeTasks.map((task) => task.end.getTime())));
     const durationMs = end.getTime() - start.getTime();
     const duration = Math.max(1, Math.ceil(durationMs / (24 * 60 * 60 * 1000)));
-    const progress =
-      nodeTasks.reduce((sum, task) => sum + task.progress, 0) / Math.max(nodeTasks.length, 1);
+    const progress = normalizeProgress(
+      nodeTasks.reduce((sum, task) => sum + task.progress, 0) / Math.max(nodeTasks.length, 1),
+    );
 
     tasks.push({
       id: summaryId,
@@ -203,11 +232,12 @@ function buildHierarchicalTasks(t: TFunction, items: DeliveryProjectGanttItem[])
       start,
       end,
       duration,
-      progress: Math.min(100, Math.max(0, progress)),
+      progress,
       type: 'summary',
       parent: 0,
-      open: false,
+      open: defaultExpanded,
       lazy: false,
+      node_status: progress >= 100 ? 'completed' : null,
     });
     tasks.push(...nodeTasks);
   }
@@ -221,11 +251,12 @@ function buildHierarchicalTasks(t: TFunction, items: DeliveryProjectGanttItem[])
           buildProjectLabel(item) ||
           `${t('app.kuaizhizao.deliveryProject.fields.projectName')} ${index + 1}`,
         ...dates,
-        progress: Math.min(100, Math.max(0, Number(item.progress ?? 0))),
-        type: 'summary',
+        progress: normalizeProgress(item.progress),
+        type: 'summary' as const,
         parent: 0,
-        open: false,
-        lazy: false,
+        open: defaultExpanded,
+        lazy: false as const,
+        node_status: item.node_status,
       };
     });
   }
@@ -233,14 +264,21 @@ function buildHierarchicalTasks(t: TFunction, items: DeliveryProjectGanttItem[])
   return tasks;
 }
 
+function collectSummaryIds(tasks: GanttTask[]): Set<number> {
+  return new Set(tasks.filter((task) => task.type === 'summary' && task.parent === 0).map((task) => task.id));
+}
+
 interface DeliveryProjectGanttChartProps {
   items: DeliveryProjectGanttItem[];
   viewMode?: DeliveryGanttViewMode;
+  /** 工作台单项目场景默认展开节点行 */
+  defaultExpanded?: boolean;
 }
 
 const DeliveryProjectGanttChart: React.FC<DeliveryProjectGanttChartProps> = ({
   items,
   viewMode = 'week',
+  defaultExpanded = false,
 }) => {
   const { t } = useTranslation();
   const isDark = useThemeStore((s) => s.resolved.isDark);
@@ -251,11 +289,14 @@ const DeliveryProjectGanttChart: React.FC<DeliveryProjectGanttChartProps> = ({
     ensureGanttIconsCssLoaded();
   }, []);
 
-  useEffect(() => {
-    setExpandedSummaryIds(new Set());
-  }, [items]);
+  const tasks = useMemo(
+    () => buildHierarchicalTasks(t, items, defaultExpanded),
+    [defaultExpanded, items, t],
+  );
 
-  const tasks = useMemo(() => buildHierarchicalTasks(t, items), [items, t]);
+  useEffect(() => {
+    setExpandedSummaryIds(defaultExpanded ? collectSummaryIds(tasks) : new Set());
+  }, [defaultExpanded, tasks]);
   const visibleRowCount = useMemo(
     () => countVisibleGanttRows(tasks, expandedSummaryIds),
     [tasks, expandedSummaryIds],
@@ -281,7 +322,12 @@ const DeliveryProjectGanttChart: React.FC<DeliveryProjectGanttChartProps> = ({
       { id: 'start', header: t('app.kuaizhizao.deliveryProject.gantt.columns.plannedStart'), width: 100, template: formatColumnDate },
       { id: 'end', header: t('app.kuaizhizao.deliveryProject.gantt.columns.plannedEnd'), width: 100, template: formatColumnDate },
       { id: 'duration', header: t('app.kuaizhizao.deliveryProject.gantt.columns.durationDays'), width: 80 },
-      { id: 'progress', header: t('app.kuaizhizao.deliveryProject.gantt.columns.progressPercent'), width: 72 },
+      {
+        id: 'progress',
+        header: t('app.kuaizhizao.deliveryProject.gantt.columns.progressPercent'),
+        width: UNI_TABLE_PROGRESS_COLUMN_WIDTH,
+        cell: DeliveryGanttProgressCell,
+      },
     ],
     [t],
   );

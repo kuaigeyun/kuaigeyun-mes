@@ -12,6 +12,7 @@ export const DRAWING_TYPE_DICTIONARY_CODE = 'DRAWING_TYPE';
 export type DrawingCatalogTab = 'engineering' | 'product_spec';
 export type DrawingStatus = 'Draft' | 'Editing' | 'Pending' | 'Released' | 'Obsolete';
 export type DrawingSecurityLevel = 'public' | 'internal' | 'secret' | 'confidential';
+export type DrawingFormat = '2d' | '3d';
 
 export interface FileBrief {
   uuid: string;
@@ -95,6 +96,7 @@ export interface EngineeringDrawing {
   name: string;
   revision: string;
   drawingType: DrawingType;
+  drawingFormat?: DrawingFormat | null;
   status: DrawingStatus;
   fileUuid: string;
   file?: FileBrief | null;
@@ -161,6 +163,7 @@ export interface EngineeringDrawingCreate {
   operationUuids?: string[];
   folderUuid?: string | null;
   securityLevel?: DrawingSecurityLevel;
+  drawingFormat?: DrawingFormat | null;
   description?: string;
 }
 
@@ -176,6 +179,7 @@ export interface EngineeringDrawingUpdate {
   operationUuids?: string[];
   folderUuid?: string | null;
   securityLevel?: DrawingSecurityLevel;
+  drawingFormat?: DrawingFormat | null;
   description?: string;
 }
 

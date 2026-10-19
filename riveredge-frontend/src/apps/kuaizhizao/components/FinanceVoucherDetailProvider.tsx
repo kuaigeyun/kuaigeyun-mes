@@ -98,19 +98,11 @@ export const FinanceVoucherDetailProvider: React.FC<{ children: React.ReactNode 
   }, [reload, target]);
 
   const linkHandlers = useMemo(
-    () => ({
-      openVoucher: (next: FinanceVoucherOpenTarget) => openFinanceVoucherDetail(next),
-      openPartnerStatement: (statementId: number) => {
-        navigate(`/apps/kuaicaiwu/finance-management/partner-statements/${statementId}`);
-      },
-      createRefund: (kind: FinanceVoucherKind, sourceId: number) => {
-        const path =
-          kind === 'receipt'
-            ? '/apps/kuaicaiwu/finance-management/receipt-refunds'
-            : '/apps/kuaicaiwu/finance-management/payment-refunds';
-        navigate(path, { state: { pullSourceId: sourceId } });
-      },
-    }),
+    () =>
+      buildFinanceVoucherLinkHandlers({
+        openVoucher: (next) => openFinanceVoucherDetail(next),
+        navigate,
+      }),
     [navigate, openFinanceVoucherDetail],
   );
 
@@ -142,6 +134,7 @@ export const FinanceVoucherDetailProvider: React.FC<{ children: React.ReactNode 
 export type FinanceVoucherLinkHandlers = {
   openVoucher: (target: FinanceVoucherOpenTarget) => void;
   openPartnerStatement: (statementId: number) => void;
+  openSourceDocument?: (doc: { source_type: string; id: number; code: string }) => void;
   createRefund: (kind: FinanceVoucherKind, sourceId: number) => void;
 };
 
@@ -153,6 +146,19 @@ export function buildFinanceVoucherLinkHandlers(options: {
     openVoucher: options.openVoucher,
     openPartnerStatement: (statementId) => {
       options.navigate(`/apps/kuaicaiwu/finance-management/partner-statements/${statementId}`);
+    },
+    openSourceDocument: (doc) => {
+      const st = String(doc.source_type || '').trim();
+      if (st === 'payable') {
+        options.navigate(`/apps/kuaicaiwu/finance-management/payables/${doc.id}`);
+        return;
+      }
+      if (st === 'payment_application') {
+        const kw = String(doc.code || doc.id).trim();
+        options.navigate(
+          `/apps/kuaizhizao/purchase-management/payment-applications?keyword=${encodeURIComponent(kw)}`,
+        );
+      }
     },
     createRefund: (kind, sourceId) => {
       const path =

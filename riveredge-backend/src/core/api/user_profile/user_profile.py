@@ -23,7 +23,7 @@ router = APIRouter(prefix="/user-profile", tags=["Core - User Profile"])
 class ChangePasswordRequest(BaseModel):
     """修改密码请求"""
     old_password: str = Field(..., description="当前密码")
-    new_password: str = Field(..., min_length=8, description="新密码（至少8个字符）")
+    new_password: str = Field(..., min_length=1, max_length=128, description="新密码")
 
 
 @router.get("", response_model=UserProfileResponse)
@@ -192,8 +192,16 @@ async def change_password(
                     detail="当前密码错误"
                 )
             
-            # 更新密码
-            user.password_hash = User.hash_password(data.new_password)
+            from core.services.security.password_policy_service import PasswordPolicyService
+            from core.services.security.password_user_utils import apply_login_password_to_user
+
+            policy = await PasswordPolicyService.get_policy(tenant_id)
+            await apply_login_password_to_user(
+                user,
+                data.new_password,
+                policy,
+                must_change_password=False,
+            )
             await user.save()
         
         return {"message": "密码修改成功"}

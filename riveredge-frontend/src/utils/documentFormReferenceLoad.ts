@@ -215,7 +215,16 @@ export function referenceDisplayItemsToMaterials(items: ReferenceDisplayItem[]):
       const extra = item.extra ?? {};
       const code = String(item.code ?? extra.main_code ?? '').trim();
       const baseUnit = (extra.base_unit ?? extra.baseUnit) as string | undefined;
-      const units = (extra.units ?? undefined) as Material['units'] | undefined;
+      const rawUnits = extra.units ?? undefined;
+      // 与 resolveMaterialScenarioUnit 一致：字符串/数组历史结构先规范化
+      let units = rawUnits as Material['units'] | undefined;
+      if (typeof rawUnits === 'string') {
+        try {
+          units = JSON.parse(rawUnits) as Material['units'];
+        } catch {
+          units = undefined;
+        }
+      }
       return {
         id: item.id as number,
         uuid: item.uuid ?? undefined,

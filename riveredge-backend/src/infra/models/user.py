@@ -60,6 +60,8 @@ class User(BaseModel):
     is_tenant_admin = fields.BooleanField(default=False, description="是否为组织管理员（需 tenant_id 不为空）")
     source = fields.CharField(max_length=50, null=True, description="用户来源（invite_code, personal, organization等）")
     last_login = fields.DatetimeField(null=True, description="最后登录时间（可选）")
+    password_changed_at = fields.DatetimeField(null=True, description="登录密码最近修改时间")
+    must_change_password = fields.BooleanField(default=False, description="下次登录须修改密码")
     
     # 扩展字段（账户管理模块）
     phone = fields.CharField(max_length=20, null=True, description="手机号（可选）")

@@ -570,15 +570,6 @@ const ApprovalInstanceListPage: React.FC = () => {
                   >
                     批量通过 ({selectedRowKeys.length})
                   </Button>,
-                  <Button
-                    key="batch-reject"
-                    danger
-                    icon={<CloseOutlined />}
-                    loading={batchLoading}
-                    onClick={() => void handleBatchApproval('reject')}
-                  >
-                    批量驳回 ({selectedRowKeys.length})
-                  </Button>,
                 ]
               : []
           }

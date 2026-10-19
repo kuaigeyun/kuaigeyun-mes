@@ -61,7 +61,15 @@ async def message_sender_function(event: Event) -> Dict[str, Any]:
         elif message_type == "internal":
             result = {"success": True, "message": "站内信已创建"}
         elif message_type == "push":
-            result = await _send_push_notification(tenant_id, config_uuid, recipient, subject, content)
+            log_vars = message_log.variables if isinstance(message_log.variables, dict) else None
+            result = await _send_push_notification(
+                tenant_id,
+                config_uuid,
+                recipient,
+                subject,
+                content,
+                variables=log_vars,
+            )
         else:
             result = {"success": False, "error": f"不支持的消息类型: {message_type}"}
 
@@ -149,6 +157,7 @@ async def _send_push_notification(
     recipient: str,
     subject: str,
     content: str,
+    variables: dict | None = None,
 ) -> Dict[str, Any]:
     try:
         config = await MessageConfigService.get_message_config_by_uuid(tenant_id, config_uuid)
@@ -157,14 +166,43 @@ async def _send_push_notification(
         channel = config.config or {}
         provider = str(channel.get("provider") or channel.get("connection_type") or "").strip().lower()
         if provider in ("wecom", "wechat_work", "企业微信"):
-            from core.services.messaging.wecom_message_service import send_wecom_text_message
-
-            user_ids = [v.strip() for v in str(recipient or "").replace(",", "|").split("|") if v.strip()]
-            sent = await send_wecom_text_message(
-                tenant_id=tenant_id,
-                user_ids=user_ids,
-                content=content or subject or "",
+            from core.services.messaging.wecom_message_service import (
+                resolve_wecom_recipient_userids,
+                send_wecom_text_message,
             )
+
+            user_ids, resolve_error = await resolve_wecom_recipient_userids(
+                tenant_id=tenant_id,
+                recipient=str(recipient or ""),
+            )
+            if resolve_error:
+                return {"success": False, "error": resolve_error}
+
+            vars_map = variables if isinstance(variables, dict) else {}
+            document_url = str(vars_map.get("document_url") or "").strip()
+            wecom_msgtype = str(
+                channel.get("wecom_msgtype") or vars_map.get("wecom_msgtype") or ""
+            ).strip().lower()
+            use_textcard = bool(document_url) and (
+                wecom_msgtype == "textcard" or bool(channel.get("wecom_use_textcard"))
+            )
+
+            if use_textcard:
+                from core.services.messaging.wecom_message_service import send_wecom_textcard_message
+
+                sent = await send_wecom_textcard_message(
+                    tenant_id=tenant_id,
+                    user_ids=user_ids,
+                    title=subject or "新消息",
+                    description=content or subject or "",
+                    url=document_url,
+                )
+            else:
+                sent = await send_wecom_text_message(
+                    tenant_id=tenant_id,
+                    user_ids=user_ids,
+                    content=content or subject or "",
+                )
             if not sent:
                 return {"success": False, "error": "企业微信未配置或无有效接收人"}
             return {"success": True, "message": "企业微信消息发送成功"}

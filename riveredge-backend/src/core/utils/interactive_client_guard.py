@@ -52,6 +52,10 @@ _EXEMPT_PREFIXES = (
     "/api/v1/auth/biometric/",
     "/api/v1/auth/wecom/",
     "/api/v1/auth/password-",  # 忘记密码等公开流（若存在）
+    # 边缘 device_token 入站（无用户 JWT；鉴权靠 token）
+    "/api/v1/apps/kuaiiot/ingest/",
+    "/api/v1/apps/kuaivision/ingest/",
+    "/api/v1/apps/kuaivision/edge/",
 )
 
 

@@ -39,13 +39,22 @@ export interface PaymentVoucher {
   refunded_amount?: number;
   refund_execution_status?: string;
   notes?: string;
+  /** 来自付款申请：确认过账前必须上传付款凭证 */
+  require_payment_voucher?: boolean;
+  attachments?: unknown;
   created_at: string;
   updated_at?: string;
   created_by_name?: string;
   updated_by_name?: string;
+  linked_source_documents?: Array<{
+    source_type: 'payable' | 'payment_application' | string;
+    id: number;
+    code: string;
+  }>;
   capabilities?: {
     pull_payment_refund?: { allowed?: boolean; reason?: string };
     repair_bank_flow?: { allowed?: boolean; reason?: string };
+    print?: { allowed?: boolean; reason?: string };
   };
 }
 
@@ -55,6 +64,7 @@ export type PaymentPullPreview = DocumentPushPreview & {
   supplier_name?: string;
   payable_id?: number | null;
   payable_code?: string | null;
+  require_payment_voucher?: boolean;
 };
 
 export type PaymentPullCandidate = {
@@ -80,6 +90,7 @@ export type PaymentCreateData = {
   bank_account_id?: number;
   settlement_type?: string;
   notes?: string;
+  require_payment_voucher?: boolean;
   attachments?: unknown;
   source_type?: 'payable' | 'payment_application';
   source_id?: number;

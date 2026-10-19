@@ -11,7 +11,7 @@ export interface MiscCategory {
   sort_order?: number;
 }
 
-const base = '/apps/kuaicaiwu/finance-misc-categories';
+const base = '/apps/kuaizhizao/finance-misc-categories';
 
 export const financeMiscCategoryService = {
   list: (

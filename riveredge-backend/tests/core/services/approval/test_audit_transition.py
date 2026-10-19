@@ -10,19 +10,43 @@ from core.services.approval.audit_transition import (
 )
 
 
-def test_revoke_landing_always_draft():
+def test_revoke_landing_draft_without_reopen():
     assert resolve_revoke_landing_phase(manual_audit_enabled=True) == "draft"
     assert resolve_revoke_landing_phase(manual_audit_enabled=False) == "draft"
+    assert (
+        resolve_revoke_landing_phase(manual_audit_enabled=True, flow_reopened=False)
+        == "draft"
+    )
 
 
-def test_revoke_to_draft_landing_always_draft():
-    assert resolve_revoke_to_draft_landing_phase(manual_audit_enabled=True) == "draft"
-    assert resolve_revoke_to_draft_landing_phase(manual_audit_enabled=False) == "draft"
+def test_revoke_landing_pending_when_flow_reopened():
+    assert (
+        resolve_revoke_landing_phase(manual_audit_enabled=True, flow_reopened=True)
+        == "pending"
+    )
+    assert (
+        resolve_revoke_to_draft_landing_phase(
+            manual_audit_enabled=True, flow_reopened=True
+        )
+        == "pending"
+    )
 
 
-def test_sales_order_revoke_landing_alias_always_draft():
+def test_revoke_landing_auto_audit_stays_draft_even_if_reopened_flag():
+    assert (
+        resolve_revoke_landing_phase(manual_audit_enabled=False, flow_reopened=True)
+        == "draft"
+    )
+
+
+def test_sales_order_revoke_landing_alias():
     assert resolve_sales_order_revoke_landing_phase(manual_audit_enabled=True) == "draft"
-    assert resolve_sales_order_revoke_landing_phase(manual_audit_enabled=False) == "draft"
+    assert (
+        resolve_sales_order_revoke_landing_phase(
+            manual_audit_enabled=True, flow_reopened=True
+        )
+        == "pending"
+    )
 
 
 def test_sales_order_revoke_state_pending():

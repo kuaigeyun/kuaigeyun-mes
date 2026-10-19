@@ -50,6 +50,67 @@ def _update_record_fields(item: RecordLike, updates: Dict[str, Any]) -> RecordLi
     return item
 
 
+async def _attach_batch_flow_withdraw_revoke(
+    tenant_id: int,
+    entity_type: str,
+    items: Sequence[RecordLike],
+    viewer_id: int,
+) -> List[RecordLike]:
+    from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+    target_ids: List[int] = []
+    for item in items:
+        audit = item.get("audit") if isinstance(item, dict) else getattr(item, "audit", None)
+        if not isinstance(audit, dict):
+            continue
+        phase = audit.get("phase")
+        if phase not in ("pending", "approved"):
+            continue
+        rid = _read_record_id(item)
+        if rid is not None:
+            target_ids.append(rid)
+
+    if not target_ids:
+        return list(items)
+
+    flag_map = await ApprovalInstanceService.batch_flow_withdraw_revoke_flags_for_entities(
+        tenant_id,
+        entity_type,
+        target_ids,
+        viewer_id,
+    )
+    if not flag_map:
+        return list(items)
+
+    out: List[RecordLike] = []
+    for item in items:
+        rid = _read_record_id(item)
+        if rid is None or rid not in flag_map:
+            out.append(item)
+            continue
+        audit = item.get("audit") if isinstance(item, dict) else getattr(item, "audit", None)
+        if not isinstance(audit, dict):
+            out.append(item)
+            continue
+        flags = flag_map[rid]
+        allowed = list(audit.get("allowed_actions") or [])
+        if "withdraw" in allowed and not flags.get("viewer_can_withdraw_submit"):
+            allowed = [a for a in allowed if a != "withdraw"]
+        if "revoke" in allowed and not flags.get("viewer_can_revoke"):
+            allowed = [a for a in allowed if a != "revoke"]
+        if flags.get("viewer_can_recall_own") and "recall_own" not in allowed:
+            allowed.append("recall_own")
+        gated_audit = {
+            **audit,
+            "allowed_actions": allowed,
+            "viewer_can_revoke": bool(flags.get("viewer_can_revoke")),
+            "viewer_can_withdraw_submit": bool(flags.get("viewer_can_withdraw_submit")),
+            "viewer_can_recall_own": bool(flags.get("viewer_can_recall_own")),
+        }
+        out.append(_update_record_fields(item, {"audit": gated_audit}))
+    return out
+
+
 async def _attach_batch_viewer_actions(
     tenant_id: int,
     entity_type: str,
@@ -63,7 +124,8 @@ async def _attach_batch_viewer_actions(
         audit = item.get("audit") if isinstance(item, dict) else getattr(item, "audit", None)
         if not isinstance(audit, dict):
             continue
-        if audit.get("phase") != "pending" or not audit.get("enabled"):
+        # 仅按 phase=pending 挂 viewer_actions：已有进行中实例时 binding 关闭仍须「待我审核/您已审核」
+        if audit.get("phase") != "pending":
             continue
         rid = _read_record_id(item)
         if rid is not None:
@@ -169,6 +231,9 @@ async def enrich_items(
         )
     if viewer_id is not None:
         out = await _attach_batch_viewer_actions(
+            tenant_id, entity_type, out, int(viewer_id)
+        )
+        out = await _attach_batch_flow_withdraw_revoke(
             tenant_id, entity_type, out, int(viewer_id)
         )
     return out

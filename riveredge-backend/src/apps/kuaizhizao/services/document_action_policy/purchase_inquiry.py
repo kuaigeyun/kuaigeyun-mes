@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
-from apps.kuaizhizao.constants import DocumentStatus
+from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_rejected_status
 from apps.kuaizhizao.constants.purchase_inquiry import PurchaseInquiryStatus
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
@@ -48,7 +48,8 @@ def derive_purchase_inquiry_capabilities(inquiry: Any) -> PurchaseInquiryCapabil
     review_status = getattr(inquiry, "review_status", None)
     st = _norm(status)
 
-    update_allowed = st == PurchaseInquiryStatus.DRAFT.value
+    review_rejected = _normalize_review_status(review_status) == ReviewStatus.REJECTED.value
+    update_allowed = st == PurchaseInquiryStatus.DRAFT.value or review_rejected or is_rejected_status(st)
     update_cap = _cap(
         update_allowed,
         "purchase_inquiry.update.not_draft" if not update_allowed else None,
@@ -59,9 +60,10 @@ def derive_purchase_inquiry_capabilities(inquiry: Any) -> PurchaseInquiryCapabil
         "purchase_inquiry.delete.not_draft" if st != PurchaseInquiryStatus.DRAFT.value else None,
     )
 
+    submit_allowed = st == PurchaseInquiryStatus.DRAFT.value or review_rejected or is_rejected_status(st)
     submit_cap = _cap(
-        st == PurchaseInquiryStatus.DRAFT.value,
-        "purchase_inquiry.submit.not_draft" if st != PurchaseInquiryStatus.DRAFT.value else None,
+        submit_allowed,
+        "purchase_inquiry.submit.not_draft" if not submit_allowed else None,
     )
 
     withdraw_submit_allowed = (

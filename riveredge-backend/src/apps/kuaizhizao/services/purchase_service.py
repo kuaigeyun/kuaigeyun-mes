@@ -72,6 +72,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
     def __init__(self):
         super().__init__(PurchaseOrder)
+        self.business_config_service = BusinessConfigService()
 
     @staticmethod
     def _format_user_display_name(user: Any) -> str:
@@ -303,11 +304,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 'updated_by_name': user_info["name"],
             })
 
-            # 自动带出归属采购员
+            # 自动带出归属采购员：供应商归属 > 当前登录创建人
             if not order_dict.get("buyer_id") and order_dict.get("supplier_id"):
                 if supplier and supplier.buyer_id:
                     order_dict["buyer_id"] = supplier.buyer_id
                     order_dict["buyer_name"] = supplier.buyer_name
+            if not order_dict.get("buyer_id") and created_by:
+                order_dict["buyer_id"] = created_by
+                order_dict["buyer_name"] = user_info["name"]
 
             await self._resolve_buyer_fields(order_dict)
 
@@ -1614,18 +1618,28 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "purchase_order"
         )
-        _ = resolve_revoke_to_draft_landing_phase(manual_audit_enabled=audit_required)
 
-        async def _do_revoke() -> PurchaseOrderResponse:
-            await order.update_from_dict({
-                "status": DocumentStatus.DRAFT.value,
-                "review_status": ReviewStatus.PENDING.value,
-                "reviewer_id": None,
-                "reviewer_name": None,
-                "review_time": None,
-                "review_remarks": None,
-                "updated_by": operator_id,
-            }).save()
+        async def _do_revoke(*, reopened: bool = False) -> PurchaseOrderResponse:
+            landing = resolve_revoke_to_draft_landing_phase(
+                manual_audit_enabled=audit_required,
+                flow_reopened=reopened,
+            )
+            row = await PurchaseOrder.get_or_none(
+                tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"采购订单不存在: {order_id}")
+            if landing == "pending":
+                row.status = DocumentStatus.PENDING_REVIEW.value
+            else:
+                row.status = DocumentStatus.DRAFT.value
+            row.review_status = ReviewStatus.PENDING.value
+            row.reviewer_id = None
+            row.reviewer_name = None
+            row.review_time = None
+            row.review_remarks = None
+            row.updated_by = operator_id
+            await row.save()
             return await self.get_purchase_order_by_id(tenant_id, order_id)
 
         return await UniAuditService.revoke_with_flow_fallback(

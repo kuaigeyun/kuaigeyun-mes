@@ -106,14 +106,21 @@ export const traceabilityApi = {
       } catch {
         /* keep text */
       }
-      // Playwright 等后端堆栈可能极长；截断避免 UI/i18n 被拖垮
+      // Playwright 等后端堆栈可能极长；截断避免 UI/i18n 被拖垮。
+      // Traceback 根因在末尾，优先保留尾部（与后端 _format_pdf_subprocess_failure 一致）。
       const raw =
         typeof message === 'string'
           ? message
           : message != null
             ? JSON.stringify(message)
             : '导出追溯报告失败';
-      const short = raw.replace(/\s+/g, ' ').trim().slice(0, 280);
+      const normalized = raw.replace(/\s+/g, ' ').trim();
+      const short =
+        normalized.length <= 280
+          ? normalized
+          : normalized.includes('Traceback')
+            ? `…${normalized.slice(-279)}`
+            : normalized.slice(0, 280);
       throw new Error(short || '导出追溯报告失败');
     }
     const blob = await response.blob();

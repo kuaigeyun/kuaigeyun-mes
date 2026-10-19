@@ -60,6 +60,7 @@ export interface LoginResponse {
   requires_tenant_selection?: boolean;
   /** 同名同密跨租户且手机号不一致时，须先核验后四位再签发 Token */
   requires_phone_verification?: boolean;
+  requires_password_change?: boolean;
 }
 
 export interface TenantSwitchOption {

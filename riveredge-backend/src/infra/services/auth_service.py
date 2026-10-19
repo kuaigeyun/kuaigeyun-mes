@@ -1070,10 +1070,21 @@ class AuthService:
         position = {"uuid": str(user.position.uuid), "name": user.position.name} if user.position else None
         roles = await DataScopeService.serialize_active_roles(user.id, final_tenant_id)
         
+        requires_password_change = False
+        if final_tenant_id is not None and not is_infra_admin:
+            from core.services.security.password_policy_service import PasswordPolicyService
+
+            password_policy = await PasswordPolicyService.get_policy(final_tenant_id)
+            requires_password_change = PasswordPolicyService.user_requires_change(
+                user,
+                password_policy,
+            )
+
         result = {
             "access_token": access_token,
             "token_type": "bearer",
             "expires_in": expires_in,
+            "requires_password_change": requires_password_change,
             "user": {
                 "id": user.id,
                 "uuid": str(user.uuid),

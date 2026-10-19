@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, Query, status
 from loguru import logger
 
 from apps.master_data.schemas.partner_price_book_schemas import (
+    PartnerPriceBookBulkCreate,
+    PartnerPriceBookBulkResponse,
     PartnerPriceBookCreate,
     PartnerPriceBookListResponse,
     PartnerPriceBookResponse,
@@ -55,6 +57,20 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
     ):
         try:
             return await PartnerPriceBookService.create(
+                tenant_id, _partner_type, data, current_user=current_user
+            )
+        except ValidationError as e:
+            raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+    @router.post(f"{base}/bulk", response_model=PartnerPriceBookBulkResponse, dependencies=[module_dep])
+    async def bulk_register_price_books(
+        data: PartnerPriceBookBulkCreate,
+        current_user: Annotated[User, Depends(get_current_user)],
+        tenant_id: Annotated[int, Depends(get_current_tenant)],
+        _partner_type: str = partner_type,
+    ):
+        try:
+            return await PartnerPriceBookService.bulk_register(
                 tenant_id, _partner_type, data, current_user=current_user
             )
         except ValidationError as e:

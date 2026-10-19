@@ -155,17 +155,26 @@ class IndustryPackMenuService:
 
     @staticmethod
     async def grant_module_permissions_to_pack_roles(tenant_id: int, app_code: str) -> int:
-        """将行业模块权限授予已持有 industry-pack:entry:read 的角色。
+        """将行业包入口 + 模块权限授予侧栏可见所需角色。
 
-        否则侧栏「行业包」有壳无子项会被当成空导航壳整组隐藏，启用模块后仍看不到菜单。
+        目标角色：
+        - 已持有 ``industry-pack:entry:read``；或
+        - 持有 ``system:application:update``（能在应用中心启用模块）；或
+        - 系统管理员预设角色
+
+        仅授给「已有 pack entry」会在首次启用时无人可授，侧栏仍空。
         """
         if not is_industry_module_app_code(app_code):
             return 0
-        # 新模块权限可能尚未写入 core_permissions；授予前强制同步一次
         try:
             from core.services.authorization.permission_sync_service import PermissionSyncService
 
-            await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=True)
+            await PermissionSyncService.ensure_app_permissions(
+                tenant_id=tenant_id, app_code=INDUSTRY_PACK_APP_CODE
+            )
+            await PermissionSyncService.ensure_app_permissions(
+                tenant_id=tenant_id, app_code=app_code
+            )
         except Exception as exc:
             logger.warning(
                 f"租户 {tenant_id} 行业模块 {app_code} 授权前权限同步失败: {exc}"
@@ -179,8 +188,46 @@ class IndustryPackMenuService:
         ]
         if not codes:
             codes = [f"{app_code}:entry:read"]
+        # 入口码必须一并授予，否则前端空壳过滤会整组隐藏
+        pack_entry = f"{INDUSTRY_PACK_APP_CODE}:entry:read"
+        if pack_entry not in codes:
+            codes = [pack_entry, *codes]
+
         conn = await get_db_connection()
         try:
+            role_rows = await conn.fetch(
+                """
+                SELECT DISTINCT r.id
+                FROM core_roles r
+                WHERE r.tenant_id = $1
+                  AND r.deleted_at IS NULL
+                  AND (
+                    UPPER(COALESCE(r.code, '')) IN ('ADMIN', 'SYSTEM_ADMIN', 'SUPER_ADMIN')
+                    OR COALESCE(r.name, '') = '系统管理员'
+                    OR EXISTS (
+                      SELECT 1
+                      FROM core_role_permissions rp
+                      JOIN core_permissions p ON p.id = rp.permission_id
+                      WHERE rp.role_id = r.id
+                        AND p.tenant_id = $1
+                        AND p.deleted_at IS NULL
+                        AND p.code IN (
+                          'industry-pack:entry:read',
+                          'system:application:update'
+                        )
+                    )
+                  )
+                """,
+                tenant_id,
+            )
+            role_ids = [int(r["id"]) for r in role_rows]
+            if not role_ids:
+                logger.warning(
+                    f"租户 {tenant_id} 行业模块 {app_code} 无目标角色可授（需行业包入口/"
+                    f"应用更新权限或系统管理员角色）"
+                )
+                return 0
+
             granted = 0
             missing_codes: list[str] = []
             for code in codes:
@@ -204,15 +251,7 @@ class IndustryPackMenuService:
                     FROM core_roles r
                     WHERE r.tenant_id = $1
                       AND r.deleted_at IS NULL
-                      AND EXISTS (
-                        SELECT 1
-                        FROM core_role_permissions rp
-                        JOIN core_permissions p ON p.id = rp.permission_id
-                        WHERE rp.role_id = r.id
-                          AND p.tenant_id = $1
-                          AND p.code = 'industry-pack:entry:read'
-                          AND p.deleted_at IS NULL
-                      )
+                      AND r.id = ANY($3::int[])
                       AND NOT EXISTS (
                         SELECT 1 FROM core_role_permissions rp2
                         WHERE rp2.role_id = r.id AND rp2.permission_id = $2
@@ -220,8 +259,8 @@ class IndustryPackMenuService:
                     """,
                     tenant_id,
                     perm_id,
+                    role_ids,
                 )
-                # asyncpg returns e.g. "INSERT 0 3"
                 try:
                     granted += int(str(result).split()[-1])
                 except Exception:
@@ -232,7 +271,8 @@ class IndustryPackMenuService:
                 )
             if granted:
                 logger.info(
-                    f"租户 {tenant_id} 行业模块 {app_code} 已向持有行业包入口权限的角色授予 {granted} 条权限"
+                    f"租户 {tenant_id} 行业模块 {app_code} 已向 {len(role_ids)} 个角色授予 "
+                    f"{granted} 条权限"
                 )
             return granted
         finally:
@@ -334,8 +374,19 @@ class IndustryPackMenuService:
             menu_config=menu_config,
             is_active=should_show,
             preserve_existing_is_active=False,
-            skip_permission_sync=False,
+            # 壳菜单重建频繁（模块开/关）；权限由 grant / 壳增量路径写入，避免全量 sync
+            skip_permission_sync=True,
         )
+        try:
+            from core.services.authorization.permission_sync_service import PermissionSyncService
+
+            await PermissionSyncService.ensure_app_permissions(
+                tenant_id=tenant_id, app_code=INDUSTRY_PACK_APP_CODE
+            )
+        except Exception as exc:
+            logger.warning(
+                f"租户 {tenant_id} 行业包壳权限增量同步失败: {exc}"
+            )
 
         # pack_menu 从 true→false 后须交还宿主侧栏（如返工单回快制造）
         from core.services.application.application_service import ApplicationService

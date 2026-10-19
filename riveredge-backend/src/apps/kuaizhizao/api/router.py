@@ -43,6 +43,9 @@ from .productions.coordination_board_api import router as coordination_board_rou
 from .purchases.purchases import router as purchase_router
 from .purchase_requisitions.purchase_requisitions import router as purchase_requisition_router
 from .payment_applications.payment_applications import router as payment_application_router
+from .finance_misc_categories.finance_misc_categories import router as finance_misc_categories_router
+from .other_incomes.other_incomes import router as other_incomes_router
+from .other_expenses.other_expenses import router as other_expenses_router
 from .purchase_inquiries.purchase_inquiries import router as purchase_inquiry_router
 from .material_calls.material_calls import router as material_call_router
 
@@ -95,7 +98,6 @@ from .wave_pickings.wave_pickings import router as wave_picking_router
 # 导入设备管理路由
 from .equipment.equipment import router as equipment_router
 from .maintenance_plans.maintenance_plans import router as maintenance_plans_router
-from .equipment_spot_check_plans import router as equipment_spot_check_plans_router
 from .equipment_faults.equipment_faults import router as equipment_faults_router
 from .molds.molds import router as molds_router
 from .tools.tools import router as tools_router
@@ -187,6 +189,9 @@ router.include_router(document_relations_legacy_router)
 router.include_router(purchase_router)
 router.include_router(purchase_requisition_router)
 router.include_router(payment_application_router)
+router.include_router(finance_misc_categories_router)
+router.include_router(other_incomes_router)
+router.include_router(other_expenses_router)
 router.include_router(purchase_inquiry_router)
 router.include_router(material_call_router)
 
@@ -207,7 +212,6 @@ router.include_router(dashboard_router)
 # 注册设备管理路由
 router.include_router(equipment_router)
 router.include_router(maintenance_plans_router)
-router.include_router(equipment_spot_check_plans_router)
 router.include_router(equipment_faults_router)
 router.include_router(molds_router)
 router.include_router(tools_router)

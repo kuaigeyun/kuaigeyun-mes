@@ -640,6 +640,10 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   owo_product_stacked: 21.9,
   priority: 22,
   activity_type_code: 22,
+  /** 客户跟进：跟进内容紧跟跟进方式（列上须设 key=follow_up_content，避免被正文段 content=79.2 覆盖） */
+  follow_up_content: 22.05,
+  /** 客户跟进：客户列（列上须设 key=follow_up_customer_name，避免被关联单号段 customer_name=81.05 覆盖） */
+  follow_up_customer_name: 15,
   /** 客户跟进：跟进内容紧跟跟进方式；售后工单等同名字段同段 */
   content: 22.05,
   request_type: 22.1,
@@ -926,6 +930,17 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   contact_person: 77,
   contactPerson: 77,
   contactTitle: 77.1,
+  /** 外贸客户：国家 / 级别 / 意向 / 广告 / 产能（主数据稀疏列段） */
+  country_code: 77.5,
+  customer_level_code: 77.55,
+  intent_material_name: 77.6,
+  campaign_name: 77.65,
+  required_capacity_text: 77.7,
+  follow_status: 77.75,
+  /** 外贸客户列表专用：避开全局 follow_up_count=68.2 / last_follow_up_at=68.1 插到业务员前 */
+  ft_follow_up_count: 77.8,
+  inactive: 77.85,
+  ft_last_follow_up_at: 77.9,
   /** 部门先于电话：员工档案等主数据更合理；联系人仍在 77 */
   department_name: 77.15,
   position_name: 77.18,

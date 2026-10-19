@@ -1,6 +1,8 @@
 import { api } from '../../../services/api';
 import type {
   PartnerPriceBook,
+  PartnerPriceBookBulkCreate,
+  PartnerPriceBookBulkResponse,
   PartnerPriceBookCreate,
   PartnerPriceBookListParams,
   PartnerPriceBookListResponse,
@@ -46,6 +48,8 @@ export function createPartnerPriceBookApi(partnerType: PartnerPriceBookType) {
     },
     resolveBatch: (data: PartnerPriceResolveBatchRequest): Promise<PartnerPriceResolveBatchResponse> =>
       api.post(`${base}/resolve-batch`, data),
+    bulkCreate: (data: PartnerPriceBookBulkCreate): Promise<PartnerPriceBookBulkResponse> =>
+      api.post(`${base}/bulk`, data),
   };
 }
 

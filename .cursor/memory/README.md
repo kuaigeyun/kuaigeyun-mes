@@ -42,7 +42,9 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 同步/推送 Hub、外推、DocumentPush、preferIds、`:sync` / `:push` | `features/sync-push-hub-master-data.md` |
 | SyncFromSource、多源映射、只补缺字段、match_key 合并 | `features/sync-from-source-multi-source-merge.md` |
 | 通知仓库 504、服务器暂时不可用、NestedTransaction 死锁 | `features/notify-warehouse-nested-tx-deadlock.md` |
+| 企业微信、消息提醒推企微、push wecom、站内信不进企微 | `features/wecom-push-from-pc-messages.md` |
 | 单位/物料同步串扰、单位写成物料编码、query_measureunits | `features/unit-material-sync-decouple.md` |
+| 单位显示成编码、库存/工单见吨(T)、MaterialUnitLabel、单位名称 | `features/material-unit-display-name.md` |
 | 来源类型转换没生效、FErpClsID、source_type 仍 Buy | `features/sync-material-source-type-conversion.md` |
 | BOM 自制件下拉空、mainMaterialScope make 找不到 | `features/bom-main-material-make-scope.md` |
 | 物料分组空拉、BD_MATERIALGROUP、FormId 名对体错 | `features/sync-material-group-empty-pull.md` |
@@ -60,28 +62,57 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 备份下载 Connection Failed、ERR_CONNECTION_REFUSED | `features/data-backup-download-same-origin.md` |
 | 平台管理员全平台备份、backup_scope=all | `features/data-backup-platform-all-tenants.md` |
 | 备份列表卡死、Worker 未知、解压 dump | `features/data-backup-list-no-zip-extract.md` |
+| 租户恢复 parent_id、部门树 FK、fk_core_departments_parent_id | `features/tenant-restore-self-fk-nullify.md` |
 | 快数采、kuaiiot、MES 写回、边缘协议、fill_target | `features/kuaiiot-phased-hardening.md` |
+| 快视觉、kuaivision、视觉入站、检测记录、边缘节点 Token | `features/kuaivision-p0-shell.md` |
+| 快视觉边缘、edge-agent、心跳、厚度步骤 POC、bump-config | `features/kuaivision-p2-edge.md` |
+| 快视觉样本、模型制品、保留天数、运维告警、promote-sample | `features/kuaivision-p3-governance.md` |
 | 编码规则、页面配置、testGenerateCode、编号预览慢 | `features/code-rule-page-config-load.md` |
 | 设备台账、车间/产线/工位快速新增、UniDropdown.quickCreate | `features/equipment-factory-binding-quick-add.md` |
+| 好力 GO 模具/设备台账批量导出、导出选中 | `features/haoligo-ledger-batch-export.md` |
 | 质检方案快速新建、方案类型空白、defaultPlanType | `features/inspection-plan-quick-type-default.md` |
 | 委外检验、质量巡检、OSQC、plan_type outsource/patrol | `features/quality-outsource-patrol.md` |
 | 图纸气泡标注、drawing_balloon、FAI 导入特性、PRO OCR | `features/drawing-balloon-sheet-pro.md` |
+| 定制图纸详情、主文件附加文件、afterBasic、FilePreviewModal | `features/funide-oa-drawing-detail-files-section.md` |
+| 设备管理附件预览、计量证书、校准记录「N 个附件」、DocumentAttachmentsReadonly | `features/equipment-attachment-online-preview.md` |
+| 客诉 8D、工作台跳系统首页、eight-d-reports/:id、host-mirror | `features/funide-oa-eight-d-workbench-route.md` |
+| 图纸下发保存没反应、图档发放部门使用人、issueDepartmentId | `features/funide-oa-drawing-distribution-party.md` |
+| 产品固件软件12位编码、软件描述、software_description | `features/funide-oa-firmware-software-description.md` |
+| 研发电子/结构菜单、2D/3D/模具交付物、试验委托 general | `features/funide-oa-rd-electronics-structure-menu.md` |
 | 构建 dist、deploy、H5、launch.dev、fast-deploy、开机自启 install-service | `features/fast-deploy-scripts.md` |
 | APP 转 PRO、compose、财务管理托管、数据中心占位 | `features/app-pro-migration-compose.md` |
+| 应用中心开关慢、启用禁用卡顿、ensure_permissions force | `features/app-enable-disable-perf.md` |
+| 侧栏本地生产不一致、菜单接管抢 is_active、财务管理缺分组 | `features/menu-takeover-single-source.md` |
+| 菜单同步仍平铺、menu_config 过期、只认后端 manifest | `features/menu-config-disk-manifest-source.md` |
+| KU-AI 能力矩阵、调用分析、insights 菜单、hub 加载慢 | `features/kuaiai-insights-in-hub.md` |
+| KU-AI 异常感知、Pulse 下线 | `features/kuaiai-pulse-offline.md` |
+| KU-AI 信任中心下线 | `features/kuaiai-trust-offline.md` |
 | 构建推送、要不要编前端、只改后端怎么推、web/H5/工位选哪条 | `principles/code-push-routing.md` + 规则 `build-push-aoci.mdc` |
 | 构建推送前 AOCI、提交前先索引、要不要跑 AOCI、每次 push 是否 maintain | `principles/aoci-git-commit.md` |
 | riveredge-app 组装、mklink、工位/TV/小程序私仓 | `features/riveredge-app-client-junctions.md` |
 | kuaicaiwu receivable ModuleNotFound、compose 空壳、external_master_data_sync | `features/compose-kuaicaiwu-empty-husk.md` |
 | 个性化主题保存后又暗、偏好与标签互相冲掉、jsonb merge | `features/user-preference-atomic-merge.md` |
-| 回显权限、display、reference_resources 单一真源、预设角色物料回显 | `features/permission-display-echo.md` |
+| 回显权限、display、reference_resources、轻办公人事选人/车间回显、预设角色物料回显 | `features/permission-display-echo.md` |
+| 轻办公报销单、费用报销、kuaioa_expense、报销明细 | `features/kuaioa-expense-reimbursement.md` |
+| 请假考勤没扣、代录请假、apply_leave_to_attendance、半天假仍正常 | `features/leave-attendance-employee-match.md` |
+| 取单 403、pull-lines 要不要开查看、来源筛选项直调 list | `features/pull-source-display-echo.md` |
+| 采购合计取舍、单价 0.195 合计 0.20、DocumentAmountSummary | `features/document-amount-summary-precision.md` |
+| 数值精度、数量/单价/金额小数位、0–6、configTree max | `features/numeric-precision-decimal-places-6.md` |
+| 往来对账单下推付款申请/采购收票、开票日期 | `features/partner-statement-push-invoice-date.md` |
+| 采购收票预览、开票明细、进项发票源单物料 | `features/purchase-invoice-pull-detail-lines.md` |
 | 选物料 403、仅回显加载物料列表失败、UniMaterialSelect | `features/uni-material-select-reference-display.md` |
 | 建议供应商无搜索、SupplierSelectDropdown、UniDropdown 可搜 | `features/supplier-select-dropdown.md` |
 | 客户供应商多收付款账户、settlementAccounts、付款账户 | `features/partner-settlement-accounts.md` |
 | 付款申请、采购请款、push_payment_application、可请款占用 | `features/payment-application-procurement.md` |
+| 付款单来源单据、打印导出、FINANCE_PAYMENT_PRINT | `features/finance-payment-source-print.md` |
+| 付款凭证必传、requirePaymentVoucher、付款申请要求上传凭证 | `features/payment-require-voucher.md` |
 | 其他费用收入、其他费用支出、收支类别、other_income | `features/finance-other-misc-vouchers.md` |
+| 其他费用应收应付、misc_voucher_finance_bridge、确认收款付款 | `features/finance-other-misc-ar-ap-chain.md` |
+| 应付/应收审核要点两遍、流程过了单据仍待审、FinanceService | `features/finance-ar-ap-audit-writeback.md` |
 | 新建销售订单很慢、进页预拉物料 2000 | `features/sales-order-form-material-preload.md` |
 | 前端慢、进页卡、Top5 菜单性能基线、useDeferAfterPaint | `features/frontend-perf-baseline.md` |
 | 销售订单点详情很慢、get_sales_order_by_id 数秒 | `features/sales-order-detail-api-perf.md` |
+| 销售订单列表慢、菜单销售订单徽章不显示 | `features/sales-order-list-perf-menu-badge.md` |
 | 全链路追踪很慢、附件中心很慢、trace/attachment-center | `features/document-trace-attach-perf.md` |
 | 工作台待办、dashboard todos、无权限仍见待办 | `features/dashboard-todo-rbac-filter.md` |
 | 开源无专业包崩溃、kuaicaiwu ImportError、销售采购订单列表 500、infra_license_keys、业务蓝图 graph、IKKZ4P、IKL5HM | `features/oss-pro-decouple-startup.md` |
@@ -90,13 +121,29 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 产线清零、zscl 清 0、发送型 MQTT、command_code t0/c0/z0、报工后自动清零 | `features/iot-line-clear-mqtt.md` |
 | 角色同步创建职位、职位代码已存在 | `features/role-create-position-reuse-code.md` |
 | SOP 配错物料、工序兜底、QC 分域 | `features/sop-shopfloor-match-domain.md` |
+| Modal 点击穿透、portal 冒泡、遮罩点到列表、maskProps | `features/modal-portal-click-isolation.md` |
 | 工作台更新说明、platformUpdateLog、版本卡 | `features/platform-update-log.md` |
-| 流程造数、操作用户、按部门/小组/工序随机、来料检验、过程检验 | `features/flow-data-generate-operator-modes.md` |
+| 运营看板、参观模式、visit_mode、手填指标 | `features/business-board-visit-mode.md` |
+| 价格本批量登记、bulk、partner-price-book | `features/partner-price-book-bulk-register.md` |
+| 简易/加强密码、password_mode、强制改密、站点登录密码策略 | `features/tenant-password-policy.md` |
+| 流程造数、操作用户、单项跳过、采购/工单失败继续、工序流转间隔、造数进度条、flow-generate job | `features/flow-data-generate-operator-modes.md` |
 | 设备点检造数、保养执行造数、点检单导入 | `features/equipment-ops-data-generate.md` |
-| 点检计划、点检计划日历、生成点检单、DJJH、方案绑定设备 | `features/equipment-spot-check-plan.md` |
-| 保养计划绑定保养方案、maintenance_scheme_id | `features/maintenance-plan-scheme-bind.md` |
+| 点检计划已拆除、DJJH、勿再实现计划层、造数改选点检单 | `features/equipment-spot-check-plan.md` |
+| 应用初始化缓慢、首次组织引导、消息模板预设、失败重试 | `features/tenant-bootstrap-initialization.md` |
+| 保养计划方案真源、设备绑定、维护类型周期 | `features/maintenance-plan-scheme-bind.md` |
 | 移动/工位点检跟绑定、保养执行带计划方案 | `features/equip-ops-scheme-bind-clients.md` |
 | 审核反审核、空壳待审、writeback_failure、revoke_noop | `features/pc-audit-unreview-empty-pending.md` |
+| 终审撤销回到上一级、终审人无审核按钮、撤销应留终审人待办可再审 | `features/audit-revoke-reopen-final-node.md` |
+| 审批流撤回反审、viewer_can_revoke、allowSubmitterWithdraw、recall_own | `features/approval-flow-withdraw-revoke-policy.md` |
+| 手机待我审批、UniAudit 门控、executeUniAuditAction | `features/mobile-approval-uni-audit-parity.md` |
+| 驳回上一级、驳回到制单人、reject_target、reject_options | `features/audit-reject-targets.md` |
+| 采购订单采购员空白、不含税金额不能改、金额单价互算 | `features/purchase-order-buyer-amount-edit.md` |
+| 采购申请到货日带入行、行到货日必填、required_date | `features/purchase-requisition-line-delivery-carry.md` |
+| 确认入库加载确认预览失败、仓库回显、loadConfirmPreviewFailed | `features/inbound-confirm-preview-warehouse-display.md` |
+| 可审人有委托无审核按钮、点审核误报没有权限、列表态未补齐待办、按钮提示待办人仍是上一节点、条件分支未确认就进特批 | `features/audit-hub-approve-button-visible.md` |
+| 审核弹窗流程预览连线偏移、生产偏移本地正常、Modal zoom transform | `features/audit-flow-preview-modal-transform.md` |
+| 多级审核第二级要点两次、列表分不清已审未审、待我审核、您已审核 | `features/audit-multilevel-second-click.md` |
+| 其他费用收支类别接口不存在、finance-misc-categories | `features/finance-other-misc-vouchers.md` |
 | 原路反审、下推下游、销售已出库仍能删报工、出库撤回送货单 | `features/downstream-revoke-delete-original-path.md` |
 | 不要做两套、复用、标准入口 | `principles/reuse-existing-patterns.md` |
 | 迁移、菜单同步、manifest、权限码、死代码交付自检 | `principles/feature-delivery.md` |
@@ -131,19 +178,35 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 
 | slug | 标题 | domain | 状态 |
 |------|------|--------|------|
+| `features/app-enable-disable-perf.md` | 应用启用/禁用增量权限同步 | core-platform | 已交付 |
+| `features/funide-oa-rd-electronics-structure-menu.md` | 定制研发电子/结构菜单 | funide-oa | 已交付 |
+| `features/funide-oa-drawing-detail-files-section.md` | 定制工程图纸详情图纸文件板块 | funide-oa | 已交付 |
+| `features/equipment-attachment-online-preview.md` | 设备管理计量证书与附件在线预览 | kuaizhizao-ops | 已交付 |
+| `features/funide-oa-eight-d-workbench-route.md` | 客诉 8D 工作台路由须手挂 | funide-oa | 已交付 |
+| `features/funide-oa-drawing-distribution-party.md` | 定制图档发放保存须带部门与使用人 | funide-oa | 已交付 |
+| `features/funide-oa-firmware-software-description.md` | 产品固件软件12位编码与软件描述 | funide-oa | 已交付 |
+| `features/kuaiai-insights-in-hub.md` | KU-AI 调用分析并入能力矩阵 | kuaiai | 已交付 |
+| `features/kuaiai-pulse-offline.md` | KU-AI 异常感知下线 | kuaiai | 已交付 |
+| `features/kuaiai-trust-offline.md` | KU-AI 信任中心下线 | kuaiai | 已交付 |
 | `features/flow-data-generate-operator-modes.md` | 流程造数步骤操作用户模式 | kuaizhizao-ops | 已交付 |
 | `features/equipment-ops-data-generate.md` | 设备点检保养造数与点检单导入 | kuaizhizao-ops | 已交付 |
-| `features/equipment-spot-check-plan.md` | 设备点检计划与日历 | kuaizhizao-ops | 已交付 |
+| `features/equipment-spot-check-plan.md` | 点检计划整层拆除（迁移 887；造数改 spot_check_ids） | kuaizhizao-ops | 已拆除 |
 | `features/maintenance-plan-scheme-bind.md` | 保养计划绑定保养方案 | kuaizhizao-ops | 已交付 |
 | `features/equip-ops-scheme-bind-clients.md` | 移动/工位点检保养方案绑定对齐 | kuaizhizao-ops | 已交付 |
 | `features/user-preference-atomic-merge.md` | 用户偏好 JSON 原子深合并 | system | 已交付 |
 | `features/permission-display-echo.md` | 权限回显 display 矩阵与鉴权 | rbac | 已交付 |
+| `features/pull-source-display-echo.md` | 取单来源回显（不必开查看） | rbac | 已交付 |
+| `features/document-amount-summary-precision.md` | 单据合计金额精度（先乘后舍） | finance-ui | 已交付 |
+| `features/numeric-precision-decimal-places-6.md` | 配置中心数值精度 0–6 与库表 scale | platform-config | 已交付 |
+| `features/partner-statement-push-invoice-date.md` | 对账单下推请款/收票与开票日期列 | finance-ui | 已交付 |
+| `features/purchase-invoice-pull-detail-lines.md` | 收票预览展示源单物料明细 | finance-ui | 已交付 |
 | `features/uni-material-select-reference-display.md` | 物料选择器走 reference-display | rbac | 已交付 |
 | `features/supplier-select-dropdown.md` | 供应商可搜索下拉 SupplierSelectDropdown | master-data | 已交付 |
 | `features/partner-settlement-accounts.md` | 客户/供应商多收付款账户 JSON | master-data | 已交付 |
 | `features/sales-order-form-material-preload.md` | 销售订单表单物料按需缓存 | master-data-ui | 已交付 |
 | `features/frontend-perf-baseline.md` | 前端性能基线与优化主线 | frontend-perf | 有效 |
 | `features/sales-order-detail-api-perf.md` | 销售订单详情接口并行取数 | kuaizhizao-sales | 已交付 |
+| `features/sales-order-list-perf-menu-badge.md` | 销售订单列表并行取数与菜单徽章 DataScope | kuaizhizao-sales | 已交付 |
 | `features/document-trace-attach-perf.md` | 全链路与附件中心取数加速 | kuaizhizao-trace | 已交付 |
 | `features/dashboard-todo-rbac-filter.md` | 工作台待办按单据 :read 过滤 | rbac | 已交付 |
 | `features/oss-pro-decouple-startup.md` | 开源仓无专业包可独立启动 | deploy | 已交付 |
@@ -159,7 +222,9 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/sync-push-hub-master-data.md` | 物料/BOM/工序 SyncPushHub + 外推 | sync-push | 已交付 |
 | `features/sync-from-source-multi-source-merge.md` | 入站多源：只补缺字段 + 匹配键合并 | sync-from-source | 已交付 |
 | `features/notify-warehouse-nested-tx-deadlock.md` | 通知仓库 Nested 事务死锁修复 | kuaizhizao-warehouse | 已交付 |
+| `features/wecom-push-from-pc-messages.md` | PC 业务消息提醒推企业微信（user_id 解析） | messaging | 已交付 |
 | `features/unit-material-sync-decouple.md` | 单位/物料同步别名与写入前去重拆开 | sync-from-source | 已交付 |
+| `features/material-unit-display-name.md` | 用户可见单位一律显示目录名称 | materialUnitDisplay / MaterialUnitLabel | 已交付 |
 | `features/sync-material-source-type-conversion.md` | 物料来源类型转换依赖 FieldKeys | sync-from-source | 已交付 |
 | `features/bom-main-material-make-scope.md` | BOM 主物料自制件下拉须服务端滤 Make | master-data-ui | 已交付 |
 | `features/sync-material-group-empty-pull.md` | 物料分组空拉与 FormId/createorg | sync-from-source | 已交付 |
@@ -177,16 +242,23 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/data-backup-download-same-origin.md` | 备份下载走当前页面 origin | system | 已交付 |
 | `features/data-backup-platform-all-tenants.md` | 平台管理员全平台租户备份 | system | 已交付 |
 | `features/data-backup-list-no-zip-extract.md` | 备份列表禁止解压 dump | system | 已交付 |
+| `features/tenant-restore-self-fk-nullify.md` | 租户恢复自引用 FK 置空 | system | 已交付 |
 | `features/kuaiiot-phased-hardening.md` | 快数采分阶段硬化 | kuaiiot | 进行中 |
+| `features/kuaivision-p0-shell.md` | 快视觉 P0 壳与入站 | kuaivision | 已交付 |
+| `features/kuaivision-p2-edge.md` | 快视觉 P2 Edge 与 POC | kuaivision | 已交付 |
+| `features/kuaivision-p3-governance.md` | 快视觉 P3 样本模型运维 | kuaivision | 已交付 |
 | `features/kuaiiot-device-status-realtime.md` | 设备连接/台账状态 MQTT 无感刷新 | kuaiiot | 已交付 |
 | `features/iot-line-clear-mqtt.md` | 产线 MQTT 清零（接入/发送 + 手动/自动） | kuaiiot | 已交付 |
 | `features/code-rule-page-config-load.md` | 编码规则页面配置加载 | code-rule | 已交付 |
 | `features/equipment-factory-binding-quick-add.md` | 设备台账工厂绑定快速新增 | master-data-ui | 已交付 |
+| `features/haoligo-ledger-batch-export.md` | 好力 GO 模具/设备台账批量导出 | dedicated-haoligo | 已交付 |
 | `features/inspection-plan-quick-type-default.md` | 快速新建质检方案默认锁定类型 | master-data-ui | 已交付 |
 | `features/quality-outsource-patrol.md` | 委外检验 OSQC 与质量巡检 | quality | 已交付 |
 | `features/fast-deploy-scripts.md` | fast-deploy 脚本入口 | deploy | 已交付 |
 | `features/riveredge-app-client-junctions.md` | 主仓 riveredge-app 联接到私仓终端 | deploy | 已交付 |
 | `features/compose-kuaicaiwu-empty-husk.md` | Pro 空壳导致 kuaicaiwu.models 缺失 | deploy | 已交付 |
+| `features/menu-takeover-single-source.md` | 菜单接管只认库内启用，侧栏读路径不写 is_active | system | 已交付 |
+| `features/menu-config-disk-manifest-source.md` | 菜单同步只认后端磁盘 manifest 并回写 menu_config | system | 已交付 |
 | `features/station-settings-api-origin.md` | 工位 API 走服务器设置 | mes-station | 已交付 |
 | `features/station-face-settings-manage.md` | 工位人脸录入与采样管理在设备设置 | mes-station | 已交付 |
 | `features/station-assigned-wo-includes-team.md` | 指派给我含班组成员被指派工单 | mes-station | 已交付 |
@@ -197,7 +269,24 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/role-create-position-reuse-code.md` | 角色同步创建职位遇已有代码则复用 | system | 已交付 |
 | `features/sop-shopfloor-match-domain.md` | SOP 现场匹配与分域隔离 | master-data | 已交付 |
 | `features/platform-update-log.md` | 平台更新日志每次交付补一条 | system | 有效 |
+| `features/business-board-visit-mode.md` | 运营看板参观模式与手填指标 | system | 有效 |
+| `features/partner-price-book-bulk-register.md` | 价格本批量登记与冲突策略 | master-data | 有效 |
+| `features/tenant-password-policy.md` | 租户简易/加强登录密码策略 | core-platform | 有效 |
 | `features/pc-audit-unreview-empty-pending.md` | PC 审核反审核空壳待审与补齐写回 | approval | 已交付 |
+| `features/audit-revoke-reopen-final-node.md` | 撤销审核重开终审节点待再审 | approval | 已交付 |
+| `features/approval-flow-withdraw-revoke-policy.md` | 审批流撤回/反审设计器与身份门控 | approval | 已交付 |
+| `features/mobile-approval-uni-audit-parity.md` | 手机审批中心与 PC getApprovalStatus/uni-audit | mobile, approval | 已交付 |
+| `features/audit-reject-targets.md` | 驳回上一级/制单人 reject_target | approval, UniAudit | 已交付 |
+| `features/purchase-order-buyer-amount-edit.md` | 采购订单采购员默认与金额单价互算 | mes-purchase | 已交付 |
+| `features/purchase-requisition-line-delivery-carry.md` | 采购申请表头到货日带入行且行必填 | mes-purchase | 已交付 |
+| `features/inbound-confirm-preview-warehouse-display.md` | 入库确认预览仓库走回显不拦确认 | mes-warehouse | 已交付 |
+| `features/modal-portal-click-isolation.md` | Modal Portal 点击不穿透底层 | modal / portal | 已交付 |
+| `features/audit-hub-approve-button-visible.md` | 审核弹窗可审人须有审核按钮 | approval | 已交付 |
+| `features/audit-flow-preview-modal-transform.md` | 审核弹窗流程预览 Modal transform 连线偏移 | approval | 已交付 |
+| `features/audit-multilevel-second-click.md` | 多级审核一次点击，列表待我审核/您已审核 | approval | 已交付 |
 | `features/downstream-revoke-delete-original-path.md` | 下推下游原路反审/删除门禁 | mes-production | 已交付 |
+| `features/payment-require-voucher.md` | 付款申请要求付款单上传凭证 | finance | 已交付 |
+| `features/kuaioa-expense-reimbursement.md` | 轻办公费用报销单与独立审核流 | kuaioa | 已交付 |
+| `features/leave-attendance-employee-match.md` | 请假回写考勤优先档案员工匹配 | kuaioa | 已交付 |
 
 Obsidian 镜像可用 wikilink，Agent 检索请用上表路径，不要只依赖 `[[...]]`。

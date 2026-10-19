@@ -1,6 +1,6 @@
 """业务数值 DECIMAL 上限（数量/单价/金额）统一口径。
 
-与库存账面等宽字段对齐：DECIMAL(18,4)。
+与配置中心数值精度上限对齐：DECIMAL(20,6)（整数位仍约 14，小数最多 6）。
 落库前用 assert_* 拦截，避免 PostgreSQL numeric overflow 变成 500。
 """
 
@@ -11,10 +11,10 @@ from typing import Optional, Tuple
 
 from infra.exceptions.exceptions import ValidationError
 
-# (max_digits, decimal_places) — 与库存数量等宽
-QUANTITY_DIGITS: Tuple[int, int] = (18, 4)
-PRICE_DIGITS: Tuple[int, int] = (18, 4)
-AMOUNT_DIGITS: Tuple[int, int] = (18, 4)
+# (max_digits, decimal_places) — 与配置中心 0–6 及库表 scale 对齐
+QUANTITY_DIGITS: Tuple[int, int] = (20, 6)
+PRICE_DIGITS: Tuple[int, int] = (20, 6)
+AMOUNT_DIGITS: Tuple[int, int] = (20, 6)
 
 KindDigits = Tuple[int, int]
 

@@ -8,6 +8,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Col, Descriptions, Form, Input, InputNumber, Row, Select, Table, theme } from 'antd';
+import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import type { FormListFieldData } from 'antd/es/form/FormList';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +27,7 @@ import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { formatCurrencyAmount } from '../../../../../utils/format';
@@ -77,6 +79,14 @@ type VoucherRow = {
   payment_method?: string;
   notes?: string;
   capabilities?: Record<string, { allowed: boolean }>;
+  receivable_id?: number | null;
+  receivable_code?: string | null;
+  receipt_id?: number | null;
+  receipt_code?: string | null;
+  payable_id?: number | null;
+  payable_code?: string | null;
+  payment_id?: number | null;
+  payment_code?: string | null;
 };
 
 type LineFormRow = {
@@ -234,6 +244,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const linkedDetail = useLinkedDocumentDetail();
   const actionRef = useRef<ActionType>();
   const tableRowsRef = useRef<VoucherRow[]>([]);
   const perms = useResourcePermissions(resource);
@@ -270,6 +281,26 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
       approve: (id: number) => service.approve(id),
     }),
     [service],
+  );
+
+  const miscWorkflowStatuses = useMemo(
+    () => ({
+      draftStatuses: ['Draft', '草稿'],
+      pendingStatuses: ['PendingReview', '待审核'],
+      approvedStatuses: ['Approved', 'Confirmed', '已审核', '已确认'],
+      rejectedStatuses: ['Rejected', '已驳回'],
+    }),
+    [],
+  );
+
+  const reloadAfterWorkflow = useCallback(
+    (rowId?: number) => {
+      actionRef.current?.reload();
+      if (detailOpen && detailRow?.id != null && (rowId == null || detailRow.id === rowId)) {
+        void service.get(detailRow.id).then(setDetailRow).catch(() => {});
+      }
+    },
+    [detailOpen, detailRow?.id, service],
   );
 
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
@@ -634,43 +665,38 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                   <Button key="edit" {...rowActionKind('update')} onClick={() => void openEdit(row)} />,
                 );
               }
-              if (perms.canAction?.('submit') && capAllowed(row, 'submit')) {
+              nodes.push(
+                <span {...rowActionKind('skip')} key="wf">
+                  <UniWorkflowActions
+                    {...rowActionKind('skip')}
+                    record={row}
+                    entityType={auditEntityType}
+                    auditNodeKey={auditEntityType}
+                    workflowAuditEnabled={auditEnabled}
+                    entityName={t(menuTitleKey)}
+                    statusField="status"
+                    {...miscWorkflowStatuses}
+                    onSuccess={() => reloadAfterWorkflow(row.id)}
+                  />
+                </span>,
+              )
+              const pushAction = kind === 'income' ? 'push_receipt' : 'push_payment';
+              const pushLabel =
+                kind === 'income' ? t('app.kuaicaiwu.otherIncome.pushReceipt') : t('app.kuaicaiwu.otherExpense.pushPayment');
+              if (perms.canAction?.('audit') && capAllowed(row, pushAction)) {
                 nodes.push(
                   <ActionConfirmPopconfirm
-                    key="submit"
-                    title={t(`${i18nPrefix}.submitConfirmTitle`)}
-                    description={t(`${i18nPrefix}.submitConfirmDesc`, { code })}
-                    onConfirm={() => void runAction(t(`${i18nPrefix}.submit`), () => service.submit(row.id))}
+                    key="push-finance"
+                    title={pushLabel}
+                    description={t(`${i18nPrefix}.confirmPostDesc`, { code })}
+                    onConfirm={() => void runAction(pushLabel, () => service.confirm(row.id))}
                   >
-                    <Button {...rowActionKind('submit')} onClick={(e) => e.stopPropagation()} />
+                    <Button {...rowActionKind('execute')} onClick={(e) => e.stopPropagation()}>
+                      {pushLabel}
+                    </Button>
                   </ActionConfirmPopconfirm>,
                 );
-              }
-              if (perms.canAction?.('approve') && capAllowed(row, 'approve')) {
-                nodes.push(
-                  <ActionConfirmPopconfirm
-                    key="approve"
-                    title={t(`${i18nPrefix}.approveConfirmTitle`)}
-                    description={t(`${i18nPrefix}.approveConfirmDesc`, { code })}
-                    onConfirm={() => void runAction(t(`${i18nPrefix}.approve`), () => service.approve(row.id))}
-                  >
-                    <Button {...rowActionKind('audit')} onClick={(e) => e.stopPropagation()} />
-                  </ActionConfirmPopconfirm>,
-                );
-              }
-              if (perms.canAction?.('reject') && capAllowed(row, 'reject')) {
-                nodes.push(
-                  <ActionConfirmPopconfirm
-                    key="reject"
-                    title={t(`${i18nPrefix}.rejectConfirmTitle`)}
-                    description={t(`${i18nPrefix}.rejectConfirmDesc`, { code })}
-                    onConfirm={() => void runAction(t('components.uniAction.reject'), () => service.reject(row.id))}
-                  >
-                    <Button {...rowActionKind('reject')} onClick={(e) => e.stopPropagation()} />
-                  </ActionConfirmPopconfirm>,
-                );
-              }
-              if (perms.canAction?.('audit') && capAllowed(row, 'confirm')) {
+              } else if (perms.canAction?.('audit') && capAllowed(row, 'confirm')) {
                 nodes.push(
                   <ActionConfirmPopconfirm
                     key="confirm"
@@ -725,7 +751,24 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [codeField, i18nPrefix, miscStatusEnum, openDetail, openEdit, perms, renderMiscStatusTag, runAction, service, t],
+    [
+      auditEnabled,
+      auditEntityType,
+      codeField,
+      i18nPrefix,
+      kind,
+      menuTitleKey,
+      miscStatusEnum,
+      miscWorkflowStatuses,
+      openDetail,
+      openEdit,
+      perms,
+      reloadAfterWorkflow,
+      renderMiscStatusTag,
+      runAction,
+      service,
+      t,
+    ],
   );
 
   const createButtonText = t(`${i18nPrefix}.createButton`);
@@ -993,6 +1036,22 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         title={detailRow ? resolveDocCode(detailRow, codeField) : ''}
         loading={detailLoading}
+        extra={
+          detailRow ? (
+            <UniWorkflowActions
+              record={detailRow}
+              entityType={auditEntityType}
+              auditNodeKey={auditEntityType}
+              workflowAuditEnabled={auditEnabled}
+              entityName={t(menuTitleKey)}
+              statusField="status"
+              {...miscWorkflowStatuses}
+              theme="default"
+              size="middle"
+              onSuccess={() => reloadAfterWorkflow(detailRow.id)}
+            />
+          ) : null
+        }
       >
         {detailRow && (
           <>
@@ -1010,6 +1069,54 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
               <Descriptions.Item label={t(`${i18nPrefix}.field.notes`)} span={2}>
                 {detailRow.notes || '—'}
               </Descriptions.Item>
+              {kind === 'income' && detailRow.receivable_id ? (
+                <Descriptions.Item label={t('app.kuaicaiwu.otherIncome.finance.receivable')}>
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, height: 'auto' }}
+                    onClick={() => linkedDetail?.openLinkedDocumentDetail('receivable', Number(detailRow.receivable_id))}
+                  >
+                    {detailRow.receivable_code || detailRow.receivable_id}
+                  </Button>
+                </Descriptions.Item>
+              ) : null}
+              {kind === 'income' && detailRow.receipt_id ? (
+                <Descriptions.Item label={t('app.kuaicaiwu.otherIncome.finance.receipt')}>
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, height: 'auto' }}
+                    onClick={() => linkedDetail?.openLinkedDocumentDetail('receipt', Number(detailRow.receipt_id))}
+                  >
+                    {detailRow.receipt_code || detailRow.receipt_id}
+                  </Button>
+                </Descriptions.Item>
+              ) : null}
+              {kind === 'expense' && detailRow.payable_id ? (
+                <Descriptions.Item label={t('app.kuaicaiwu.otherExpense.finance.payable')}>
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, height: 'auto' }}
+                    onClick={() => linkedDetail?.openLinkedDocumentDetail('payable', Number(detailRow.payable_id))}
+                  >
+                    {detailRow.payable_code || detailRow.payable_id}
+                  </Button>
+                </Descriptions.Item>
+              ) : null}
+              {kind === 'expense' && detailRow.payment_id ? (
+                <Descriptions.Item label={t('app.kuaicaiwu.otherExpense.finance.payment')}>
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, height: 'auto' }}
+                    onClick={() => linkedDetail?.openLinkedDocumentDetail('payment', Number(detailRow.payment_id))}
+                  >
+                    {detailRow.payment_code || detailRow.payment_id}
+                  </Button>
+                </Descriptions.Item>
+              ) : null}
             </Descriptions>
             <Table
               size="small"

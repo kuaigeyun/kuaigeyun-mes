@@ -186,9 +186,28 @@ async def ai_get_job(
 )
 async def ai_stats_overview(
     days: int = Query(default=7, ge=1, le=90),
+    include_pulse: bool = Query(
+        default=False,
+        description="是否同步计算 Pulse 异常建议数（规则引擎较重；能力矩阵默认 false，另调 pulse-count）",
+    ),
     ai_auth: AiAuth = Depends(get_ai_auth),
 ):
-    return await AiStatsService.get_overview(tenant_id=ai_auth.tenant_id, days=days)
+    return await AiStatsService.get_overview(
+        tenant_id=ai_auth.tenant_id,
+        days=days,
+        include_pulse=include_pulse,
+    )
+
+
+@router.get(
+    "/stats/pulse-count",
+    dependencies=[Depends(require_ai_capability("entry"))],
+)
+async def ai_stats_pulse_count(
+    ai_auth: AiAuth = Depends(get_ai_auth),
+):
+    count = await AiStatsService.get_pulse_suggestion_count(ai_auth.tenant_id)
+    return {"pulse_suggestion_count": count}
 
 
 @router.get(

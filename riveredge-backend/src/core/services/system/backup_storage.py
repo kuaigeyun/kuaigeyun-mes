@@ -13,17 +13,30 @@ from typing import Optional
 from infra.config.infra_config import infra_settings
 
 
+def _normalize_workdir(raw: str) -> str:
+    """把 Git Bash / MSYS 的 /d/path 归一成 Windows 盘符路径，避免落到 D:\\d\\...。"""
+    text = raw.strip().replace("/", os.sep)
+    if os.name == "nt" and len(text) >= 3 and text[0] == os.sep and text[2] == os.sep:
+        drive = text[1]
+        if drive.isalpha():
+            return f"{drive.upper()}:{text[2:]}"
+    return text
+
+
 def _default_backup_dir() -> str:
     workdir = (os.environ.get("WORKDIR") or "").strip()
     if workdir:
-        return os.path.join(os.path.abspath(workdir), "backups")
+        return os.path.join(os.path.abspath(_normalize_workdir(workdir)), "backups")
     backend_root = Path(__file__).resolve().parents[4]
     return str(backend_root / "backups")
 
 
 def resolve_data_backup_dir() -> str:
     configured = (getattr(infra_settings, "DATA_BACKUP_DIR", "") or "").strip()
-    path = os.path.abspath(configured) if configured else os.path.abspath(_default_backup_dir())
+    if configured:
+        path = os.path.abspath(_normalize_workdir(configured))
+    else:
+        path = os.path.abspath(_default_backup_dir())
     os.makedirs(path, exist_ok=True)
     return path
 

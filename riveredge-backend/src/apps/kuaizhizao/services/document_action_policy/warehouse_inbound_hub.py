@@ -67,6 +67,7 @@ def derive_inbound_hub_capabilities(
     record: Any,
     *,
     receipt_type: Optional[str] = None,
+    payable_request_open: bool = False,
 ) -> InboundHubCapabilities:
     rt = _norm(receipt_type or getattr(record, "receipt_type", None))
     status = _norm(getattr(record, "status", None))
@@ -112,11 +113,25 @@ def derive_inbound_hub_capabilities(
         update_allowed = False
         update_reason = "inbound_hub.update.not_allowed"
 
+    push_pa_cap: Optional[ActionCapability] = None
+    if rt == "purchase":
+        if posted and payable_request_open:
+            push_pa_cap = _cap(True)
+        elif posted:
+            push_pa_cap = _cap(
+                False, "purchase_receipt.push_payment_application.no_open_amount"
+            )
+        else:
+            push_pa_cap = _cap(
+                False, "purchase_receipt.push_payment_application.not_posted"
+            )
+
     return InboundHubCapabilities(
         confirm=_cap(confirm_allowed, confirm_reason),
         withdraw=_cap(withdraw_allowed, withdraw_reason),
         update=_cap(update_allowed, update_reason),
         print=_cap(True),
+        push_payment_application=push_pa_cap,
     )
 
 

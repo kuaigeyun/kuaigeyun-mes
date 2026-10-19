@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getUserPreference, updateUserPreference } from '../services/userPreference';
 import { useConfigStore } from './configStore';
-import { getTenantId, getUserInfo } from '../utils/auth';
+import { getTenantId, getUserInfo, isInfraSuperAdminFromToken } from '../utils/auth';
 
 const PREFERENCE_STORAGE_KEY_BASE = 'user-preference-storage';
 
@@ -278,6 +278,11 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
         if (!options?.force && !get().initialized) {
           get().rehydrateFromStorage();
         }
+        // 平台超管无 core_users 行，仅用本机缓存，禁止打 /personal/user-preferences
+        if (isInfraSuperAdminFromToken()) {
+          set({ loading: false, initialized: true });
+          return;
+        }
         set({ loading: true });
         fetchPreferencesInFlight = (async () => {
           try {
@@ -346,13 +351,23 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
             throw new Error('preferences patch is empty');
           }
 
+          const nextPrefs = mergePreferencesPatch(get().preferences, patch);
+          // 平台超管仅落本机，禁止用 infra admin_id 写 core_user_preferences
+          if (isInfraSuperAdminFromToken()) {
+            set({
+              preferences: nextPrefs,
+              loading: false,
+            });
+            syncTableColumnsToLocalStorage(nextPrefs);
+            return;
+          }
+
           const saved = await updateUserPreference({ preferences: patch });
           if (!saved?.preferences || typeof saved.preferences !== 'object') {
             throw new Error('用户偏好更新响应缺少 preferences');
           }
 
           // 只把本次 patch 合入本地，禁止用整包响应覆盖——并发主题/标签写返回乱序时会冲掉兄弟键
-          const nextPrefs = mergePreferencesPatch(get().preferences, patch);
           set({
             preferences: nextPrefs,
             loading: false,

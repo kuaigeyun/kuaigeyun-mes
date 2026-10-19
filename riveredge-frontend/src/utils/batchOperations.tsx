@@ -7,6 +7,9 @@
 import React from 'react';
 import { Progress } from 'antd';
 import { getAntdMessage, getAntdModal } from './antdAppApis';
+import { runWithBulkImportErrorSuppress } from './bulkImportErrorSuppress';
+import { getApiErrorMessage } from './errorHandler';
+import { ImportResultModalContent } from './importResultModalContent';
 import { todaySiteDateString } from './format';
 
 /**
@@ -74,6 +77,7 @@ export async function batchImport<T = any>(
     onComplete,
   } = config;
 
+  return runWithBulkImportErrorSuppress(async () => {
   // 显示导入进度 Modal
   const progressModal = getAntdModal().info({
     title,
@@ -105,7 +109,7 @@ export async function batchImport<T = any>(
         const data = await importFn(item, index);
         return { success: true, data };
       } catch (error: any) {
-        lastError = error?.message || error?.detail || '未知错误';
+        lastError = getApiErrorMessage(error, '未知错误');
         if (attempt < retryCount - 1) {
           // 指数退避
           await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
@@ -168,13 +172,13 @@ export async function batchImport<T = any>(
   if (result.failureCount > 0) {
     getAntdModal().warning({
       title: `${title}（部分失败）`,
-      width: 700,
+      width: 720,
       content: (
-        <div>
-          <p>
-            <strong>导入结果：</strong>成功 {result.successCount} 条，失败 {result.failureCount} 条
-          </p>
-        </div>
+        <ImportResultModalContent
+          successCount={result.successCount}
+          failureCount={result.failureCount}
+          errors={result.errors}
+        />
       ),
     });
   } else {
@@ -186,6 +190,7 @@ export async function batchImport<T = any>(
   }
 
   return result;
+  });
 }
 
 /**

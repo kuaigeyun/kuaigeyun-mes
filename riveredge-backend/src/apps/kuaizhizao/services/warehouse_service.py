@@ -1606,6 +1606,50 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             return "待审核", "待审核"
         return "待领料", "已通过"
 
+    async def _start_production_picking_approval_after_create(
+        self,
+        tenant_id: int,
+        picking_id: int,
+        user_id: int,
+    ) -> ProductionPickingWithItemsResponse:
+        """
+        创建落「待审核」后必须启动审批实例（对齐销售出库 create）。
+        空审批人 emptyApproverPolicy=auto_pass 时提交瞬间会写回已通过。
+        """
+        picking = await ProductionPicking.get_or_none(
+            tenant_id=tenant_id, id=picking_id, deleted_at__isnull=True
+        )
+        if not picking:
+            raise NotFoundError(f"生产领料单不存在: {picking_id}")
+        if str(picking.status or "").strip() != "待审核":
+            return await self.get_production_picking_by_id(tenant_id, picking_id)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            node_key="production_picking",
+            entity_type="production_picking",
+            entity_id=picking.id,
+            entity_uuid=str(picking.uuid),
+            title=f"生产领料审批: {picking.picking_code}",
+            content=f"工单: {picking.work_order_code}",
+        )
+        if not instance:
+            raise BusinessLogicError(
+                "生产领料审核已开启但未找到可用的审批流程，请在配置中心检查 production_picking 审批流程是否已激活"
+            )
+        if approval_instance_finished_on_submit(instance):
+            return await self.approve_production_picking(
+                tenant_id=tenant_id,
+                picking_id=picking_id,
+                approver_id=user_id,
+                is_auto_approve=True,
+            )
+        return await self.get_production_picking_by_id(tenant_id, picking_id)
+
     async def _get_user_role_codes(self, user_id: int) -> set[str]:
         user = await User.get_or_none(id=user_id, deleted_at__isnull=True).prefetch_related("roles")
         if not user:
@@ -1695,6 +1739,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
     async def create_production_picking(self, tenant_id: int, picking_data: ProductionPickingCreate, created_by: int) -> ProductionPickingResponse:
         """创建生产领料单"""
+        created_picking_id: Optional[int] = None
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = today_site_str()
@@ -1713,6 +1758,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 updated_by_name=user_info["name"],
                 **payload,
             )
+            created_picking_id = int(picking.id)
 
             # 建立工单→生产领料 的 DocumentRelation（支持单据追溯）
             work_order_id = getattr(picking, "work_order_id", None) or getattr(picking_data, "work_order_id", None)
@@ -1745,7 +1791,10 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 except Exception as e:
                     logger.warning("建立工单→生产领料 单据关联失败: %s", e)
 
-            return ProductionPickingResponse.model_validate(picking)
+        detail = await self._start_production_picking_approval_after_create(
+            tenant_id, int(created_picking_id), created_by
+        )
+        return ProductionPickingResponse.model_validate(detail.model_dump())
 
     async def get_production_picking_by_id(self, tenant_id: int, picking_id: int) -> ProductionPickingWithItemsResponse:
         """根据ID获取生产领料单（含明细）"""
@@ -2219,8 +2268,6 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         if not picking:
             raise NotFoundError(f"生产领料单不存在: {picking_id}")
         status = str(picking.status or "").strip()
-        if status == "待审核":
-            return await self.get_production_picking_by_id(tenant_id, picking_id)
 
         audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "production_picking"
@@ -2236,6 +2283,28 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 updated_by=submitted_by,
             )
             return await self.get_production_picking_by_id(tenant_id, picking_id)
+
+        # 已是待审核：有进行中/已结束实例则幂等返回；无实例则补启（修复旧拉单未启流）
+        if status == "待审核":
+            from core.services.approval.audit_flow_guard import get_approval_gate_status
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="production_picking",
+                entity_id=picking_id,
+            )
+            if gate.get("has_pending_flow") or gate.get("flow_completed_approved"):
+                if gate.get("flow_completed_approved"):
+                    return await self.approve_production_picking(
+                        tenant_id=tenant_id,
+                        picking_id=picking_id,
+                        approver_id=submitted_by,
+                        is_auto_approve=True,
+                    )
+                return await self.get_production_picking_by_id(tenant_id, picking_id)
+            return await self._start_production_picking_approval_after_create(
+                tenant_id, picking_id, submitted_by
+            )
 
         if status not in ("草稿", "待领料", "draft"):
             raise BusinessLogicError(f"当前状态不可提交审核: {status or '-'}")
@@ -2903,6 +2972,16 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     "updated_by": confirmed_by,
                 }
                 await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(**header_update)
+
+                from apps.kuaizhizao.services.material_call_service import MaterialCallService
+
+                await MaterialCallService().sync_linked_calls_from_production_picking(
+                    tenant_id=tenant_id,
+                    picking_id=picking_id,
+                    picking_items=picking_items,
+                    issue_qty_by_item_id=issue_qty_by_item_id,
+                    reverse=False,
+                )
             except Exception as inv_e:
                 logger.error("生产领料确认-更新库存失败: %s", inv_e)
                 raise
@@ -3017,6 +3096,24 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     status="待领料",
                     picking_time=None,
                     updated_by=updated_by,
+                )
+
+                withdraw_issue_qty: Dict[int, Decimal] = {}
+                for item in items:
+                    qty = item.picked_quantity if item.picked_quantity and item.picked_quantity > 0 else (
+                        item.required_quantity or Decimal(0)
+                    )
+                    if qty > 0:
+                        withdraw_issue_qty[int(item.id)] = qty
+
+                from apps.kuaizhizao.services.material_call_service import MaterialCallService
+
+                await MaterialCallService().sync_linked_calls_from_production_picking(
+                    tenant_id=tenant_id,
+                    picking_id=picking_id,
+                    picking_items=items,
+                    issue_qty_by_item_id=withdraw_issue_qty,
+                    reverse=True,
                 )
             except BusinessLogicError:
                 raise
@@ -3210,8 +3307,13 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 )
             except Exception as e:
                 logger.warning("建立工单→生产领料 单据关联失败: %s", e)
-            
-            return ProductionPickingResponse.model_validate(picking)
+
+            created_picking_id = int(picking.id)
+
+        detail = await self._start_production_picking_approval_after_create(
+            tenant_id, created_picking_id, created_by
+        )
+        return ProductionPickingResponse.model_validate(detail.model_dump())
 
     async def preview_push_work_order_to_production_picking(
         self,
@@ -3549,7 +3651,11 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             except Exception as e:
                 logger.warning("建立工单→生产领料 单据关联失败: %s", e)
 
-            return await self.get_production_picking_by_id(tenant_id, int(picking.id))
+            created_picking_id = int(picking.id)
+
+        return await self._start_production_picking_approval_after_create(
+            tenant_id, created_picking_id, created_by
+        )
 
     async def _resolve_material_call_picking_push_context(
         self,
@@ -3897,8 +4003,12 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             except Exception as e:
                 logger.warning("建立补料→生产领料 单据关联失败: %s", e)
 
-            return await self.get_production_picking_by_id(tenant_id, int(picking.id))
-    
+            created_picking_id = int(picking.id)
+
+        return await self._start_production_picking_approval_after_create(
+            tenant_id, created_picking_id, created_by
+        )
+
     async def batch_pick_from_work_orders(
         self,
         tenant_id: int,
@@ -4063,8 +4173,12 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             except Exception as e:
                 logger.warning("建立工单→生产领料 单据关联失败: %s", e)
 
-            detail = await self.get_production_picking_by_id(tenant_id, int(picking.id))
-            return [ProductionPickingResponse.model_validate(detail.model_dump())]
+            created_picking_id = int(picking.id)
+
+        detail = await self._start_production_picking_approval_after_create(
+            tenant_id, created_picking_id, created_by
+        )
+        return [ProductionPickingResponse.model_validate(detail.model_dump())]
 
 
 # 生产退料加载：可选取的领料单状态（唯一真源，与 capability / 预览一致）
@@ -10305,9 +10419,21 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         quantity_units = await batch_document_item_homogeneous_units(
             tenant_id, PurchaseReceiptItem, "receipt_id", receipt_ids
         )
+        from apps.kuaizhizao.services.payment_application_pull_service import (
+            PaymentApplicationPullService,
+        )
+
+        push_pa_open = await PaymentApplicationPullService().push_payment_application_open_by_receipt_ids(
+            tenant_id, receipt_ids
+        )
         enriched = enrich_inbound_hub_list_capabilities(
-            receipts, out, "purchase", item_counts=item_counts, item_previews=item_previews,
-            quantity_units=quantity_units
+            receipts,
+            out,
+            "purchase",
+            item_counts=item_counts,
+            item_previews=item_previews,
+            quantity_units=quantity_units,
+            push_payment_application_open=push_pa_open,
         )
         return enriched, total
 
@@ -15476,14 +15602,87 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         inbound_data: OtherInboundUpdate,
         updated_by: int
     ) -> OtherInboundResponse:
-        """更新其他入库单"""
+        """更新其他入库单（待入库可改表头与明细）"""
         async with in_transaction():
-            await self.get_other_inbound_by_id(tenant_id, inbound_id)
-            dump = inbound_data.model_dump(exclude_unset=True, exclude={"inbound_code"})
+            inbound = await OtherInbound.get_or_none(
+                tenant_id=tenant_id, id=inbound_id, deleted_at__isnull=True
+            )
+            if not inbound:
+                raise NotFoundError(f"其他入库单不存在: {inbound_id}")
+            if inbound.status not in ("待入库", "草稿", "draft", "DRAFT"):
+                raise BusinessLogicError("只有待入库状态的其他入库单可修改")
+
+            dump = inbound_data.model_dump(
+                exclude_unset=True, exclude={"inbound_code", "items"}
+            )
             user_info = await self.get_user_info(updated_by)
             dump["updated_by"] = updated_by
             dump["updated_by_name"] = user_info["name"]
-            await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(**dump)
+            if dump:
+                await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(**dump)
+
+            if inbound_data.items is not None:
+                if not inbound_data.items:
+                    raise ValidationError("入库明细不能为空")
+                await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).delete()
+                total_quantity = Decimal(0)
+                total_amount = Decimal(0)
+                from apps.master_data.models.material import Material
+                from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+
+                for item_data in inbound_data.items:
+                    qty = Decimal(str(item_data.inbound_quantity))
+                    if qty <= 0:
+                        raise ValidationError(
+                            f"物料 {item_data.material_code or item_data.material_id} 的入库数量必须大于 0"
+                        )
+                    price = Decimal(str(item_data.unit_price or 0))
+                    amt = qty * price
+                    item_dict = item_data.model_dump(
+                        exclude_unset=True,
+                        exclude={"inbound_quantity", "unit_price", "total_amount"},
+                    )
+                    material = await Material.get_or_none(
+                        tenant_id=tenant_id,
+                        id=item_data.material_id,
+                        deleted_at__isnull=True,
+                    )
+                    if material:
+                        if not str(item_dict.get("material_code") or "").strip():
+                            item_dict["material_code"] = (
+                                getattr(material, "main_code", None)
+                                or getattr(material, "code", None)
+                                or ""
+                            )
+                        if not str(item_dict.get("material_name") or "").strip():
+                            item_dict["material_name"] = getattr(material, "name", "") or ""
+                        if not str(item_dict.get("material_unit") or "").strip():
+                            item_dict["material_unit"] = getattr(material, "base_unit", "") or ""
+
+                        batch_no = await ensure_batch_no_for_item(
+                            tenant_id=tenant_id,
+                            material=material,
+                            item_data=item_data,
+                            supplier_code=None,
+                        )
+                        if batch_no is not None:
+                            item_dict["batch_number"] = batch_no
+                    await OtherInboundItem.create(
+                        tenant_id=tenant_id,
+                        inbound_id=inbound_id,
+                        inbound_quantity=qty,
+                        unit_price=price,
+                        total_amount=amt,
+                        **item_dict,
+                    )
+                    total_quantity += qty
+                    total_amount += amt
+
+                await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
+                    total_quantity=total_quantity,
+                    total_amount=total_amount,
+                )
+
             return OtherInboundResponse.model_validate(
                 await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
             )

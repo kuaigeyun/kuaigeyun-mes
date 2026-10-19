@@ -260,7 +260,7 @@ const DrawingsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const currentUser = useCurrentUser();
   const { canCreate, canUpdate, canDelete, canPrint, canImport, canAction } = useResourcePermissions(DRAWING_PERMISSION);
-  const changePerms = useResourcePermissions('kuaiplm.change');
+  const changePerms = useResourcePermissions('kuaiplm:change');
   const canSubmit = !!canAction?.('submit');
   const canApprove = !!canAction?.('approve');
   const canReject = !!canAction?.('reject');
@@ -1329,6 +1329,14 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           ) : (
             '-'
           ),
+      },
+      {
+        title: t('app.master-data.drawings.drawingFormat'),
+        dataIndex: 'drawingFormat',
+        render: (_, r) =>
+          r.drawingFormat
+            ? t(`app.master-data.drawings.drawingFormat.${r.drawingFormat}`)
+            : '-',
       },
       {
         title: t('common.status'),

@@ -8,8 +8,10 @@
 import hashlib
 import json
 import os
+import re
+from copy import deepcopy
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Set
+from typing import Optional, List, Dict, Any, Set, Tuple
 from uuid import UUID, uuid4
 from datetime import datetime
 import asyncpg
@@ -1076,18 +1078,63 @@ class ApplicationService:
             )
 
             await ScheduledJobPresetService.sync_presets_for_tenant(tenant_id)
-        if application.get('is_installed') and application.get('menu_config') and not is_industry_module_app_code(app_code) and not is_industry_pack_shell_code(app_code):
+        if (
+            application.get("is_installed")
+            and application.get("menu_config")
+            and not is_industry_module_app_code(app_code)
+            and not is_industry_pack_shell_code(app_code)
+        ):
+            from core.models.menu import Menu
+            from core.services.authorization.permission_sync_service import PermissionSyncService
             from core.services.system.menu_service import MenuService
-            # 重新同步菜单，确保菜单状态与应用状态一致
-            await MenuService.sync_menus_from_application_config(
+
+            # 安装时已写入菜单树；启用热路径只翻转 is_active + 增量权限。
+            # 结构变更走「同步清单/菜单」，避免每次开关都全量 rebuild 菜单树。
+            existing_menu_count = await Menu.filter(
                 tenant_id=tenant_id,
                 application_uuid=str(uuid),
-                menu_config=application['menu_config'],
-                is_active=True,
-                preserve_existing_is_active=False,
-            )
-        else:
-            # 如果应用没有菜单配置，直接更新现有菜单状态
+                deleted_at__isnull=True,
+            ).count()
+            if existing_menu_count == 0:
+                await MenuService.sync_menus_from_application_config(
+                    tenant_id=tenant_id,
+                    application_uuid=str(uuid),
+                    menu_config=application["menu_config"],
+                    is_active=True,
+                    preserve_existing_is_active=False,
+                )
+            else:
+                conn = await get_db_connection()
+                try:
+                    await conn.execute(
+                        """
+                        UPDATE core_menus
+                        SET is_active = TRUE, updated_at = NOW()
+                        WHERE tenant_id = $1 AND application_uuid = $2 AND deleted_at IS NULL
+                        """,
+                        tenant_id,
+                        str(uuid),
+                    )
+                finally:
+                    await conn.close()
+                if app_code:
+                    try:
+                        await PermissionSyncService.ensure_app_permissions(
+                            tenant_id=tenant_id, app_code=app_code
+                        )
+                    except Exception as e:
+                        from loguru import logger
+
+                        logger.warning(
+                            "应用 {} 启用后权限增量同步失败 tenant_id={}: {}",
+                            app_code,
+                            tenant_id,
+                            e,
+                        )
+        elif not is_industry_module_app_code(app_code) and not is_industry_pack_shell_code(
+            app_code
+        ):
+            # 无 menu_config：直接更新现有菜单状态
             conn = await get_db_connection()
             try:
                 menu_update_query = """
@@ -1480,10 +1527,19 @@ class ApplicationService:
                 # 读取 manifest.json
                 with open(manifest_file, 'r', encoding='utf-8') as f:
                     manifest_data = json.load(f)
-                
+
+                code = str(manifest_data.get("code") or "").strip()
+                if code:
+                    # 接管菜单子树从宿主衍生，扫描结果与同步/侧栏排序同一真源
+                    manifest_data = ApplicationService._materialize_takeover_manifest(
+                        code, manifest_data
+                    )
                 # 添加插件目录路径信息
                 manifest_data['_plugin_dir'] = str(plugin_dir)
                 plugins.append(manifest_data)
+            except ValidationError as e:
+                logger.warning(f"警告: 插件 {plugin_dir.name} 菜单接管派生失败: {e}")
+                continue
             except (json.JSONDecodeError, IOError) as e:
                 # 忽略无法读取的 manifest.json
                 logger.warning(f"警告: 无法读取插件 {plugin_dir.name} 的 manifest.json: {e}")
@@ -1501,9 +1557,9 @@ class ApplicationService:
         return ApplicationService._get_manifest_by_code(code) is not None
 
     @staticmethod
-    def _get_manifest_by_code(code: str) -> Optional[Dict[str, Any]]:
+    def _get_raw_manifest_by_code(code: str) -> Optional[Dict[str, Any]]:
         """
-        根据应用 code 读取 manifest.json，用于获取 is_pro 等字段。
+        根据应用 code 读取未经派生的 manifest.json。
         
         Args:
             code: 应用代码
@@ -1511,6 +1567,17 @@ class ApplicationService:
         Returns:
             manifest 字典，不存在则返回 None
         """
+        manifest_path = None
+        if code and code not in (".", "..") and "/" not in code and "\\" not in code:
+            manifest_path = ApplicationService._resolve_manifest_path(code)
+        if manifest_path:
+            try:
+                with manifest_path.open("r", encoding="utf-8") as handle:
+                    data = json.load(handle)
+                if data.get("code") == code:
+                    return data
+            except (json.JSONDecodeError, IOError):
+                pass
         plugins_dir = ApplicationService._get_plugins_directory()
         # 支持 code 与目录名不一致（如 master-data / master_data）
         for plugin_dir in plugins_dir.iterdir():
@@ -1527,6 +1594,83 @@ class ApplicationService:
             except (json.JSONDecodeError, IOError):
                 continue
         return None
+
+    @staticmethod
+    def _find_manifest_menu_node_by_title(
+        menu_config: Any,
+        title: str,
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(menu_config, dict):
+            return None
+        if str(menu_config.get("title") or "").strip() == title:
+            return menu_config
+        for child in menu_config.get("children") or []:
+            found = ApplicationService._find_manifest_menu_node_by_title(child, title)
+            if found:
+                return found
+        return None
+
+    @staticmethod
+    def _find_manifest_takeover_node(
+        menu_config: Any,
+        takeover_key: str,
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(menu_config, dict):
+            return None
+        meta = menu_config.get("meta")
+        if isinstance(meta, dict) and str(meta.get("menu_takeover") or "").strip() == takeover_key:
+            return menu_config
+        for child in menu_config.get("children") or []:
+            found = ApplicationService._find_manifest_takeover_node(child, takeover_key)
+            if found:
+                return found
+        return None
+
+    @staticmethod
+    def _materialize_takeover_manifest(
+        code: str,
+        manifest: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """接管应用只声明挂载点，菜单子树从宿主 manifest 唯一真源派生。"""
+        from core.config.menu_takeover import MENU_TAKEOVER_RULES
+
+        rule = MENU_TAKEOVER_RULES.get(code)
+        if not rule or not rule.source_menu_title or not rule.consumer_takeover_key:
+            return manifest
+
+        source_manifest = ApplicationService._get_raw_manifest_by_code(rule.source_app_code)
+        if not source_manifest:
+            raise ValidationError(
+                f"应用 {code} 的菜单接管宿主 {rule.source_app_code} manifest 不存在"
+            )
+        source_node = ApplicationService._find_manifest_menu_node_by_title(
+            source_manifest.get("menu_config"),
+            rule.source_menu_title,
+        )
+        if not source_node:
+            raise ValidationError(
+                f"应用 {code} 的菜单接管宿主缺少节点 {rule.source_menu_title}"
+            )
+
+        materialized = deepcopy(manifest)
+        takeover_node = ApplicationService._find_manifest_takeover_node(
+            materialized.get("menu_config"),
+            rule.consumer_takeover_key,
+        )
+        if not takeover_node:
+            raise ValidationError(
+                f"应用 {code} manifest 缺少接管声明 {rule.consumer_takeover_key}"
+            )
+        takeover_node["children"] = deepcopy(source_node.get("children") or [])
+        return materialized
+
+    @staticmethod
+    def _get_manifest_by_code(code: str) -> Optional[Dict[str, Any]]:
+        """读取 manifest；接管菜单由宿主 manifest 唯一真源派生。"""
+        manifest = ApplicationService._get_raw_manifest_by_code(code)
+        if not manifest:
+            return None
+        return ApplicationService._materialize_takeover_manifest(code, manifest)
 
     @staticmethod
     def resolve_market_category_for_code(code: str) -> Optional[str]:
@@ -1574,6 +1718,37 @@ class ApplicationService:
         return paths
 
     @staticmethod
+    def collect_manifest_leaf_immediate_parent_titles(menu_config: Any) -> Dict[str, str]:
+        """
+        叶子 path → 直接父级 manifest title（与 core_menus.name 一致）。
+
+        用于检测「路径已在库内但中间分组未挂上」（如快财务仍平铺、快制造已收款/付款分组）。
+        """
+        mapping: Dict[str, str] = {}
+
+        def walk(node: Dict[str, Any], parent_title: str) -> None:
+            title = str(node.get("title") or "").strip()
+            path = node.get("path")
+            children = node.get("children") or []
+            normalized_path = str(path).strip() if path else ""
+            if normalized_path and not children:
+                mapping[normalized_path] = parent_title
+            for child in children:
+                if isinstance(child, dict):
+                    walk(child, title)
+
+        if isinstance(menu_config, dict):
+            root_title = str(menu_config.get("title") or "").strip()
+            for child in menu_config.get("children") or []:
+                if isinstance(child, dict):
+                    walk(child, root_title)
+        elif isinstance(menu_config, list):
+            for item in menu_config:
+                if isinstance(item, dict):
+                    walk(item, "")
+        return mapping
+
+    @staticmethod
     def _is_orphaned_manifest_menu_row(
         *,
         name: Optional[str],
@@ -1606,8 +1781,9 @@ class ApplicationService:
         tenant_id: int,
         application_uuid: str,
         app_code: str,
+        manifest_menu_config: Any = None,
     ) -> bool:
-        """manifest 同步菜单是否存在 parent_id 为空的孤儿分组/页面。"""
+        """manifest 同步菜单是否存在 parent_id 为空的孤儿分组/页面，或叶子父级与 manifest 不一致。"""
         from core.models.menu import Menu
 
         rows = await Menu.filter(
@@ -1624,6 +1800,40 @@ class ApplicationService:
                 app_code=app_code,
             ):
                 return True
+
+        if manifest_menu_config:
+            expected_parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(
+                manifest_menu_config
+            )
+            root_title = ""
+            root_path = ""
+            if isinstance(manifest_menu_config, dict):
+                root_title = str(manifest_menu_config.get("title") or "").strip()
+                root_path = str(manifest_menu_config.get("path") or "").strip()
+            if expected_parents:
+                by_id = {menu.id: menu for menu in rows}
+                by_path = {
+                    str(menu.path).strip(): menu
+                    for menu in rows
+                    if menu.path and str(menu.path).strip()
+                }
+                for path, expected_parent_title in expected_parents.items():
+                    row = by_path.get(path)
+                    if not row or row.parent_id is None:
+                        continue
+                    parent = by_id.get(row.parent_id)
+                    if not parent:
+                        return True
+                    if parent.name == expected_parent_title:
+                        continue
+                    # 根节点 name 常被写成应用显示名，与 manifest title key 不等；按根 path 判定
+                    if (
+                        root_path
+                        and expected_parent_title == root_title
+                        and str(parent.path or "").strip() == root_path
+                    ):
+                        continue
+                    return True
         return False
 
     @staticmethod
@@ -1704,6 +1914,7 @@ class ApplicationService:
                     tenant_id,
                     str(app_uuid),
                     code,
+                    manifest_menu_config,
                 )
             if config_stale or rows_stale or hierarchy_stale:
                 stale_app_codes.append(code)
@@ -1716,9 +1927,63 @@ class ApplicationService:
         }
 
     @staticmethod
+    def _parse_semver_parts(version: Any) -> Optional[Tuple[int, int, int]]:
+        raw = str(version or "").strip()
+        if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", raw):
+            return None
+        major, minor, patch = (int(part) for part in raw.split("."))
+        return major, minor, patch
+
+    @staticmethod
+    def _bump_semver_patch(version: Any) -> str:
+        parts = ApplicationService._parse_semver_parts(version)
+        if not parts:
+            return "1.0.1"
+        major, minor, patch = parts
+        return f"{major}.{minor}.{patch + 1}"
+
+    @staticmethod
+    def _resolve_menu_config_sync_version(
+        *,
+        db_version: Any,
+        disk_version: Any,
+        db_menu_config: Any,
+        disk_menu_config: Any,
+    ) -> str:
+        """菜单同步写库版本：磁盘为结构真源；若内容变了但版本未升高，升 patch 以通过 DB 门禁。
+
+        ``core_guard_application_menu_config_version`` 要求改 menu_config 时 NEW.version > OLD.version。
+        磁盘与库同版本但 JSON 残留不一致时，若不升版会永久 stale，登录弹窗无法消除。
+        """
+        disk_ver = str(disk_version or "").strip() or "1.0.0"
+        db_ver = str(db_version or "").strip()
+        if (
+            ApplicationService.stable_menu_config_digest(db_menu_config)
+            == ApplicationService.stable_menu_config_digest(disk_menu_config)
+        ):
+            return disk_ver
+
+        disk_parts = ApplicationService._parse_semver_parts(disk_ver)
+        db_parts = ApplicationService._parse_semver_parts(db_ver)
+        if disk_parts and db_parts and disk_parts > db_parts:
+            return disk_ver
+        baseline = disk_ver if disk_parts else (db_ver if db_parts else "1.0.0")
+        if db_parts and (not disk_parts or db_parts >= disk_parts):
+            baseline = db_ver
+        return ApplicationService._bump_semver_patch(baseline)
+
+    @staticmethod
     def _build_manifest_sync_update(app: ApplicationDict, manifest: Dict[str, Any]) -> ApplicationUpdate:
+        app_code = str(app.get("code") or "").strip()
+        if app_code:
+            manifest = ApplicationService._materialize_takeover_manifest(app_code, manifest)
         menu_config = manifest.get("menu_config")
-        version = manifest.get("version", app.get("version", "1.0.0"))
+        version = ApplicationService._resolve_menu_config_sync_version(
+            db_version=app.get("version"),
+            disk_version=manifest.get("version", app.get("version", "1.0.0")),
+            db_menu_config=app.get("menu_config"),
+            disk_menu_config=menu_config,
+        )
         app_name = app.get("name")
         if not app.get("is_custom_name"):
             app_name = manifest.get("name", app_name)
@@ -1734,6 +1999,112 @@ class ApplicationService:
             version=version,
             sort_order=app_sort_order,
         )
+
+    @staticmethod
+    async def bind_menu_config_to_disk_manifest(
+        tenant_id: int,
+        application_uuid: str,
+        menu_config: Any,
+        *,
+        app_code: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        菜单同步唯一源：本节点可读的后端 ``src/apps/{code}/manifest.json``。
+
+        有磁盘 menu_config 时必须用它写 ``core_menus``，并回写 ``core_applications.menu_config``。
+        本节点未部署该包时，才使用调用方传入的库内快照；禁止用过期库内 JSON 覆盖磁盘真源。
+        """
+        code = str(app_code or "").strip()
+        if not code:
+            app_row = await ApplicationService.get_application_by_uuid_optional(
+                tenant_id, str(application_uuid)
+            )
+            code = str((app_row or {}).get("code") or "").strip()
+        if not code:
+            return ApplicationService._normalize_menu_config_field(menu_config)
+
+        manifest = ApplicationService._get_manifest_by_code(code)
+        if not manifest:
+            return ApplicationService._normalize_menu_config_field(menu_config)
+
+        disk_menu = ApplicationService._normalize_menu_config_field(manifest.get("menu_config"))
+        if not disk_menu:
+            return ApplicationService._normalize_menu_config_field(menu_config)
+        disk_version_raw = str(manifest.get("version") or "").strip()
+        if not disk_version_raw:
+            raise ValidationError(f"应用 {code} 的 manifest 缺少 version，不能同步菜单")
+
+        incoming = ApplicationService._normalize_menu_config_field(menu_config)
+        app_row = await ApplicationService.get_application_by_uuid_optional(
+            tenant_id, str(application_uuid)
+        )
+        disk_version = ApplicationService._resolve_menu_config_sync_version(
+            db_version=(app_row or {}).get("version"),
+            disk_version=disk_version_raw,
+            db_menu_config=(app_row or {}).get("menu_config"),
+            disk_menu_config=disk_menu,
+        )
+
+        # 行业包壳：磁盘 menu_config.children 恒为空占位；子菜单由
+        # IndustryPackMenuService 运行时聚合后传入。禁止用空 children 冲掉聚合结果。
+        # 聚合树只用于写 core_menus，不回写 core_applications.menu_config（壳磁盘真源
+        # 仍为 children=[]；回写会触发 stale-manifest 校验且与磁盘真源冲突）。
+        if is_industry_pack_shell_code(code):
+            incoming_children = (
+                list(incoming.get("children") or [])
+                if isinstance(incoming, dict)
+                else []
+            )
+            merged = {
+                "title": disk_menu.get("title") or (incoming or {}).get("title"),
+                "icon": disk_menu.get("icon") or (incoming or {}).get("icon"),
+                "path": disk_menu.get("path") or (incoming or {}).get("path"),
+                "permission": disk_menu.get("permission")
+                or (incoming or {}).get("permission"),
+                "children": incoming_children,
+            }
+            if incoming and incoming.get("sort_order") is not None:
+                merged["sort_order"] = incoming.get("sort_order")
+            elif disk_menu.get("sort_order") is not None:
+                merged["sort_order"] = disk_menu.get("sort_order")
+            to_use = ApplicationService._normalize_menu_config_field(merged) or merged
+            logger.info(
+                "menu_config_industry_pack_shell_merged tenant={} app={} children={}",
+                tenant_id,
+                application_uuid,
+                len(incoming_children),
+            )
+            return to_use
+
+        if (
+            ApplicationService.stable_menu_config_digest(incoming)
+            == ApplicationService.stable_menu_config_digest(disk_menu)
+        ):
+            return disk_menu
+
+        conn = await get_db_connection()
+        try:
+            await conn.execute(
+                """
+                UPDATE core_applications
+                SET menu_config = $3::jsonb, version = $4, updated_at = NOW()
+                WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
+                """,
+                tenant_id,
+                str(application_uuid),
+                json.dumps(disk_menu, ensure_ascii=False),
+                disk_version,
+            )
+        finally:
+            await conn.close()
+
+        logger.info(
+            "menu_config_bound_to_disk_manifest tenant={} app={} code={}",
+            tenant_id,
+            application_uuid,
+            code,
+        )
+        return disk_menu
 
     @staticmethod
     async def sync_all_manifests_and_menus(tenant_id: int) -> Dict[str, Any]:
@@ -1873,6 +2244,7 @@ class ApplicationService:
 
         # 一次性按 tenant 取出所有已存在应用（code -> row），消除 N+1 启动期 DB 查询
         existing_by_code: Dict[str, Dict[str, Any]] = {}
+        apps_prefetched = False
         try:
             conn = await get_db_connection()
             try:
@@ -1904,6 +2276,7 @@ class ApplicationService:
                             drop_id,
                             tenant_id,
                         )
+                apps_prefetched = True
             finally:
                 await conn.close()
         except Exception as e:
@@ -1945,7 +2318,7 @@ class ApplicationService:
                     continue
                 
                 # 优先用预取结果；预取失败时回退到单次查询
-                if existing_by_code:
+                if apps_prefetched:
                     existing_app = existing_by_code.get(code)
                 else:
                     existing_app = await ApplicationService.get_application_by_code(
@@ -1959,7 +2332,7 @@ class ApplicationService:
                 is_active = (existing_app.get('is_active', True) if existing_app else False) if is_installed else False
                 
                 # 系统内置应用默认自动安装；但 PRO 应用必须已激活 License Key，避免后台误开。
-                should_auto_install = await ApplicationService._can_enable_or_install_app(
+                should_auto_install = not is_installed and await ApplicationService._can_enable_or_install_app(
                     tenant_id=tenant_id,
                     app_code=code,
                 )
@@ -2013,12 +2386,18 @@ class ApplicationService:
                         permission_code=app_data.permission_code,
                         sort_order=app_sort_order,
                     )
-                    application = await ApplicationService.update_application(
-                        tenant_id=tenant_id,
-                        uuid=existing_app.get('uuid'),
-                        data=update_data,
-                        sync_derived_resources=False,
-                    )
+                    if any(
+                        existing_app.get(key) != value
+                        for key, value in update_data.model_dump(exclude_unset=True).items()
+                    ):
+                        application = await ApplicationService.update_application(
+                            tenant_id=tenant_id,
+                            uuid=existing_app.get('uuid'),
+                            data=update_data,
+                            sync_derived_resources=False,
+                        )
+                    else:
+                        application = dict(existing_app)
 
                     if needs_auto_install:
                         await ApplicationService.install_application(
@@ -2046,7 +2425,8 @@ class ApplicationService:
                         newly_installed = True
 
                 ded = ApplicationService._manifest_is_dedicated(manifest)
-                await ApplicationService._persist_is_dedicated(tenant_id, code, ded)
+                if not existing_app or bool(existing_app.get("is_dedicated")) != ded:
+                    await ApplicationService._persist_is_dedicated(tenant_id, code, ded)
                 if isinstance(application, dict):
                     application["is_dedicated"] = ded
 

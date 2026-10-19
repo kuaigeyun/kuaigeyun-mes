@@ -92,6 +92,11 @@ export interface FlowPreviewStep {
   step_key: string;
   label: string;
   issued_at: string;
+  operation_sequence?: number;
+  operation_code?: string | null;
+  operation_name?: string | null;
+  flow_mode?: string | null;
+  note?: string | null;
 }
 
 export interface FlowPreviewResult {
@@ -103,6 +108,15 @@ export interface FlowPreviewResult {
   warehouse_name: string;
   anchor_at: string;
   steps: FlowPreviewStep[];
+  process_operations?: Array<{
+    code?: string | null;
+    name?: string | null;
+    sequence?: number;
+    allow_jump?: boolean;
+    standard_time?: number | null;
+    setup_time?: number | null;
+  }>;
+  process_material_code?: string | null;
   warnings?: string[];
 }
 
@@ -133,6 +147,20 @@ export interface FlowExecuteResult {
   outsource_notes?: string[];
   operators?: Record<string, number>;
   errors?: string[];
+  skipped_count?: number;
+}
+
+export type FlowJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+
+export interface FlowGenerateJob {
+  job_id: string;
+  status: FlowJobStatus;
+  progress: number;
+  message?: string | null;
+  result?: FlowExecuteResult | null;
+  error?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const BASE = '/apps/kuaizhizao/management/flow-generate';
@@ -153,12 +181,48 @@ export async function previewFlowGenerate(
   });
 }
 
-export async function executeFlowGenerate(
+/** 启动异步造数任务（立即返回 job_id，避免网关 504） */
+export async function startFlowGenerate(
   body: FlowGeneratePayload,
-): Promise<FlowExecuteResult> {
+): Promise<FlowGenerateJob> {
   return apiRequest(BASE, {
     method: 'POST',
     data: body,
-    timeoutMs: 300_000,
+    timeoutMs: 60_000,
   });
+}
+
+export async function getFlowGenerateJob(jobId: string): Promise<FlowGenerateJob> {
+  return apiRequest(`${BASE}/jobs/${encodeURIComponent(jobId)}`, {
+    method: 'GET',
+    timeoutMs: 30_000,
+  });
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** 启动并轮询至完成；onProgress 用于进度条 */
+export async function executeFlowGenerate(
+  body: FlowGeneratePayload,
+  onProgress?: (job: FlowGenerateJob) => void,
+): Promise<FlowExecuteResult> {
+  const started = await startFlowGenerate(body);
+  onProgress?.(started);
+  let job = started;
+  const deadline = Date.now() + 30 * 60_000;
+  while (job.status === 'queued' || job.status === 'running') {
+    if (Date.now() > deadline) {
+      throw new Error('造数任务超时，请稍后在业务单据中核对是否已生成');
+    }
+    await sleep(1200);
+    job = await getFlowGenerateJob(job.job_id);
+    onProgress?.(job);
+  }
+  if (job.status === 'failed') {
+    throw new Error(job.error || job.message || '造数未通过，请修改后重试');
+  }
+  if (!job.result) {
+    throw new Error('造数任务已完成但未返回结果');
+  }
+  return job.result;
 }

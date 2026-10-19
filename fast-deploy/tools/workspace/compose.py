@@ -142,6 +142,8 @@ def _iter_app_bindings(cfg: dict) -> Iterator[BindingTuple]:
 
 
 def compose(cfg: dict) -> None:
+    ok: list[str] = []
+    failed: list[str] = []
     for mode, repo, label, be_name, fe_name in _iter_app_bindings(cfg):
         display = (label or be_name).strip()
         be_src = repo / "backend" / "apps" / be_name
@@ -157,8 +159,21 @@ def compose(cfg: dict) -> None:
             assembled = True
         if assembled:
             print(f"{display} 应用组装成功")
+            ok.append(display)
         else:
-            print(f"{display} 应用组装失败")
+            print(f"{display} 应用组装失败（源仓无 backend/apps/{be_name} 或 frontend/apps/{fe_name}）")
+            failed.append(display)
+    industry_ok = [name for name in ok if name.startswith("ind-") or name == "spoke-wheel"]
+    print(
+        f"组装完成: 成功 {len(ok)}，失败 {len(failed)}"
+        + (f"（其中行业包 {len(industry_ok)} 个）" if industry_ok else "")
+    )
+    if failed:
+        raise SystemExit(
+            "以下应用组装失败: "
+            + ", ".join(failed)
+            + "。请检查专业仓路径与 backend/frontend/apps 目录。"
+        )
 
 
 def status(cfg: dict) -> None:

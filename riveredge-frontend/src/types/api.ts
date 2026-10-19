@@ -61,5 +61,7 @@ export interface CurrentUser {
   }>;
   /** 登录身份：infra_superadmin 为平台超级管理员 */
   user_type?: 'infra_superadmin' | 'user' | 'guest' | string;
+  /** 加强密码策略：须先修改密码后再使用系统 */
+  requires_password_change?: boolean;
 }
 

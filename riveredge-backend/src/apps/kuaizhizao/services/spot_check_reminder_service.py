@@ -39,6 +39,7 @@ ENTITY_BINDING = "equipment_scheme_binding"
 RULE_PREFIX = "kuaizhizao.spot_check"
 RULE_INCOMPLETE = f"{RULE_PREFIX}.incomplete_overdue"
 RULE_REVIEW = f"{RULE_PREFIX}.review_overdue"
+RULE_TASK = f"{RULE_PREFIX}.task_overdue"
 CHANNEL_INTERNAL = "internal"
 VALID_DONE_STATUSES = ("待审核", "已审核")
 
@@ -124,10 +125,14 @@ class SpotCheckReminderService:
     async def on_spot_check_created(
         tenant_id: int,
         header: EquipmentSpotCheck,
-        scheme: EquipmentInspectionScheme,
+        scheme: Optional[EquipmentInspectionScheme],
     ) -> None:
-        period_key, _ = _period_key_and_start(scheme.cycle_type, header.check_date)
-        bindings = await EquipmentSchemeBinding.filter(
+        if header.status != "待审核":
+            return
+        period_key, _ = _period_key_and_start(
+            scheme.cycle_type if scheme else None, header.check_date
+        )
+        bindings = [] if not scheme else await EquipmentSchemeBinding.filter(
             tenant_id=tenant_id,
             equipment_id=header.equipment_id,
             scheme_id=scheme.id,
@@ -256,6 +261,28 @@ async def dispatch_spot_check_reminder(
     payload = event.payload or {}
     kind = str(payload.get("kind") or "")
 
+    if event.rule_code == RULE_TASK:
+        header = await EquipmentSpotCheck.filter(
+            tenant_id=tenant_id, id=event.entity_id, deleted_at__isnull=True,
+        ).first()
+        if not header or header.status not in ("待执行", "已驳回"):
+            await ReminderEventService.mark_stopped(tenant_id, event.id, "任务已提交、取消或不可用")
+            return "stopped"
+        await dispatch_kuaizhizao_notification(
+            tenant_id, trigger_document=DOC_SPOT_CHECK,
+            trigger_action=ACTION_DUE_OVERDUE,
+            variables={
+                "document_no": header.document_no,
+                "equipment_code": header.equipment_code or "",
+                "equipment_name": header.equipment_name or "",
+                "check_date": header.check_date.isoformat(),
+                "reminder_kind": "计划点检任务超时",
+                "detail_path": f"/apps/kuaizhizao/equipment-management/spot-checks?uuid={header.uuid}",
+            },
+            context={"creator_user_id": header.inspector_id, "assignee_user_id": header.inspector_id},
+        )
+        return "sent"
+
     if event.rule_code == RULE_REVIEW or kind == "review_overdue":
         header = await EquipmentSpotCheck.filter(
             tenant_id=tenant_id, id=event.entity_id, deleted_at__isnull=True
@@ -300,7 +327,6 @@ async def dispatch_spot_check_reminder(
     if not scheme or not equipment or not scheme.is_active:
         await ReminderEventService.mark_stopped(tenant_id, event.id, "方案或设备不可用")
         return "stopped"
-
     period_key = str(payload.get("period_key") or "")
     today = _site_today()
     current_key, period_start = _period_key_and_start(scheme.cycle_type, today)
@@ -347,7 +373,7 @@ register_reminder_handler(RULE_PREFIX, dispatch_spot_check_reminder)
 
 
 async def prepare_spot_check_reminders() -> None:
-    """扫描绑定，幂等写入本周期未点检超时事件。"""
+    """按设备方案绑定准备未点检超时提醒。"""
     bindings = await EquipmentSchemeBinding.filter(
         scheme_type="spot_check",
         deleted_at__isnull=True,

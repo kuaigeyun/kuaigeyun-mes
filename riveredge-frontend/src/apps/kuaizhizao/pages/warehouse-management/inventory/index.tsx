@@ -3,7 +3,7 @@ import type { ProColumns } from '@ant-design/pro-components';
 import { App, Popover, Select, Space, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { formatQuantity, todaySiteDateString } from '../../../../../utils/format';
-import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
+import { MaterialUnitLabel } from '../../../../../components/material-unit-label';
 import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniTable } from '../../../../../components/uni-table';
@@ -383,12 +383,14 @@ const InventoryPage: React.FC = () => {
           {
             title: t('common.unit'),
             dataIndex: 'material_unit',
-            width: 56,
-            minWidth: 56,
+            width: 96,
+            minWidth: 96,
             uniTableKeepWidth: true,
             resizable: false,
+            align: 'left',
             hideInSearch: true,
-            render: (_, r) => renderCell(r.material_unit),
+            // 单位只在本列展示；库存数量列只出数字，避免长短单位把右对齐数量顶歪
+            render: (_, r) => <MaterialUnitLabel value={r.material_unit} />,
           },
           {
             title: t('app.kuaizhizao.warehouseReports.colStockQty'),
@@ -404,7 +406,7 @@ const InventoryPage: React.FC = () => {
               const qty = Number(record.quantity || 0);
               return (
                 <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>
-                  <QuantityWithUnitDisplay quantity={qty} unit={record.material_unit} />
+                  {formatQuantity(qty)}
                 </span>
               );
             },
@@ -563,7 +565,7 @@ const InventoryPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.inventory')}
         headerActions={tableHeaderActions}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-width-v7"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-width-v9"
         actionRef={actionRef}
         columns={columns}
         request={fetchInventory}

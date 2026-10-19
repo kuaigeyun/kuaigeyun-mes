@@ -4,9 +4,11 @@
  */
 import React from 'react';
 import { Progress } from 'antd';
-import { formatApiErrorDetail } from '../services/api';
 import { getAntdMessage, getAntdModal } from './antdAppApis';
 import type { BatchImportResult } from './batchOperations';
+import { runWithBulkImportErrorSuppress } from './bulkImportErrorSuppress';
+import { getApiErrorMessage } from './errorHandler';
+import { ImportResultModalContent } from './importResultModalContent';
 
 export const DEFAULT_IMPORT_CHUNK_SIZE = 100;
 
@@ -24,18 +26,26 @@ function sleepMs(ms: number): Promise<void> {
 }
 
 function extractImportFailureReason(error: unknown): string {
-  const err = error as {
-    message?: string;
-    detail?: string;
-    response?: { data?: { detail?: unknown; message?: unknown } };
-  };
-  const fromResponse = formatApiErrorDetail(
-    err.response?.data?.detail ?? err.response?.data?.message,
-  );
-  if (fromResponse) {
-    return fromResponse;
-  }
-  return err.message || err.detail || '未知错误';
+  return getApiErrorMessage(error, '未知错误');
+}
+
+function showPartialImportResultModal(
+  title: string,
+  successCount: number,
+  failureCount: number,
+  errors: Array<{ row: number; error: string }>,
+) {
+  getAntdModal().warning({
+    title: `${title}（部分失败）`,
+    width: 720,
+    content: (
+      <ImportResultModalContent
+        successCount={successCount}
+        failureCount={failureCount}
+        errors={errors}
+      />
+    ),
+  });
 }
 
 function isWriteRateLimitError(error: unknown): boolean {
@@ -142,6 +152,7 @@ export async function importInChunks<T>(
     return result;
   }
 
+  return runWithBulkImportErrorSuppress(async () => {
   const size = Math.max(1, Math.min(200, Math.trunc(chunkSize) || DEFAULT_IMPORT_CHUNK_SIZE));
   const totalChunks = Math.ceil(items.length / size);
   const progressModal = getAntdModal().info({
@@ -245,25 +256,19 @@ export async function importInChunks<T>(
 
   if (showResultModal) {
     if (result.failureCount > 0) {
-      getAntdModal().warning({
-        title: `${title}（部分失败）`,
-        width: 700,
-        content: (
-          <div>
-            <p>
-              <strong>
-                导入结果：成功 {result.successCount} 条，失败 {result.failureCount} 条
-              </strong>
-            </p>
-          </div>
-        ),
-      });
+      showPartialImportResultModal(
+        title,
+        result.successCount,
+        result.failureCount,
+        result.errors,
+      );
     } else if (result.successCount > 0) {
       getAntdMessage().success(`成功导入 ${result.successCount} 条数据`);
     }
   }
 
   return result;
+  });
 }
 
 /** UniImport 矩阵导入单次响应（snake / camel；errors 项 error 或 message） */
@@ -350,6 +355,7 @@ export async function importExcelMatrixInChunks(config: {
     return aggregated;
   }
 
+  return runWithBulkImportErrorSuppress(async () => {
   const size = Math.max(1, Math.min(200, Math.trunc(chunkSize) || DEFAULT_IMPORT_CHUNK_SIZE));
   const totalChunks = Math.ceil(dataRows.length / size);
   const progressModal = getAntdModal().info({
@@ -427,25 +433,19 @@ export async function importExcelMatrixInChunks(config: {
 
   if (showResultModal) {
     if (aggregated.failure_count > 0) {
-      getAntdModal().warning({
-        title: `${title}（部分失败）`,
-        width: 700,
-        content: (
-          <div>
-            <p>
-              <strong>
-                导入结果：成功 {aggregated.success_count} 条，失败 {aggregated.failure_count} 条
-              </strong>
-            </p>
-          </div>
-        ),
-      });
+      showPartialImportResultModal(
+        title,
+        aggregated.success_count,
+        aggregated.failure_count,
+        aggregated.errors,
+      );
     } else if (aggregated.success_count > 0) {
       getAntdMessage().success(`成功导入 ${aggregated.success_count} 条数据`);
     }
   }
 
   return aggregated;
+  });
 }
 
 /**

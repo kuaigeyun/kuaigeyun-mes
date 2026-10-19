@@ -437,12 +437,21 @@ async def _dispatch_payment_application(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.kuaizhizao.services.payment_application_service import PaymentApplicationService
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     svc = PaymentApplicationService()
     if action == "submit":
-        return await svc.submit_application(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_application(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "approve":
         return await svc.approve_application(
             tenant_id,
@@ -471,15 +480,32 @@ async def _dispatch_purchase_request(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     svc = PurchaseRequisitionService()
     if action == "submit":
-        return await svc.submit_requisition(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_requisition(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
+    patch = None
+    if payload and isinstance(payload.get("instance_data_patch"), dict):
+        patch = payload.get("instance_data_patch")
     if action == "approve":
         return await svc.approve_requisition(
-            tenant_id, entity_id, True, review_remarks=reason, approved_by=user_id
+            tenant_id,
+            entity_id,
+            True,
+            review_remarks=reason,
+            approved_by=user_id,
+            instance_data_patch=patch,
         )
     if action == "reject":
         return await svc.approve_requisition(
@@ -1301,12 +1327,21 @@ async def _dispatch_other_income(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
-    from apps.kuaicaiwu.services.other_income_service import OtherIncomeService
+    from apps.kuaizhizao.services.other_income_service import OtherIncomeService
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     svc = OtherIncomeService()
     if action == "submit":
-        return await svc.submit_income(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_income(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "approve":
         return await svc.approve_income(
             tenant_id, entity_id, approved=True, operator_id=user_id
@@ -1333,12 +1368,21 @@ async def _dispatch_other_expense(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
-    from apps.kuaicaiwu.services.other_expense_service import OtherExpenseService
+    from apps.kuaizhizao.services.other_expense_service import OtherExpenseService
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     svc = OtherExpenseService()
     if action == "submit":
-        return await svc.submit_expense(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_expense(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "approve":
         return await svc.approve_expense(
             tenant_id, entity_id, approved=True, operator_id=user_id
@@ -1518,6 +1562,16 @@ _dispatch_kuaioa_seal = _make_kuaioa_dispatch(
     decision_import="apps.kuaioa.services.seal_service",
     decision_fn="apply_seal_request_decision",
 )
+_dispatch_kuaioa_expense = _make_kuaioa_dispatch(
+    entity_key="kuaioa_expense",
+    service_import="apps.kuaioa.services.expense_service",
+    service_cls="ExpenseRequestService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.expense_service",
+    decision_fn="apply_expense_request_decision",
+)
 _dispatch_kuaioa_special_price = _make_kuaioa_dispatch(
     entity_key="kuaioa_special_price",
     service_import="apps.kuaioa.services.collaboration_service",
@@ -1636,6 +1690,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "kuaioa_asset_purchase": _dispatch_kuaioa_asset_purchase,
     "kuaioa_leave": _dispatch_kuaioa_leave,
     "kuaioa_seal": _dispatch_kuaioa_seal,
+    "kuaioa_expense": _dispatch_kuaioa_expense,
     "kuaioa_special_price": _dispatch_kuaioa_special_price,
     "kuaioa_concession": _dispatch_kuaioa_concession,
     "kuaioa_process_deviation": _dispatch_kuaioa_process_deviation,

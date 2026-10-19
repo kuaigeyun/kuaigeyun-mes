@@ -2,11 +2,73 @@
 
 export type ApprovalNodeType = 'start' | 'approval' | 'cc' | 'condition' | 'end';
 
+export type ConditionRouteMode = 'previous_approver' | 'initiator' | 'formula';
+
 export interface ConditionItem {
   field?: string;
   operator?: string;
   value?: unknown;
   label?: string;
+  /** 公式模式：其余分支 */
+  else?: boolean;
+}
+
+const CONDITION_ROUTE_MODES = new Set<ConditionRouteMode>([
+  'previous_approver',
+  'initiator',
+  'formula',
+]);
+
+function conditionValueFilled(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === 'string' && !value.trim()) return false;
+  return true;
+}
+
+function inferConditionRouteMode(conditions: ConditionItem[], outEdgeCount: number): ConditionRouteMode | undefined {
+  if (outEdgeCount <= 1) return 'formula';
+  if (conditions.some((c) => c.else)) return 'formula';
+  if (conditions.some((c) => String(c.field || '').trim() && conditionValueFilled(c.value))) {
+    return 'formula';
+  }
+  if (conditions.length && conditions.every((c) => !conditionValueFilled(c.value))) {
+    return 'previous_approver';
+  }
+  return undefined;
+}
+
+export function normalizeConditionNodeData(
+  data: ApprovalNodeData = {},
+  outEdgeCount = 0,
+): ApprovalNodeData {
+  const out: ApprovalNodeData = { ...data };
+  const conditions = asList(out.conditions || (out.condition_list as ConditionItem[]));
+  const normalized: ConditionItem[] = conditions.map((c) => ({
+    field: c.field,
+    operator: c.operator || '==',
+    value: c.value,
+    label: c.label || '',
+    else: Boolean(c.else),
+  }));
+  out.conditions = normalized;
+  delete out.condition_list;
+
+  const rawMode = String(out.routeMode || out.route_mode || '').trim() as ConditionRouteMode;
+  if (CONDITION_ROUTE_MODES.has(rawMode)) {
+    out.routeMode = rawMode;
+  } else {
+    const inferred = inferConditionRouteMode(normalized, outEdgeCount);
+    if (inferred) out.routeMode = inferred;
+    else delete out.routeMode;
+  }
+
+  const mode = out.routeMode;
+  if (mode === 'previous_approver' || mode === 'initiator') {
+    out.conditions = normalized.map((item, i) => ({
+      label: String(item.label || '').trim() || `分支${i + 1}`,
+    }));
+  }
+  return out;
 }
 
 export interface ApprovalNodeData {
@@ -20,9 +82,31 @@ export interface ApprovalNodeData {
   refreshContextOnEdit?: boolean;
   allowTransfer?: boolean;
   allowAddSign?: boolean;
+  /** 审批中：发起人撤回整单 */
+  allowSubmitterWithdraw?: boolean;
+  submitterWithdrawOnlyBeforeAnyApprove?: boolean;
+  /** 审批中：审批人撤回本级同意 */
+  allowApproverRecall?: boolean;
+  /** 驳回允许落点 */
+  rejectAllowedTargets?: Array<'previous' | 'submitter'>;
+  /** 驳回默认落点 */
+  rejectDefaultTarget?: 'previous' | 'submitter';
+  /** 已通过：是否允许反审 */
+  allowRevokeAfterApproved?: boolean;
+  revokeLanding?: 'reopen_final' | 'to_draft';
   emptyApproverPolicy?: 'block' | 'auto_pass' | 'fallback_user' | 'escalate_admin';
+  /** multi_level_manager：沿部门树向上第 N 个负责人（≥2） */
+  managerLevel?: number;
+  /** 本节点审批通过时写入 instance.data，供后续条件分支 */
+  decisionOnApprove?: { field: string; label: string; defaultValue?: boolean };
+  decisionOnApproveEnabled?: boolean;
+  decisionOnApproveField?: string;
+  decisionOnApproveLabel?: string;
+  decisionOnApproveDefault?: boolean;
   editableFields?: string[] | '*';
   conditions?: ConditionItem[];
+  routeMode?: ConditionRouteMode;
+  route_mode?: ConditionRouteMode;
   [key: string]: unknown;
 }
 
@@ -61,22 +145,64 @@ export function normalizeNodeData(nodeType: string, data: ApprovalNodeData = {})
         out.departmentScope = scope === 'specified' ? 'specified' : 'submitter';
         delete out.department_scope;
       }
+      if (out.approverType === 'multi_level_manager') {
+        const raw = out.managerLevel ?? out.manager_level;
+        const level = raw == null ? 2 : Number(raw);
+        out.managerLevel = Number.isFinite(level) && level >= 2 ? level : 2;
+        delete out.manager_level;
+      }
+      if (out.decisionOnApproveEnabled && (out.decisionOnApproveField || out.decisionOnApprove?.field)) {
+        const field = String(out.decisionOnApproveField || out.decisionOnApprove?.field || '').trim();
+        if (field) {
+          out.decisionOnApprove = {
+            field,
+            label: String(out.decisionOnApproveLabel || out.decisionOnApprove?.label || field).trim(),
+            defaultValue: Boolean(out.decisionOnApproveDefault ?? out.decisionOnApprove?.defaultValue),
+          };
+        }
+      } else {
+        delete out.decisionOnApprove;
+      }
+      delete out.decisionOnApproveEnabled;
+      delete out.decisionOnApproveField;
+      delete out.decisionOnApproveLabel;
+      delete out.decisionOnApproveDefault;
       out.allowEditDuringApproval = Boolean(out.allowEditDuringApproval);
       out.refreshContextOnEdit = out.refreshContextOnEdit !== false;
       out.allowTransfer = Boolean(out.allowTransfer);
       out.allowAddSign = Boolean(out.allowAddSign);
+      out.allowSubmitterWithdraw = out.allowSubmitterWithdraw !== false;
+      out.submitterWithdrawOnlyBeforeAnyApprove = Boolean(out.submitterWithdrawOnlyBeforeAnyApprove);
+      out.allowApproverRecall = Boolean(out.allowApproverRecall);
+      const rawRejectAllowed = out.rejectAllowedTargets ?? out.reject_allowed_targets;
+      if (rawRejectAllowed == null) {
+        out.rejectAllowedTargets = ['previous', 'submitter'];
+      } else {
+        const list = Array.isArray(rawRejectAllowed) ? rawRejectAllowed : [rawRejectAllowed];
+        const parsed: Array<'previous' | 'submitter'> = [];
+        for (const item of list) {
+          const val = String(item || '').trim().toLowerCase();
+          if ((val === 'previous' || val === 'submitter') && !parsed.includes(val)) {
+            parsed.push(val);
+          }
+        }
+        out.rejectAllowedTargets = parsed.length ? parsed : ['previous', 'submitter'];
+      }
+      delete out.reject_allowed_targets;
+      const defaultReject = String(
+        out.rejectDefaultTarget ?? out.reject_default_target ?? 'previous',
+      ).toLowerCase();
+      out.rejectDefaultTarget = defaultReject === 'submitter' ? 'submitter' : 'previous';
+      delete out.reject_default_target;
+      if (!out.rejectAllowedTargets.includes(out.rejectDefaultTarget)) {
+        out.rejectDefaultTarget = out.rejectAllowedTargets[0];
+      }
+      out.allowRevokeAfterApproved = out.allowRevokeAfterApproved !== false;
+      const landing = String(out.revokeLanding || out.revoke_landing || 'reopen_final').toLowerCase();
+      out.revokeLanding = landing === 'to_draft' ? 'to_draft' : 'reopen_final';
+      delete out.revoke_landing;
       if (!out.emptyApproverPolicy) out.emptyApproverPolicy = 'block';
     }
-  }
-  if (nodeType === 'condition') {
-    const conditions = asList(out.conditions || (out.condition_list as ConditionItem[]));
-    out.conditions = conditions.map((c) => ({
-      field: c.field,
-      operator: c.operator || '==',
-      value: c.value,
-      label: c.label || '',
-    }));
-    delete out.condition_list;
   }
   return out;
 }
@@ -105,6 +231,16 @@ export function normalizeFlowGraph(raw: { nodes?: unknown[]; edges?: unknown[] }
       type: String(edge.type || 'default'),
       data: (edge.data as Record<string, unknown>) || {},
     }));
+
+  const outEdgeCountBySource = new Map<string, number>();
+  edges.forEach((e) => {
+    outEdgeCountBySource.set(e.source, (outEdgeCountBySource.get(e.source) || 0) + 1);
+  });
+  nodes.forEach((node) => {
+    if (node.type !== 'condition') return;
+    node.data = normalizeConditionNodeData(node.data, outEdgeCountBySource.get(node.id) || 0);
+  });
+
   return { nodes, edges };
 }
 
@@ -127,8 +263,34 @@ export function validateFlowGraph(graph: FlowGraph): string[] {
     if (node.type === 'condition') {
       const outEdges = graph.edges.filter((e) => e.source === node.id);
       const conds = node.data.conditions || [];
+      const mode = node.data.routeMode;
+      if (outEdges.length > 1 && !mode) {
+        errors.push(`条件节点「${node.data.label || node.id}」须选择分支触发方式`);
+      }
       if (outEdges.length > 1 && conds.length !== outEdges.length) {
-        errors.push(`条件节点「${node.data.label || node.id}」出边数与条件数不一致`);
+        errors.push(`条件节点「${node.data.label || node.id}」出边数与分支数不一致`);
+      }
+      if (mode === 'formula') {
+        const elseCount = conds.filter((c) => c.else).length;
+        if (elseCount > 1) {
+          errors.push(`条件节点「${node.data.label || node.id}」仅允许一条其余分支`);
+        }
+        conds.forEach((c, i) => {
+          if (c.else) return;
+          if (!String(c.field || '').trim()) {
+            errors.push(`条件节点「${node.data.label || node.id}」分支 ${i + 1} 须选择字段`);
+          }
+          if (!conditionValueFilled(c.value)) {
+            errors.push(`条件节点「${node.data.label || node.id}」分支 ${i + 1} 须填写比较数值`);
+          }
+        });
+      }
+      if (mode === 'previous_approver' || mode === 'initiator') {
+        conds.forEach((c, i) => {
+          if (!String(c.label || '').trim()) {
+            errors.push(`条件节点「${node.data.label || node.id}」分支 ${i + 1} 须填写名称`);
+          }
+        });
       }
     }
   });
@@ -138,6 +300,12 @@ export function validateFlowGraph(graph: FlowGraph): string[] {
 /** 表单 approverIds ↔ UI 分字段 */
 export function nodeDataToFormValues(data: ApprovalNodeData): ApprovalNodeData {
   const v = { ...data };
+  if (v.decisionOnApprove?.field) {
+    v.decisionOnApproveEnabled = true;
+    v.decisionOnApproveField = v.decisionOnApprove.field;
+    v.decisionOnApproveLabel = v.decisionOnApprove.label;
+    v.decisionOnApproveDefault = Boolean(v.decisionOnApprove.defaultValue);
+  }
   if (v.approverType === 'user') v.approvers = v.approverIds ?? [];
   if (v.approverType === 'role') v.roles = v.approverIds ?? [];
   if (v.approverType === 'department') {

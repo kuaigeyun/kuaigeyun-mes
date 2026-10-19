@@ -217,6 +217,32 @@ def require_permission_codes(
     return dependency
 
 
+def require_read_or_display(
+    permission_prefix: str,
+    *,
+    check_abac: bool = False,
+    require_tenant: bool = True,
+):
+    """
+    取单候选 / 来源单据筛选项鉴权：目标 `{prefix}:read` 或 `{prefix}:display` 任一即可。
+
+    产品契约：回显独立于查看——下游取单不必授予来源单据菜单的「查看」。
+    仅用于 pull-lines / 引用筛选类 GET；写操作（pull 创建）仍走目标单据 create 等码。
+    """
+    prefix = (permission_prefix or "").strip().rstrip(":")
+    if not prefix or ":" not in prefix:
+        raise ValueError(
+            f"require_read_or_display 需要 permission_prefix（如 kuaizhizao:purchase-order），收到: {permission_prefix!r}"
+        )
+    return require_permission_codes(
+        f"{prefix}:read",
+        f"{prefix}:display",
+        require_all=False,
+        check_abac=check_abac,
+        require_tenant=require_tenant,
+    )
+
+
 def _resolve_action_by_request(method: str, path: str) -> str:
     """
     【遗留】根据 HTTP 方法与路径片段推断 action，仅服务于 require_module_access。

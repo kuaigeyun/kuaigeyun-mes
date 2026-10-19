@@ -39,6 +39,12 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
 
 
+# 宿主应用菜单同步后，须从 manifest 刷新对应 PRO consumer 侧栏（同路径接管，结构须一致）
+_MENU_PEER_SYNC_AFTER_SOURCE: Dict[str, str] = {
+    "kuaizhizao": "kuaicaiwu",
+}
+
+
 class ManifestMenuSortIndex(TypedDict):
     """manifest menu_config 排序索引：叶子用 path，分组用 title（与 core_menus.name 一致）。"""
 
@@ -79,6 +85,237 @@ class MenuService:
         if n.startswith("menu."):
             return True
         return False
+
+    @staticmethod
+    def _merge_manifest_folder_meta(
+        menu_name: str,
+        menu_meta: Dict[str, Any] | None,
+        *,
+        has_children: bool,
+        menu_path: Any,
+    ) -> Dict[str, Any] | None:
+        """manifest 无 path 的分组（如收款/付款管理）入库时标记 type=group，侧栏与快制造一致。"""
+        if menu_path or not has_children:
+            return menu_meta
+        name = (menu_name or "").strip()
+        if ".menu.group." not in name:
+            return menu_meta
+        merged: Dict[str, Any] = {**(menu_meta or {})}
+        merged.setdefault("type", "group")
+        merged.setdefault("className", "riveredge-menu-group-title")
+        return merged
+
+    @staticmethod
+    def _pick_manifest_folder_parent(
+        candidates: List[Menu],
+        leaf: Menu,
+    ) -> Optional[Menu]:
+        """同 parent_id + name 唯一；若库内出现同名多条且无法与叶子当前父级对齐，直接失败暴露。"""
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        for folder in candidates:
+            if folder.parent_id == leaf.parent_id:
+                return folder
+        folder_name = (candidates[0].name or "").strip()
+        raise ValidationError(
+            f"菜单分组 {folder_name} 在 core_menus 中存在 {len(candidates)} 条重复行，"
+            "无法确定挂载点，请删除重复分组后重新同步应用菜单"
+        )
+
+    @staticmethod
+    async def _realign_application_menu_leaf_parents(
+        tenant_id: int,
+        application_uuid: str,
+        menu_config: Any,
+    ) -> int:
+        """
+        将叶子菜单挂回 manifest 声明的直接父级（修复中间分组丢失导致的平铺）。
+        """
+        from core.models.menu import Menu
+        from core.services.application.application_service import ApplicationService
+
+        expected = ApplicationService.collect_manifest_leaf_immediate_parent_titles(menu_config)
+        if not expected:
+            return 0
+
+        root_title = ""
+        root_path = ""
+        if isinstance(menu_config, dict):
+            root_title = str(menu_config.get("title") or "").strip()
+            root_path = str(menu_config.get("path") or "").strip()
+
+        rows = await Menu.filter(
+            tenant_id=tenant_id,
+            application_uuid=str(application_uuid),
+            deleted_at__isnull=True,
+        ).all()
+        by_path = {str(m.path).strip(): m for m in rows if m.path and str(m.path).strip()}
+        folders_by_name: Dict[str, List[Menu]] = {}
+        for menu in rows:
+            if menu.path:
+                continue
+            name = (menu.name or "").strip()
+            if not name:
+                continue
+            folders_by_name.setdefault(name, []).append(menu)
+
+        fixed = 0
+        for path, expected_parent_name in expected.items():
+            leaf = by_path.get(path)
+            if not leaf or leaf.parent_id is None:
+                continue
+            if (leaf.meta or {}).get(META_TENANT_PARENT_OVERRIDE):
+                continue
+            current_parent = next((m for m in rows if m.id == leaf.parent_id), None)
+            # 根菜单同步时可能把 name 写成应用显示名，与 manifest title（i18n key）不一致；
+            # 只要挂在根 path 上即视为已对齐。
+            if current_parent and (
+                current_parent.name == expected_parent_name
+                or (
+                    root_path
+                    and expected_parent_name == root_title
+                    and str(current_parent.path or "").strip() == root_path
+                )
+            ):
+                continue
+            candidates = folders_by_name.get(expected_parent_name, [])
+            target = MenuService._pick_manifest_folder_parent(candidates, leaf)
+            if not target and root_path and expected_parent_name == root_title:
+                target = by_path.get(root_path)
+            if not target:
+                raise ValidationError(
+                    f"manifest 声明路由 {path} 的父级为 {expected_parent_name!r}，"
+                    "但 core_menus 中缺少对应无 path 分组行；请先执行应用菜单同步"
+                )
+            if leaf.parent_id == target.id:
+                continue
+            leaf.parent_id = target.id
+            await leaf.save(update_fields=["parent_id", "updated_at"])
+            fixed += 1
+        if fixed:
+            from loguru import logger
+
+            logger.info(
+                "menu_leaf_parent_realign tenant={} app={} fixed={}",
+                tenant_id,
+                application_uuid,
+                fixed,
+            )
+        return fixed
+
+    @staticmethod
+    async def _ensure_manifest_intermediate_folders(
+        tenant_id: int,
+        application_uuid: str,
+        menu_config: Any,
+        *,
+        is_active: bool = True,
+    ) -> int:
+        """
+        按 manifest 补齐无 path 的中间分组行（parent_id + group meta），避免叶子直接挂在文件夹下平铺。
+        """
+        if not menu_config:
+            return 0
+
+        rows = await Menu.filter(
+            tenant_id=tenant_id,
+            application_uuid=str(application_uuid),
+            deleted_at__isnull=True,
+        ).all()
+        by_path: Dict[str, Menu] = {
+            str(m.path).strip(): m for m in rows if m.path and str(m.path).strip()
+        }
+        by_parent_name: Dict[Tuple[Optional[int], str], Menu] = {}
+        for menu in rows:
+            if menu.name:
+                by_parent_name.setdefault((menu.parent_id, menu.name), menu)
+
+        ensured = 0
+
+        async def ensure_folder(
+            node: Dict[str, Any],
+            parent_id: Optional[int],
+        ) -> Optional[int]:
+            nonlocal ensured
+            title = str(node.get("title") or "").strip()
+            path_raw = node.get("path")
+            path = str(path_raw).strip() if path_raw else ""
+            children = node.get("children") if isinstance(node.get("children"), list) else []
+            has_children = len(children) > 0
+
+            if path:
+                existing = by_path.get(path)
+                return existing.id if existing else None
+
+            if not title or not has_children:
+                return parent_id
+
+            meta = MenuService._merge_manifest_folder_meta(
+                title,
+                node.get("meta") if isinstance(node.get("meta"), dict) else None,
+                has_children=True,
+                menu_path=None,
+            )
+            folder = by_parent_name.get((parent_id, title))
+            if folder is None:
+                folder = await Menu.create(
+                    tenant_id=tenant_id,
+                    name=title,
+                    path=None,
+                    icon=node.get("icon"),
+                    component=node.get("component"),
+                    permission_code=None,
+                    application_uuid=str(application_uuid),
+                    parent_id=parent_id,
+                    sort_order=0,
+                    is_active=is_active,
+                    is_external=bool(node.get("is_external", False)),
+                    external_url=node.get("external_url"),
+                    meta=meta,
+                )
+                rows.append(folder)
+                ensured += 1
+            else:
+                folder.icon = node.get("icon") or folder.icon
+                folder.meta = merge_menu_meta_for_sync(folder.meta, meta)
+                if not (folder.meta or {}).get(META_TENANT_PARENT_OVERRIDE):
+                    folder.parent_id = parent_id
+                await folder.save()
+            by_parent_name[(folder.parent_id, title)] = folder
+
+            for child in children:
+                if isinstance(child, dict):
+                    await ensure_folder(child, folder.id)
+            return folder.id
+
+        async def walk_config(config: Any) -> None:
+            if isinstance(config, dict):
+                root_path = str(config.get("path") or "").strip()
+                root_id: Optional[int] = None
+                if root_path:
+                    root_row = by_path.get(root_path)
+                    root_id = root_row.id if root_row else None
+                for child in config.get("children") or []:
+                    if isinstance(child, dict):
+                        await ensure_folder(child, root_id)
+            elif isinstance(config, list):
+                for item in config:
+                    if isinstance(item, dict):
+                        await ensure_folder(item, None)
+
+        await walk_config(menu_config)
+        if ensured:
+            from loguru import logger
+
+            logger.info(
+                "menu_folder_ensure tenant={} app={} created={}",
+                tenant_id,
+                application_uuid,
+                ensured,
+            )
+        return ensured
 
     @staticmethod
     def _should_repair_orphaned_manifest_parent(
@@ -1057,7 +1294,49 @@ class MenuService:
             root_menus.append(menu_response)
         elif str(menu.uuid) == parent_uuid:
             root_menus.append(menu_response)
-    
+
+    @staticmethod
+    def _exclude_taken_over_source_menus(
+        menus: List[Menu],
+        visible_apps: List[Dict[str, Any]],
+    ) -> List[Menu]:
+        """侧栏隐藏已被启用 consumer 接管的 source 菜单。只读库内启用状态与接管规则，不写 is_active。"""
+        from core.config.menu_takeover import MENU_TAKEOVER_RULES, path_matches_takeover_prefix
+
+        active_codes = {str(a.get("code") or "").strip() for a in visible_apps}
+        rules = [
+            rule
+            for rule in MENU_TAKEOVER_RULES.values()
+            if rule.consumer_app_code in active_codes
+        ]
+        if not rules:
+            return menus
+        code_by_uuid = {
+            str(a.get("uuid")): str(a.get("code") or "").strip()
+            for a in visible_apps
+            if a.get("uuid")
+        }
+        hidden: set[int] = set()
+        for menu in menus:
+            app_code = code_by_uuid.get(str(menu.application_uuid or ""))
+            if not app_code:
+                continue
+            for rule in rules:
+                if rule.source_app_code == app_code and path_matches_takeover_prefix(menu.path, rule):
+                    hidden.add(menu.id)
+                    break
+        changed = True
+        while changed:
+            changed = False
+            for menu in menus:
+                if menu.id in hidden or menu.parent_id not in hidden:
+                    continue
+                hidden.add(menu.id)
+                changed = True
+        if not hidden:
+            return menus
+        return [menu for menu in menus if menu.id not in hidden]
+
     @staticmethod
     async def get_menu_tree(
         tenant_id: int,
@@ -1087,27 +1366,18 @@ class MenuService:
         # 生成缓存键（基于查询参数）
         # v8：树构建不再在 SQL 层按 is_active 截断，避免禁用项失去父级导致层级错乱；
         #     过滤在完整树成型后执行（菜单管理保留祖先链，侧栏导航严格启用）。
+        # v9：侧栏不再按本节点 manifest 指纹分缓存，也不在读路径写接管。
         suffix = f"_{cache_key_suffix}" if cache_key_suffix else ""
-        manifest_fp = MenuService._get_manifest_fingerprint()
         overlay_tag = "o1" if overlay_manifest_sort else "o0"
         cache_key_value = (
             f"p{parent_uuid or 'root'}_a{application_uuid or 'all'}"
-            f"_i{is_active if is_active is not None else 'all'}_v8{suffix}_m{manifest_fp}_{overlay_tag}"
+            f"_i{is_active if is_active is not None else 'all'}_v9{suffix}_{overlay_tag}"
         )
         cache_key = MenuService._get_cache_key(tenant_id, "tree", cache_key_value)
 
-        if cache_key_suffix == NAV_TREE_CACHE_SUFFIX:
-            from core.services.system.menu_takeover_service import MenuTakeoverService
-
-            await MenuTakeoverService.reconcile_takeovers_for_tenant(tenant_id)
-        
         # 尝试从缓存获取（命中直出）。
-        # 缓存写入的就是已做孤儿过滤 + manifest 排序的成品树（见下方构建逻辑），
-        # 且所有改变菜单可见性/顺序的操作都会失效缓存：
-        #   - 应用 安装/卸载/启用/禁用、专用应用 绑定/解绑 → _clear_menu_cache
-        #   - manifest 同步扫描、菜单 CRUD → _clear_menu_cache
-        #   - manifest 内容变更（部署）→ 缓存键中的 manifest 指纹变化
-        # 因此命中后无需再查已安装应用做孤儿过滤、也无需重读 manifest 重排。
+        # 缓存写入的就是已做孤儿过滤 + 接管隐藏 + manifest 排序的成品树（见下方构建逻辑）。
+        # 改变菜单可见性的写操作会失效缓存：应用安装/卸载/启用/禁用、菜单同步与 CRUD。
         if use_cache:
             try:
                 cached = await cache_manager.get("menu", cache_key)
@@ -1142,20 +1412,17 @@ class MenuService:
         all_menus_raw = await query.order_by("sort_order", "created_at").all()
         menu_by_id_full = {menu.id: menu for menu in all_menus_raw}
 
-        # 过滤孤儿菜单：application_uuid 对应的应用已卸载/禁用/软删除/占位时不显示；
-        # 且须在本节点已部署 manifest（PRO 未 compose 时不得进入 navigation-tree）。
-        # 说明：平台/系统菜单（application_uuid 为 NULL）照常保留。
+        # 过滤孤儿菜单：只认库内已安装且启用的应用。节点磁盘不得再决定侧栏可见范围。
+        # 平台/系统菜单（application_uuid 为 NULL）照常保留。
         all_menus = list(all_menus_raw)
         visible_apps = await ApplicationService.get_installed_applications(tenant_id=tenant_id)
-        visible_app_uuids = {
-            str(a["uuid"])
-            for a in visible_apps
-            if ApplicationService.is_manifest_deployed_on_node(str(a.get("code") or "").strip())
-        }
+        visible_app_uuids = {str(a["uuid"]) for a in visible_apps}
         all_menus = [
             m for m in all_menus
             if (not m.application_uuid) or (str(m.application_uuid) in visible_app_uuids)
         ]
+        if cache_key_suffix == NAV_TREE_CACHE_SUFFIX:
+            all_menus = MenuService._exclude_taken_over_source_menus(all_menus, visible_apps)
         
         # 构建菜单映射
         menu_map: Dict[int, MenuTreeResponse] = {}
@@ -1638,6 +1905,50 @@ class MenuService:
         return updated
 
     @staticmethod
+    async def _sync_peer_consumer_menus_from_manifest(
+        tenant_id: int,
+        synced_source_app_code: str,
+    ) -> None:
+        """
+        快制造财务管理菜单变更时，同步刷新快财务 core_menus（接管同路径，分组结构须一致）。
+        """
+        from loguru import logger
+
+        peer_code = _MENU_PEER_SYNC_AFTER_SOURCE.get(str(synced_source_app_code or "").strip())
+        if not peer_code:
+            return
+        from core.services.system.menu_takeover_service import MenuTakeoverService
+
+        if not await MenuTakeoverService.is_consumer_effective(tenant_id, peer_code):
+            return
+        manifest = ApplicationService._get_manifest_by_code(peer_code)
+        if not manifest:
+            return
+        menu_config = manifest.get("menu_config")
+        if not menu_config:
+            return
+        peer_app = await ApplicationService.get_application_by_code(tenant_id, peer_code)
+        if not peer_app or not peer_app.get("uuid"):
+            return
+        logger.info(
+            "peer_menu_sync tenant={} source={} peer={}",
+            tenant_id,
+            synced_source_app_code,
+            peer_code,
+        )
+        await MenuService.sync_menus_from_application_config(
+            tenant_id=tenant_id,
+            application_uuid=str(peer_app["uuid"]),
+            menu_config=menu_config,
+            is_active=bool(peer_app.get("is_active", True)),
+            skip_permission_sync=True,
+            defer_cache_clear=True,
+            defer_menu_takeover=True,
+        )
+        await MenuTakeoverService.reapply_after_source_menu_sync(tenant_id, peer_code)
+        await MenuTakeoverService.reapply_industry_pack_after_host_menu_sync(tenant_id, peer_code)
+
+    @staticmethod
     async def sync_menus_from_application_config(
         tenant_id: int,
         application_uuid: str,
@@ -1671,7 +1982,13 @@ class MenuService:
             int: 同步的菜单数量
         """
         from loguru import logger
-        
+
+        # 唯一源：本节点后端 manifest；有包则回写库内 menu_config，禁止用过期 jsonb 写侧栏树
+        menu_config = await ApplicationService.bind_menu_config_to_disk_manifest(
+            tenant_id,
+            str(application_uuid),
+            menu_config,
+        )
         if not menu_config:
             logger.info(f"应用 {application_uuid} 没有菜单配置，跳过同步")
             return 0
@@ -1756,6 +2073,12 @@ class MenuService:
             menu_meta = menu_item.get("meta")
             children = menu_item.get("children", [])
             has_children = isinstance(children, list) and len(children) > 0
+            menu_meta = MenuService._merge_manifest_folder_meta(
+                menu_name,
+                menu_meta,
+                has_children=has_children,
+                menu_path=menu_path,
+            )
             is_clickable_leaf = bool(menu_path and str(menu_path).strip()) and (not menu_is_external) and (not has_children)
             if is_clickable_leaf and not menu_permission_code:
                 raise ValidationError(
@@ -1898,6 +2221,16 @@ class MenuService:
             f"应用 {application_uuid} 菜单配置同步完成，处理 {synced_count} 个菜单（新建 {created_count} 个）"
         )
 
+        await MenuService._ensure_manifest_intermediate_folders(
+            tenant_id,
+            application_uuid,
+            menu_config,
+            is_active=is_active,
+        )
+        await MenuService._realign_application_menu_leaf_parents(
+            tenant_id, application_uuid, menu_config
+        )
+
         # 菜单同步后，清除相关缓存，确保前端能立即获取最新菜单
         if not defer_cache_clear:
             try:
@@ -1909,11 +2242,20 @@ class MenuService:
                 from loguru import logger
                 logger.warning(f"清除菜单缓存失败: {e}")
 
-        # 菜单同步后强制同步权限到 core_permissions，保证角色权限页「全部权限」含应用级菜单权限
+        # 菜单同步后按应用增量写入 core_permissions（禁止 force 全量，避免启用/开关应用卡顿）
         if not skip_permission_sync:
             try:
                 from core.services.authorization.permission_sync_service import PermissionSyncService
-                await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=True)
+
+                sync_app_code = str((app or {}).get("code") or "").strip()
+                if sync_app_code:
+                    await PermissionSyncService.ensure_app_permissions(
+                        tenant_id=tenant_id, app_code=sync_app_code
+                    )
+                else:
+                    await PermissionSyncService.ensure_permissions(
+                        tenant_id=tenant_id, force=False
+                    )
             except Exception as e:
                 logger.warning(f"菜单同步后权限同步失败: {e}")
 
@@ -1925,6 +2267,7 @@ class MenuService:
             await MenuTakeoverService.reapply_industry_pack_after_host_menu_sync(
                 tenant_id, app_code
             )
+            await MenuService._sync_peer_consumer_menus_from_manifest(tenant_id, app_code)
 
         return synced_count
 
@@ -1990,6 +2333,8 @@ class MenuService:
             if is_industry_pack_shell_code(app_code):
                 industry_module_seen = True
                 continue
+            if app_code and not ApplicationService.is_manifest_deployed_on_node(app_code):
+                continue
 
             manifest = manifest_by_code.get(app_code) if app_code else None
             manifest_menu = (
@@ -2005,17 +2350,23 @@ class MenuService:
                     try:
                         from infra.infrastructure.database.database import get_db_connection
 
+                        disk_version = str((manifest or {}).get("version") or "").strip()
+                        if not disk_version:
+                            raise ValidationError(
+                                f"应用 {app_code} 的 manifest 缺少 version，不能回写菜单"
+                            )
                         conn = await get_db_connection()
                         try:
                             await conn.execute(
                                 """
                                 UPDATE core_applications
-                                SET menu_config = $3::jsonb, updated_at = NOW()
+                                SET menu_config = $3::jsonb, version = $4, updated_at = NOW()
                                 WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
                                 """,
                                 tenant_id,
                                 str(app_uuid),
                                 json.dumps(manifest_menu, ensure_ascii=False),
+                                disk_version,
                             )
                         finally:
                             await conn.close()
@@ -2080,6 +2431,10 @@ class MenuService:
             await MenuTakeoverService.finalize_dedicated_shell_menus_after_batch_sync(
                 tenant_id
             )
+            if "kuaizhizao" in synced_app_codes:
+                await MenuService._sync_peer_consumer_menus_from_manifest(
+                    tenant_id, "kuaizhizao"
+                )
         if total > 0 or synced_app_codes:
             await MenuService._clear_menu_cache(tenant_id)
             logger.info(f"租户 {tenant_id} 菜单同步完成，共 {total} 个菜单")

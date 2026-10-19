@@ -861,13 +861,13 @@ async def _load_freight_bill(tenant_id: int, entity_id: int) -> Any:
 
 
 async def _load_other_income(tenant_id: int, entity_id: int) -> Any:
-    from apps.kuaicaiwu.services.other_income_service import OtherIncomeService
+    from apps.kuaizhizao.services.other_income_service import OtherIncomeService
 
     return await OtherIncomeService().get_by_id(tenant_id, entity_id)
 
 
 async def _load_other_expense(tenant_id: int, entity_id: int) -> Any:
-    from apps.kuaicaiwu.services.other_expense_service import OtherExpenseService
+    from apps.kuaizhizao.services.other_expense_service import OtherExpenseService
 
     return await OtherExpenseService().get_by_id(tenant_id, entity_id)
 

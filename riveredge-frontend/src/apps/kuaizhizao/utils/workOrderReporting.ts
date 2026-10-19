@@ -2,6 +2,16 @@
  * 报工数量上限：区分「计划可报（合计）」与「物料可报（在制）」，取较小值为本次可报上限。
  */
 
+import { getCachedNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
+
+/** 按配置中心数量小数位收口，避免工序数量相减/累加留下二进制尾数。 */
+function quantizeBusinessQuantity(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const places = getCachedNumericPrecisionPlaces('quantity');
+  const factor = 10 ** places;
+  return Math.round(value * factor) / factor;
+}
+
 /** percent 模式：超报值为百分数 0–100（误填如 10000 时按 100 处理） */
 function clampOverReportValue(mode: string, val: number): number {
   if (mode === 'percent') {
@@ -351,13 +361,15 @@ export function getOperationMaterialLoss(operation: any): number {
   const completed = Number(operation?.completed_quantity ?? operation?.completedQuantity ?? 0) || 0;
   const qualified = Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
   const inferred = Math.max(0, completed - qualified);
-  return Math.max(uq + scrap, inferred);
+  return quantizeBusinessQuantity(Math.max(uq + scrap, inferred));
 }
 
 /** 工单各工序累计料损 */
 export function getWorkOrderMaterialLossTotal(operations: any[] | undefined | null): number {
   if (!operations?.length) return 0;
-  return operations.reduce((sum, op) => sum + getOperationMaterialLoss(op), 0);
+  return quantizeBusinessQuantity(
+    operations.reduce((sum, op) => sum + getOperationMaterialLoss(op), 0),
+  );
 }
 
 function pickLastWorkOrderOperation(operations: any[]): any | null {

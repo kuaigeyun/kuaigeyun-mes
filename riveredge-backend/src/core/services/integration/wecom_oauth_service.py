@@ -20,13 +20,16 @@ from infra.infrastructure.http.client import get_http_client
 from infra.models.user import User
 
 
-def _extract_wecom_user_id(user: User) -> str | None:
+def extract_wecom_user_id(user: User) -> str | None:
     contact = user.contact_info if isinstance(user.contact_info, dict) else {}
     for key in ("wecom_userid", "wecom_user_id", "wx_work_userid"):
         value = contact.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
     return None
+
+
+_extract_wecom_user_id = extract_wecom_user_id
 
 
 def encode_wecom_oauth_state(*, tenant_id: int, redirect: str | None = None) -> str:

@@ -3,7 +3,7 @@
 import json
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -209,5 +209,64 @@ class PartnerPriceResolveResponse(BaseModel):
 
 class PartnerPriceResolveBatchResponse(BaseModel):
     items: List[PartnerPriceResolveResponse]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PartnerPriceBookBulkLine(BaseModel):
+    material_id: int = Field(..., alias="materialId")
+    unit_price: Decimal = Field(..., alias="unitPrice", gt=0)
+    unit: Optional[str] = Field(None, description="计价单位，空则取物料主单位")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PartnerPriceBookBulkCreate(BaseModel):
+    partner_ids: List[int] = Field(..., alias="partnerIds", min_length=1)
+    lines: List[PartnerPriceBookBulkLine] = Field(..., min_length=1)
+    price_type: Optional[str] = Field(
+        "tax_inclusive",
+        alias="priceType",
+        description="价类：tax_inclusive 含税 / tax_exclusive 不含税",
+    )
+    tax_rate: Optional[Decimal] = Field(None, alias="taxRate")
+    effective_from: Optional[date] = Field(None, alias="effectiveFrom")
+    effective_to: Optional[date] = Field(None, alias="effectiveTo")
+    remark: Optional[str] = None
+    is_active: Optional[bool] = Field(True, alias="isActive")
+    conflict_policy: Optional[Literal["skip", "overwrite"]] = Field(
+        None,
+        alias="conflictPolicy",
+        description="空=仅预检；skip=跳过冲突；overwrite=覆盖标准价",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def validate_bulk(self):
+        if self.effective_from and self.effective_to and self.effective_from > self.effective_to:
+            raise ValueError("生效起始日不能晚于截止日")
+        material_ids = [line.material_id for line in self.lines]
+        if len(material_ids) != len(set(material_ids)):
+            raise ValueError("明细物料不能重复")
+        return self
+
+
+class PartnerPriceBookBulkConflictItem(BaseModel):
+    partner_id: int = Field(..., alias="partnerId")
+    partner_code: Optional[str] = Field(None, alias="partnerCode")
+    partner_name: Optional[str] = Field(None, alias="partnerName")
+    material_id: int = Field(..., alias="materialId")
+    material_code: Optional[str] = Field(None, alias="materialCode")
+    material_name: Optional[str] = Field(None, alias="materialName")
+    existing_uuid: str = Field(..., alias="existingUuid")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PartnerPriceBookBulkResponse(BaseModel):
+    created_count: int = Field(0, alias="createdCount")
+    skipped_count: int = Field(0, alias="skippedCount")
+    overwritten_count: int = Field(0, alias="overwrittenCount")
 
     model_config = ConfigDict(populate_by_name=True)

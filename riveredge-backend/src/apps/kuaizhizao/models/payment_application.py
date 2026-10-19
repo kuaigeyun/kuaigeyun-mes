@@ -50,7 +50,16 @@ class PaymentApplication(BaseModel):
     supplier_bank_name = fields.CharField(max_length=200, null=True, description="收款开户行")
     supplier_bank_account = fields.CharField(max_length=64, null=True, description="收款账号")
 
+    payment_reason = fields.TextField(null=True, description="付款事由")
+    payment_method = fields.CharField(max_length=50, null=True, description="付款方式")
+    invoice_status = fields.CharField(max_length=50, null=True, description="发票情况")
+    payment_terms = fields.CharField(max_length=200, null=True, description="付款条件")
+
     notes = fields.TextField(null=True, description="备注")
+    require_payment_voucher = fields.BooleanField(
+        default=False,
+        description="是否要求后续付款单上传付款凭证",
+    )
     attachments = fields.JSONField(null=True, description="附件")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

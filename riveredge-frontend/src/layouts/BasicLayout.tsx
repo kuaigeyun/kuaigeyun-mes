@@ -829,6 +829,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [collapsed, setCollapsed] = useState<boolean>(false);
 
   useEffect(() => {
+    void import('../utils/sessionCurrentUser').then(({ getSessionCurrentUser }) => {
+      const user = getSessionCurrentUser();
+      if (!user?.requires_password_change) return;
+      if (location.pathname.startsWith('/personal/profile')) return;
+      navigate('/personal/profile?forcePasswordChange=1', { replace: true });
+    });
+  }, [location.pathname, navigate]);
+
+  useEffect(() => {
     if (sidebarCollapsedPref !== undefined) {
       setCollapsed(Boolean(sidebarCollapsedPref));
     }
@@ -1204,6 +1213,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       if (meta.type === 'group') menuItem.type = 'group';
       if (meta.className) menuItem.className = meta.className;
       if (meta.hideInMenu === true) menuItem.hideInMenu = true;
+    }
+    if (
+      isAppMenu &&
+      !menu.path &&
+      menu.children?.length &&
+      typeof menuNameKey === 'string' &&
+      menuNameKey.includes('.menu.group.')
+    ) {
+      menuItem.type = 'group';
+      menuItem.className = menuItem.className ?? 'riveredge-menu-group-title';
     }
 
     return menuItem;

@@ -36,10 +36,18 @@ def gate_audit_allowed_actions(
     if not allowed or capabilities is None:
         return audit
 
+    phase = str(audit.get("phase") or "")
     gated: list[str] = []
     for action in allowed:
         cap_key = _AUDIT_ACTION_CAPABILITY_KEYS.get(action)
-        if cap_key is None or _capability_allowed(capabilities, cap_key):
+        if cap_key is None:
+            gated.append(action)
+            continue
+        # 审核相位已驳回时仍须保留重新提交（capabilities 可能仍按草稿门禁）
+        if phase == "rejected" and action == "submit":
+            gated.append(action)
+            continue
+        if _capability_allowed(capabilities, cap_key):
             gated.append(action)
 
     return {**audit, "allowed_actions": gated}

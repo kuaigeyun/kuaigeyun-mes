@@ -136,9 +136,9 @@ export function resolveDetailTimeFieldHiddenMap(
 
 /** 配置中心数值精度上限（与 configTree / 后端 parameters.common.* 校验 max 同源） */
 export const NUMERIC_PRECISION_STORAGE_CEILING = {
-  quantity: 4,
-  price: 4,
-  amount: 4,
+  quantity: 6,
+  price: 6,
+  amount: 6,
 } as const;
 
 export type NumericPrecisionKind = keyof typeof NUMERIC_PRECISION_STORAGE_CEILING;

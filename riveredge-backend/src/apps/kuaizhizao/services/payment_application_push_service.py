@@ -74,7 +74,11 @@ class PaymentApplicationPushService:
         from apps.kuaicaiwu.services.finance_voucher_codes import allocate_payment_code
         from apps.kuaicaiwu.services.bank_account_service import BankAccountService
 
-        payment_method = data.payment_method or "银行转账"
+        payment_method = (
+            data.payment_method
+            or getattr(app, "payment_method", None)
+            or "银行转账"
+        )
         await BankAccountService().validate_voucher_account(
             tenant_id,
             payment_method=payment_method,
@@ -100,6 +104,7 @@ class PaymentApplicationPushService:
                 "settlement_type": settlement_type,
                 "status": "Draft",
                 "notes": notes,
+                "require_payment_voucher": bool(getattr(app, "require_payment_voucher", False)),
             }
             apply_create_audit(payload, current_user)
             payment = await Payment.create(**payload)

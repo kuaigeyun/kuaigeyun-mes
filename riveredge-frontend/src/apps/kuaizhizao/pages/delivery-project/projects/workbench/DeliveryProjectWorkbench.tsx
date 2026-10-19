@@ -19,6 +19,7 @@ import {
   Select,
   Space,
   Spin,
+  Segmented,
   Tabs,
   Timeline,
   Typography,
@@ -26,8 +27,17 @@ import {
   Row,
   Col,
   theme,
+  Tooltip,
 } from 'antd';
-import { BugOutlined, FileTextOutlined, LinkOutlined, PaperClipOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  BugOutlined,
+  FileTextOutlined,
+  LinkOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  PaperClipOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { ProFormInstance } from '@ant-design/pro-components';
@@ -91,8 +101,11 @@ import {
 import { UniUserSelect } from '../../../../../../components/uni-user-select';
 import DeliveryProjectNodeStepper from '../../components/DeliveryProjectNodeStepper';
 import DeliveryNodeTaskOperateModal from '../../components/DeliveryNodeTaskOperateModal';
-import DeliveryTaskScheduleBars from '../../components/DeliveryTaskScheduleBars';
 import DeliveryNodeDocumentLinkModal from '../../components/DeliveryNodeDocumentLinkModal';
+import DeliveryProjectGanttChart, {
+  type DeliveryGanttViewMode,
+  type DeliveryProjectGanttItem,
+} from '../../components/DeliveryProjectGanttChart';
 import DeliveryNodeReportDetailDrawer from '../../node-reports/components/DeliveryNodeReportDetailDrawer';
 import DeliveryIssueDetailDrawer from '../../issues/components/DeliveryIssueDetailDrawer';
 import { buildLinkedDocumentColumns } from '../../shared/deliveryLinkedDocumentPresentation';
@@ -116,6 +129,16 @@ const PLACEHOLDER: DeliveryProject = {
 const RESOURCE = 'kuaizhizao:delivery-project';
 const REPORT_RESOURCE = 'kuaizhizao:delivery-node-report';
 const ISSUE_RESOURCE = 'kuaizhizao:delivery-issue';
+const RIGHT_PANEL_COLLAPSED_STORAGE_KEY =
+  'kuaizhizao.delivery-project.workbench.rightPanelCollapsed';
+
+function readRightPanelCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(RIGHT_PANEL_COLLAPSED_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 export const DeliveryProjectWorkbench: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -229,9 +252,32 @@ export const DeliveryProjectWorkbench: React.FC = () => {
   const [sidelines, setSidelines] = useState<DeliveryProject[]>([]);
   const [sidelineModalOpen, setSidelineModalOpen] = useState(false);
   const [sidelineForm] = Form.useForm();
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(readRightPanelCollapsed);
+  const [ganttViewMode, setGanttViewMode] = useState<DeliveryGanttViewMode>('week');
   const editFormRef = useRef<ProFormInstance>();
   const selectedOwnerRef = useRef<number | undefined>();
   const selectedMembersRef = useRef<DeliveryMember[]>([]);
+
+  const ganttViewOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.deliveryProject.gantt.viewDay'), value: 'day' as const },
+      { label: t('app.kuaizhizao.deliveryProject.gantt.viewWeek'), value: 'week' as const },
+      { label: t('app.kuaizhizao.deliveryProject.gantt.viewMonth'), value: 'month' as const },
+    ],
+    [t],
+  );
+
+  const toggleRightPanelCollapsed = useCallback(() => {
+    setRightPanelCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(RIGHT_PANEL_COLLAPSED_STORAGE_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore quota / private mode */
+      }
+      return next;
+    });
+  }, []);
 
   const load = useCallback(async () => {
     if (!projectId || Number.isNaN(projectId)) return;
@@ -842,6 +888,29 @@ export const DeliveryProjectWorkbench: React.FC = () => {
     [effective.nodes],
   );
 
+  const projectGanttItems = useMemo((): DeliveryProjectGanttItem[] => {
+    if (!effective.id || nodes.length === 0) return [];
+    return nodes.map((node) => ({
+      id: node.id,
+      project_id: effective.id,
+      node_id: node.id,
+      project_code: effective.project_code,
+      project_name: effective.project_name,
+      node_name: node.node_name,
+      customer_name: effective.customer_name,
+      node_status: node.status,
+      planned_start_date: node.planned_start_date,
+      planned_end_date: node.planned_end_date,
+      progress: node.progress_percent,
+    }));
+  }, [
+    effective.customer_name,
+    effective.id,
+    effective.project_code,
+    effective.project_name,
+    nodes,
+  ]);
+
   useEffect(() => {
     if (nodes.length === 0) return;
     if (activeNodeKey && nodes.some((n) => n.node_key === activeNodeKey)) return;
@@ -1232,29 +1301,22 @@ export const DeliveryProjectWorkbench: React.FC = () => {
                         </Button>
                       ) : null}
                     </Space>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <DeliveryWorkbenchTable
-                          rowKey="id"
-                          size="small"
-                          className="delivery-project-workbench-node-table"
-                          pagination={false}
-                          locale={{ emptyText: t('app.kuaizhizao.deliveryProject.noNodeTasks') }}
-                          dataSource={children}
-                          columns={buildWorkbenchNodeTaskColumns({
-                            t,
-                            canUpdate,
-                            canParticipantAct,
-                            onEdit: (task) => void openTaskModal(node, task),
-                            onOperate: openTaskOperateModal,
-                            onDelete: (task) => void confirmDeleteNodeTask(task),
-                          })}
-                        />
-                      </div>
-                      <div style={{ width: 280, flex: '0 0 280px' }}>
-                        <DeliveryTaskScheduleBars tasks={children} />
-                      </div>
-                    </div>
+                    <DeliveryWorkbenchTable
+                      rowKey="id"
+                      size="small"
+                      className="delivery-project-workbench-node-table"
+                      pagination={false}
+                      locale={{ emptyText: t('app.kuaizhizao.deliveryProject.noNodeTasks') }}
+                      dataSource={children}
+                      columns={buildWorkbenchNodeTaskColumns({
+                        t,
+                        canUpdate,
+                        canParticipantAct,
+                        onEdit: (task) => void openTaskModal(node, task),
+                        onOperate: openTaskOperateModal,
+                        onDelete: (task) => void confirmDeleteNodeTask(task),
+                      })}
+                    />
                   </div>
                 );
               })}
@@ -1481,133 +1543,198 @@ export const DeliveryProjectWorkbench: React.FC = () => {
           </Row>
         </Card>
 
-        <Row gutter={[16, 16]}>
-          <Col xs={24} lg={16}>
+        <div className="delivery-project-workbench-split">
+          <div className="delivery-project-workbench-main">
             {nodes.length > 0 ? (
-              <Card size="small" styles={{ body: { paddingTop: 12 } }}>
-                <DeliveryProjectNodeStepper
-                  nodes={nodes}
-                  activeNodeKey={activeNodeKey}
-                  onChange={setActiveNodeKey}
-                />
-                <div className="delivery-project-node-panel" style={{ marginTop: 16 }}>
+              <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+                <Card size="small" styles={{ body: { paddingTop: 12 } }}>
+                  <DeliveryProjectNodeStepper
+                    nodes={nodes}
+                    activeNodeKey={activeNodeKey}
+                    onChange={setActiveNodeKey}
+                  />
+                </Card>
+                <Card
+                  size="small"
+                  title={t('app.kuaizhizao.deliveryProject.workbench.projectGanttTitle')}
+                  extra={
+                    <Segmented
+                      size="small"
+                      value={ganttViewMode}
+                      options={ganttViewOptions}
+                      onChange={(value) => setGanttViewMode(value as DeliveryGanttViewMode)}
+                    />
+                  }
+                >
+                  <DeliveryProjectGanttChart
+                    items={projectGanttItems}
+                    viewMode={ganttViewMode}
+                    defaultExpanded
+                  />
+                </Card>
+                <div className="delivery-project-node-panel">
                   {activeNode ? renderNodePanel(activeNode) : null}
                 </div>
-              </Card>
+              </Space>
             ) : (
               <Card>
                 <Empty description={t('app.kuaizhizao.deliveryProject.workbench.empty.nodes')} />
               </Card>
             )}
-          </Col>
+          </div>
 
-          <Col xs={24} lg={8}>
-            <Card
-              size="small"
-              title={t('app.kuaizhizao.deliveryProject.workbench.tabs.related')}
-              style={{ marginBottom: 16 }}
-            >
-              {relatedPanel}
-            </Card>
+          {rightPanelCollapsed ? (
+            <div className="delivery-project-workbench-side-rail">
+              <Tooltip
+                title={t('app.kuaizhizao.deliveryProject.workbench.expandRightPanel')}
+                placement="left"
+              >
+                <Button
+                  type="text"
+                  className="delivery-project-workbench-side-rail-btn"
+                  icon={<MenuUnfoldOutlined />}
+                  onClick={toggleRightPanelCollapsed}
+                  aria-label={t('app.kuaizhizao.deliveryProject.workbench.expandRightPanel')}
+                />
+              </Tooltip>
+            </div>
+          ) : (
+            <div className="delivery-project-workbench-side">
+              <Card
+                size="small"
+                className="delivery-project-workbench-side-pack"
+                title={t('app.kuaizhizao.deliveryProject.workbench.sidePanelTitle')}
+                extra={
+                  <Tooltip title={t('app.kuaizhizao.deliveryProject.workbench.collapseRightPanel')}>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<MenuFoldOutlined />}
+                      onClick={toggleRightPanelCollapsed}
+                      aria-label={t('app.kuaizhizao.deliveryProject.workbench.collapseRightPanel')}
+                    />
+                  </Tooltip>
+                }
+              >
+                <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+                  <div>
+                    <Typography.Text className="delivery-project-workbench-side-section-title">
+                      {t('app.kuaizhizao.deliveryProject.workbench.tabs.related')}
+                    </Typography.Text>
+                    {relatedPanel}
+                  </div>
 
-            <Card
-              size="small"
-              title={t('app.kuaizhizao.deliveryProject.workbench.section.collaboration')}
-              style={{ marginBottom: 16 }}
-            >
-              <Row gutter={[8, 8]}>
-                {collabShortcuts.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <Col span={8} key={item.key}>
-                      <Card
-                        hoverable
-                        size="small"
-                        onClick={item.onClick}
-                        styles={{
-                          body: {
-                            padding: '10px 6px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 4,
-                          },
-                        }}
-                        style={{ borderRadius: token.borderRadius }}
-                      >
-                        <div
-                          style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: token.borderRadius,
-                            background: token.colorPrimaryBg,
-                            border: `1px solid ${token.colorPrimaryBorder}`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
+                  <div>
+                    <Typography.Text className="delivery-project-workbench-side-section-title">
+                      {t('app.kuaizhizao.deliveryProject.workbench.section.collaboration')}
+                    </Typography.Text>
+                    <Row gutter={[8, 8]}>
+                      {collabShortcuts.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <Col span={8} key={item.key}>
+                            <Card
+                              hoverable
+                              size="small"
+                              onClick={item.onClick}
+                              styles={{
+                                body: {
+                                  padding: '10px 6px',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                },
+                              }}
+                              style={{ borderRadius: token.borderRadius }}
+                            >
+                              <div
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: token.borderRadius,
+                                  background: token.colorPrimaryBg,
+                                  border: `1px solid ${token.colorPrimaryBorder}`,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Icon style={{ fontSize: 18, color: token.colorPrimary }} />
+                              </div>
+                              <Typography.Text
+                                style={{ fontSize: 12, textAlign: 'center', lineHeight: 1.3 }}
+                              >
+                                {item.title}
+                              </Typography.Text>
+                              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                                {item.count}
+                              </Typography.Text>
+                            </Card>
+                          </Col>
+                        );
+                      })}
+                    </Row>
+                  </div>
+
+                  <div>
+                    <div className="delivery-project-workbench-side-section-head">
+                      <Typography.Text className="delivery-project-workbench-side-section-title">
+                        {t('app.kuaizhizao.deliveryProject.recentReports')}
+                      </Typography.Text>
+                      {canUpdate ? (
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<PlusOutlined />}
+                          onClick={() => openCreateReport(activeNode)}
                         >
-                          <Icon style={{ fontSize: 18, color: token.colorPrimary }} />
-                        </div>
-                        <Typography.Text style={{ fontSize: 12, textAlign: 'center', lineHeight: 1.3 }}>
-                          {item.title}
-                        </Typography.Text>
-                        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                          {item.count}
-                        </Typography.Text>
-                      </Card>
-                    </Col>
-                  );
-                })}
-              </Row>
-            </Card>
+                          {t('app.kuaizhizao.deliveryProject.createReport')}
+                        </Button>
+                      ) : null}
+                    </div>
+                    <DeliveryWorkbenchTable
+                      rowKey="id"
+                      size="small"
+                      className="delivery-project-workbench-side-table"
+                      pagination={false}
+                      dataSource={reports}
+                      locale={{ emptyText: t('app.kuaizhizao.deliveryProject.workbench.collabEmpty') }}
+                      columns={recentReportColumns}
+                    />
+                  </div>
 
-            <Card
-              size="small"
-              title={t('app.kuaizhizao.deliveryProject.recentReports')}
-              extra={
-                canUpdate ? (
-                  <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => openCreateReport(activeNode)}>
-                    {t('app.kuaizhizao.deliveryProject.createReport')}
-                  </Button>
-                ) : null
-              }
-              style={{ marginBottom: 16 }}
-            >
-              <DeliveryWorkbenchTable
-                rowKey="id"
-                size="small"
-                className="delivery-project-workbench-side-table"
-                pagination={false}
-                dataSource={reports}
-                locale={{ emptyText: t('app.kuaizhizao.deliveryProject.workbench.collabEmpty') }}
-                columns={recentReportColumns}
-              />
-            </Card>
-
-            <Card
-              size="small"
-              title={t('app.kuaizhizao.deliveryProject.recentIssues')}
-              extra={
-                canUpdate ? (
-                  <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => openCreateIssue(activeNode)}>
-                    {t('app.kuaizhizao.deliveryProject.createIssue')}
-                  </Button>
-                ) : null
-              }
-            >
-              <DeliveryWorkbenchTable
-                rowKey="id"
-                size="small"
-                className="delivery-project-workbench-side-table"
-                pagination={false}
-                dataSource={issues}
-                locale={{ emptyText: t('app.kuaizhizao.deliveryProject.workbench.collabEmpty') }}
-                columns={recentIssueColumns}
-              />
-            </Card>
-          </Col>
-        </Row>
+                  <div>
+                    <div className="delivery-project-workbench-side-section-head">
+                      <Typography.Text className="delivery-project-workbench-side-section-title">
+                        {t('app.kuaizhizao.deliveryProject.recentIssues')}
+                      </Typography.Text>
+                      {canUpdate ? (
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<PlusOutlined />}
+                          onClick={() => openCreateIssue(activeNode)}
+                        >
+                          {t('app.kuaizhizao.deliveryProject.createIssue')}
+                        </Button>
+                      ) : null}
+                    </div>
+                    <DeliveryWorkbenchTable
+                      rowKey="id"
+                      size="small"
+                      className="delivery-project-workbench-side-table"
+                      pagination={false}
+                      dataSource={issues}
+                      locale={{ emptyText: t('app.kuaizhizao.deliveryProject.workbench.collabEmpty') }}
+                      columns={recentIssueColumns}
+                    />
+                  </div>
+                </Space>
+              </Card>
+            </div>
+          )}
+        </div>
       </Space>
     </ListPageTemplate>
     <Modal

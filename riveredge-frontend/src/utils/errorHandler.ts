@@ -10,6 +10,7 @@
  */
 
 import { getAntdMessage } from './antdAppApis';
+import { isBulkImportErrorToastSuppressed } from './bulkImportErrorSuppress';
 import { isRequestCancellation } from './requestCancellation';
 
 const getMessage = () => getAntdMessage();
@@ -134,6 +135,7 @@ export function handleError(error: any, defaultMessage: string = '操作失败')
   }
 
   const message = getMessage();
+  const suppressToast = isBulkImportErrorToastSuppressed();
   
   // 如果是 ErrorResponse 格式
   if (error?.response?.data) {
@@ -141,33 +143,51 @@ export function handleError(error: any, defaultMessage: string = '操作失败')
     
     // 统一错误格式 { success: false, error: { code, message, details } }
     if (errorData.success === false && errorData.error) {
-      const errorMessage = errorData.error.message || defaultMessage;
-      message.error(errorMessage);
+      const detailMsg =
+        typeof errorData.error.details?.message === 'string'
+          ? errorData.error.details.message
+          : '';
+      const errorMessage =
+        errorData.error.code === 'INTERNAL_SERVER_ERROR' && detailMsg
+          ? detailMsg
+          : errorData.error.message || defaultMessage;
+      if (!suppressToast) {
+        message.error(errorMessage);
+      }
       return errorMessage;
     }
     
     // FastAPI 错误格式 { detail: ... }
     if (errorData.detail) {
       const errorMessage = formatFastApiDetail(errorData.detail) || defaultMessage;
-      message.error(errorMessage);
+      if (!suppressToast) {
+        message.error(errorMessage);
+      }
       return errorMessage;
     }
     
     // 其他格式
     const errorMessage = errorData.message || errorData.error || defaultMessage;
-    message.error(errorMessage);
+    if (!suppressToast) {
+      message.error(errorMessage);
+    }
     return errorMessage;
   }
   
   // 如果是普通 Error 对象
   if (error instanceof Error) {
-    message.error(error.message || defaultMessage);
-    return error.message || defaultMessage;
+    const errorMessage = error.message || defaultMessage;
+    if (!suppressToast) {
+      message.error(errorMessage);
+    }
+    return errorMessage;
   }
   
   // 默认处理
   const errorMessage = typeof error === 'string' ? error : defaultMessage;
-  message.error(errorMessage);
+  if (!suppressToast) {
+    message.error(errorMessage);
+  }
   return errorMessage;
 }
 

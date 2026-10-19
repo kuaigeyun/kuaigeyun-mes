@@ -24,6 +24,8 @@ import json
 from pathlib import Path
 from core.api.deps.deps import get_current_tenant
 from core.api.deps.access import AuthContext, get_auth_context
+from core.services.authorization.access_control_service import AccessControlService
+from core.services.authorization.menu_resource_resolver import parse_permission_code
 from core.utils.timezone_utils import now_utc, to_api_isoformat
 from core.services.application.application_dedicated_binding_service import ApplicationDedicatedBindingService
 from core.schemas.system_parameter import SystemParameterCreate, SystemParameterUpdate
@@ -48,6 +50,73 @@ def _require_tenant_or_platform_admin(auth: AuthContext) -> None:
         )
 
 
+_MENU_SYNC_PERMISSION_CODES = (
+    "system:application:update",
+    "system:menu:update",
+)
+
+_APPLICATION_LIFECYCLE_PERMISSION_CODES = (
+    "system:application:update",
+)
+
+
+async def _actor_can_manage_application_lifecycle(
+    auth: AuthContext,
+    tenant_id: int,
+) -> bool:
+    """平台/组织管理员，或具备应用更新权限的账号，可执行应用中心启停（仍受分类与套餐约束）。"""
+    if auth.is_infra_admin or auth.is_tenant_admin:
+        return True
+    for perm in _APPLICATION_LIFECYCLE_PERMISSION_CODES:
+        parsed = parse_permission_code(perm)
+        if not parsed:
+            continue
+        app_code, module, action = parsed
+        decision = await AccessControlService.check_access(
+            user_id=auth.user_id,
+            tenant_id=tenant_id,
+            resource=f"{app_code}:{module}",
+            action=action,
+            is_infra_admin=auth.is_infra_admin,
+            is_tenant_admin=auth.is_tenant_admin,
+            check_abac=False,
+            required_permissions=[perm],
+        )
+        if decision.allowed:
+            return True
+    return False
+
+
+async def _require_application_menu_sync_access(
+    auth: AuthContext,
+    tenant_id: int,
+) -> None:
+    """菜单同步与安装/专业版授权分离；未 compose 的专业应用由服务层跳过。"""
+    if auth.is_infra_admin or auth.is_tenant_admin:
+        return
+    for perm in _MENU_SYNC_PERMISSION_CODES:
+        parsed = parse_permission_code(perm)
+        if not parsed:
+            continue
+        app_code, module, action = parsed
+        decision = await AccessControlService.check_access(
+            user_id=auth.user_id,
+            tenant_id=tenant_id,
+            resource=f"{app_code}:{module}",
+            action=action,
+            is_infra_admin=auth.is_infra_admin,
+            is_tenant_admin=auth.is_tenant_admin,
+            check_abac=False,
+            required_permissions=[perm],
+        )
+        if decision.allowed:
+            return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="需要组织管理员、平台管理员，或具备应用更新/菜单更新权限方可同步菜单。",
+    )
+
+
 def _require_platform_admin(auth: AuthContext) -> None:
     if not auth.is_infra_admin:
         raise HTTPException(
@@ -61,13 +130,13 @@ async def _require_application_lifecycle_access(
     tenant_id: int,
     application: Dict[str, Any],
 ) -> None:
-    """平台管理员始终允许；组织管理员须具备对应分类自主启停权限且套餐允许。"""
+    """平台管理员始终允许；组织侧须具备生命周期身份 + 分类自主启停权限且套餐允许。"""
     if auth.is_infra_admin:
         return
-    if not auth.is_tenant_admin:
+    if not await _actor_can_manage_application_lifecycle(auth, tenant_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="仅组织管理员或平台管理员可安装、卸载、启用或禁用应用。",
+            detail="仅组织管理员、平台管理员，或具备应用更新权限的账号可安装、卸载、启用或禁用应用。",
         )
     if not await ApplicationCenterPermissionService.can_self_service_toggle_app(
         tenant_id, application
@@ -461,13 +530,17 @@ async def get_application_center_capabilities(
     tenant_id: int = Depends(get_current_tenant),
     auth: AuthContext = Depends(get_auth_context),
 ):
-    """应用中心自主启停能力（组织分类权限 + 套餐 PRO 硬顶）。"""
-    _require_tenant_or_platform_admin(auth)
+    """应用中心自主启停能力（组织分类权限 + 套餐 PRO 硬顶）。
+
+    任意已登录组织用户可读，便于侧栏开关展示禁用原因；真正启停仍走生命周期鉴权。
+    """
     caps = await ApplicationCenterPermissionService.build_center_capabilities(tenant_id)
+    can_manage = await _actor_can_manage_application_lifecycle(auth, tenant_id)
     return {
         **caps,
         "is_infra_admin": bool(auth.is_infra_admin),
         "is_tenant_admin": bool(auth.is_tenant_admin),
+        "can_manage_lifecycle": bool(can_manage),
     }
 
 
@@ -488,7 +561,7 @@ async def get_menu_sync_status(
     租户/平台管理员登录后用于提示是否需要执行「一键同步菜单」。
     必须注册在 /{uuid} 之前，否则 path 会被当成应用 UUID。
     """
-    _require_tenant_or_platform_admin(auth)
+    await _require_application_menu_sync_access(auth, tenant_id)
     return await ApplicationService.get_menu_sync_status(tenant_id)
 
 
@@ -502,7 +575,7 @@ async def sync_all_manifests_and_menus(
 
     应用中心「一键同步菜单」专用，避免前端按应用串行请求。
     """
-    _require_tenant_or_platform_admin(auth)
+    await _require_application_menu_sync_access(auth, tenant_id)
     result = await ApplicationService.sync_all_manifests_and_menus(tenant_id)
     return result
 

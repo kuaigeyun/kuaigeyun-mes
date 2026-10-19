@@ -943,6 +943,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
             <ProFormSelect
               name="channels"
               label={t('pages.system.configCenter.notification.form.channels')}
+              extra={t('pages.system.configCenter.notification.form.channelsWecomHint')}
               mode="multiple"
               options={channelOptions}
               rules={[

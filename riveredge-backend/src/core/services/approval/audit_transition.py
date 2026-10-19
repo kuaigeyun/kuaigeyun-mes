@@ -5,16 +5,16 @@
     人工审核 (manual)::
 
         draft --submit--> pending --approve--> approved
-        approved --revoke--> draft --submit--> pending --approve--> approved
+        approved --revoke--> pending（停在终审节点，可再审）
         pending --withdraw--> draft
-
     自动审核 (auto)::
 
         draft --submit--> approved
         approved --revoke--> draft --submit--> approved
 
-全单据：人工/自动审 ``revoke`` 一律 ``draft``，须重新提交再启审批
-（``resolve_revoke_to_draft_landing_phase`` / ``resolve_revoke_landing_phase``）。
+人工审 ``revoke``：有多级流程时重开终审节点待办，单据落 ``pending``
+（``resolve_revoke_landing_phase`` / ``reopen_at_last_approval_node``）。
+无流程或自动审：落 ``draft``，须重新提交。
 
 ``withdraw`` 仅人工审 pending 态提供，退回 draft。
 """
@@ -36,29 +36,40 @@ class SalesOrderRevokeState(TypedDict):
 def resolve_revoke_to_draft_landing_phase(
     *,
     manual_audit_enabled: bool = True,
+    flow_reopened: bool = False,
 ) -> RevokeLandingPhase:
-    """撤销审核落点：一律 draft（人工/自动审相同）。
+    """撤销审核落点。
 
-    ``manual_audit_enabled`` 保留入参仅为调用方签名对称，不参与分支。
+    - 人工审且已重开终审节点 → pending
+    - 人工审但无可用流程实例可重开 → draft（须重提）
+    - 自动审 → draft
     """
-    _ = manual_audit_enabled
+    if manual_audit_enabled and flow_reopened:
+        return "pending"
     return "draft"
 
 
-def resolve_revoke_landing_phase(*, manual_audit_enabled: bool) -> RevokeLandingPhase:
+def resolve_revoke_landing_phase(
+    *,
+    manual_audit_enabled: bool,
+    flow_reopened: bool = False,
+) -> RevokeLandingPhase:
     """撤销审核落点（与 ``resolve_revoke_to_draft_landing_phase`` 同义）。"""
     return resolve_revoke_to_draft_landing_phase(
-        manual_audit_enabled=manual_audit_enabled
+        manual_audit_enabled=manual_audit_enabled,
+        flow_reopened=flow_reopened,
     )
 
 
 def resolve_sales_order_revoke_landing_phase(
     *,
     manual_audit_enabled: bool = True,
+    flow_reopened: bool = False,
 ) -> RevokeLandingPhase:
     """销售订单别名；请新调用改用 ``resolve_revoke_to_draft_landing_phase``。"""
     return resolve_revoke_to_draft_landing_phase(
-        manual_audit_enabled=manual_audit_enabled
+        manual_audit_enabled=manual_audit_enabled,
+        flow_reopened=flow_reopened,
     )
 
 

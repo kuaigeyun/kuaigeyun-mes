@@ -39,6 +39,8 @@ const DETAIL_ITEMS_MIN_WIDTH = 980;
 
 export const PURCHASE_REQUISITION_WORKFLOW_PROPS = {
   resourcePrefix: PURCHASE_REQUISITION_RESOURCE,
+  entityType: 'purchase_request',
+  auditNodeKey: 'purchase_request',
   unifiedAudit: true,
   statusField: 'status' as const,
   reviewStatusField: 'review_status' as const,

@@ -13,6 +13,7 @@ from apps.master_data.models.drawing_distribution import (
     DrawingDistributionLine,
     DrawingDistributionPolicy,
 )
+from apps.master_data.services.performance_scope_service import PerformanceScopeService
 from apps.master_data.schemas.drawing_distribution_schemas import (
     DrawingDistributionCreate,
     DrawingDistributionLineInput,
@@ -39,8 +40,20 @@ def _line_response(line: DrawingDistributionLine) -> DrawingDistributionLineResp
     )
 
 
+async def _user_uuid_map(tenant_id: int, user_ids: List[int]) -> dict[int, str]:
+    if not user_ids:
+        return {}
+    users = await User.filter(
+        tenant_id=tenant_id, id__in=user_ids, deleted_at__isnull=True
+    ).all()
+    return {user.id: user.uuid for user in users}
+
+
 def _to_response(
-    row: DrawingDistribution, lines: Optional[List[DrawingDistributionLine]] = None
+    row: DrawingDistribution,
+    lines: Optional[List[DrawingDistributionLine]] = None,
+    *,
+    recipient_user_uuid: Optional[str] = None,
 ) -> DrawingDistributionResponse:
     audit = audit_response_fields(row)
     return DrawingDistributionResponse(
@@ -49,6 +62,11 @@ def _to_response(
         tenant_id=row.tenant_id,
         code=row.code,
         name=row.name,
+        issue_department_id=row.issue_department_id,
+        issue_department_name=row.issue_department_name,
+        recipient_user_id=row.recipient_user_id,
+        recipient_user_name=row.recipient_user_name,
+        recipient_user_uuid=recipient_user_uuid,
         status=row.status,
         remark=row.remark,
         issued_at=row.issued_at,
@@ -65,6 +83,23 @@ def _to_response(
 
 
 class DrawingDistributionService:
+    @staticmethod
+    async def _apply_party_fields(
+        tenant_id: int,
+        payload: dict,
+        *,
+        issue_department_id: int,
+        recipient_user_id: int,
+    ) -> None:
+        payload["issue_department_id"] = issue_department_id
+        payload["issue_department_name"] = await PerformanceScopeService.resolve_department_name(
+            tenant_id, issue_department_id
+        )
+        payload["recipient_user_id"] = recipient_user_id
+        payload["recipient_user_name"] = await PerformanceScopeService.resolve_employee_name(
+            tenant_id, recipient_user_id
+        )
+
     @staticmethod
     async def is_distribution_required(tenant_id: int) -> bool:
         policy = await DrawingDistributionPolicy.get_or_none(tenant_id=tenant_id)
@@ -181,10 +216,21 @@ class DrawingDistributionService:
             "remark": (data.remark or "").strip() or None,
             "status": "Draft",
         }
+        await DrawingDistributionService._apply_party_fields(
+            tenant_id,
+            payload,
+            issue_department_id=data.issue_department_id,
+            recipient_user_id=data.recipient_user_id,
+        )
         apply_create_audit(payload, current_user)
         row = await DrawingDistribution.create(**payload)
         lines = await DrawingDistributionService._replace_lines(tenant_id, row, data.lines)
-        return _to_response(row, lines)
+        uuid_map = await _user_uuid_map(tenant_id, [row.recipient_user_id] if row.recipient_user_id else [])
+        return _to_response(
+            row,
+            lines,
+            recipient_user_uuid=uuid_map.get(row.recipient_user_id) if row.recipient_user_id else None,
+        )
 
     @staticmethod
     async def update(
@@ -200,17 +246,43 @@ class DrawingDistributionService:
             row.name = data.name.strip()
         if data.remark is not None:
             row.remark = data.remark.strip() or None
+        if data.issue_department_id is not None or data.recipient_user_id is not None:
+            dept_id = data.issue_department_id if data.issue_department_id is not None else row.issue_department_id
+            user_id = data.recipient_user_id if data.recipient_user_id is not None else row.recipient_user_id
+            if dept_id is None or user_id is None:
+                raise ValidationError("请填写发放部门与使用人")
+            party_payload: dict = {}
+            await DrawingDistributionService._apply_party_fields(
+                tenant_id,
+                party_payload,
+                issue_department_id=int(dept_id),
+                recipient_user_id=int(user_id),
+            )
+            row.issue_department_id = party_payload["issue_department_id"]
+            row.issue_department_name = party_payload["issue_department_name"]
+            row.recipient_user_id = party_payload["recipient_user_id"]
+            row.recipient_user_name = party_payload["recipient_user_name"]
         apply_update_audit(row, current_user)
         await row.save()
         lines = await DrawingDistributionService._lines(tenant_id, row.id)
         if data.lines is not None:
             lines = await DrawingDistributionService._replace_lines(tenant_id, row, data.lines)
-        return _to_response(row, lines)
+        uuid_map = await _user_uuid_map(tenant_id, [row.recipient_user_id] if row.recipient_user_id else [])
+        return _to_response(
+            row,
+            lines,
+            recipient_user_uuid=uuid_map.get(row.recipient_user_id) if row.recipient_user_id else None,
+        )
 
     @staticmethod
     async def get(tenant_id: int, dist_uuid: str) -> DrawingDistributionResponse:
         row = await DrawingDistributionService._get_or_404(tenant_id, dist_uuid)
-        return _to_response(row, await DrawingDistributionService._lines(tenant_id, row.id))
+        uuid_map = await _user_uuid_map(tenant_id, [row.recipient_user_id] if row.recipient_user_id else [])
+        return _to_response(
+            row,
+            await DrawingDistributionService._lines(tenant_id, row.id),
+            recipient_user_uuid=uuid_map.get(row.recipient_user_id) if row.recipient_user_id else None,
+        )
 
     @staticmethod
     async def list_distributions(
@@ -239,6 +311,8 @@ class DrawingDistributionService:
         lines = await DrawingDistributionService._lines(tenant_id, row.id)
         if not lines:
             raise ValidationError("请至少选择一张已发布图纸")
+        if not row.issue_department_id or not row.recipient_user_id:
+            raise ValidationError("请填写发放部门与使用人")
         row.status = "Pending"
         apply_update_audit(row, current_user)
         await row.save()

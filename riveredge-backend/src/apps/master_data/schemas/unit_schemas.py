@@ -21,6 +21,7 @@ class MaterialUnitCreate(MaterialUnitBase):
 
 
 class MaterialUnitUpdate(BaseModel):
+    code: Optional[str] = Field(None, min_length=1, max_length=50, description="单位编码")
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None

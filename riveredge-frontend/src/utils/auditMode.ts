@@ -9,7 +9,16 @@
 
 export type AuditWorkflowMode = 'manual' | 'auto';
 
-export type AuditActionType = 'submit' | 'withdraw' | 'approve' | 'reject' | 'revoke';
+export type AuditActionType = 'submit' | 'withdraw' | 'approve' | 'reject' | 'revoke' | 'recall_own';
+
+export interface AuditViewerActionsLike {
+  has_my_pending_task?: boolean;
+  approve?: boolean;
+  reject?: boolean;
+  /** 当前人已通过本单某一级，且当前节点不再是他的待办 */
+  my_acted?: boolean;
+  block_reason?: string | null;
+}
 
 export interface AuditViewerActionsLike {
   has_my_pending_task?: boolean;
@@ -25,6 +34,9 @@ export interface AuditStateLike {
   allowed_actions?: string[];
   entity_type?: string;
   viewer_actions?: AuditViewerActionsLike;
+  viewer_can_revoke?: boolean;
+  viewer_can_withdraw_submit?: boolean;
+  viewer_can_recall_own?: boolean;
 }
 
 export interface AuditActionVisibility {
@@ -37,6 +49,7 @@ export interface AuditActionVisibility {
   showApprove: boolean;
   showReject: boolean;
   showRevoke: boolean;
+  showRecallOwn: boolean;
   showAuditHub: boolean;
 }
 
@@ -76,17 +89,26 @@ export function resolveAuditActionVisibility(
   if (audit && typeof audit === 'object' && typeof audit.phase === 'string') {
     const allowedActions = Array.isArray(audit.allowed_actions) ? audit.allowed_actions : [];
     const manualAuditEnabled = isManualAuditEnabled(audit);
+    const flowWithdraw =
+      includesAuditAction(allowedActions, 'withdraw')
+      && audit.viewer_can_withdraw_submit !== false;
+    const flowRevoke =
+      includesAuditAction(allowedActions, 'revoke')
+      && audit.viewer_can_revoke !== false;
+    const flowRecallOwn = includesAuditAction(allowedActions, 'recall_own');
     return {
       authoritative: true,
       allowedActions,
       manualAuditEnabled,
       showSubmit: includesAuditAction(allowedActions, 'submit'),
-      showWithdraw: includesAuditAction(allowedActions, 'withdraw'),
+      showWithdraw: flowWithdraw,
       showApprove: includesAuditAction(allowedActions, 'approve'),
       showReject: includesAuditAction(allowedActions, 'reject'),
-      showRevoke: includesAuditAction(allowedActions, 'revoke'),
+      showRevoke: flowRevoke,
+      showRecallOwn: flowRecallOwn,
       showAuditHub:
-        includesAuditAction(allowedActions, 'withdraw')
+        flowWithdraw
+        || flowRecallOwn
         || includesAuditAction(allowedActions, 'approve')
         || includesAuditAction(allowedActions, 'reject'),
     };
@@ -107,6 +129,7 @@ export function resolveAuditActionVisibility(
     showApprove: manualAuditEnabled && isPending,
     showReject: manualAuditEnabled && isPending,
     showRevoke: isApproved,
+    showRecallOwn: false,
     showAuditHub: manualAuditEnabled && isPending,
   };
 }
@@ -118,5 +141,6 @@ export function hasVisibleAuditRowActions(visibility: AuditActionVisibility): bo
     || visibility.showApprove
     || visibility.showReject
     || visibility.showRevoke
+    || visibility.showRecallOwn
   );
 }

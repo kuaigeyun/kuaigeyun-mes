@@ -825,7 +825,13 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         return await self.get_requisition_by_id(tenant_id, requisition_id)
 
     async def submit_requisition(
-        self, tenant_id: int, requisition_id: int, submitted_by: int
+        self,
+        tenant_id: int,
+        requisition_id: int,
+        submitted_by: int,
+        *,
+        selected_approver_user_ids: Optional[List[int]] = None,
+        selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
     ) -> PurchaseRequisitionResponse:
         """提交采购申请（启动审批或直接通过）"""
         req = await PurchaseRequisition.get_or_none(
@@ -856,6 +862,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 title=f"采购申请审批: {req.requisition_code}",
                 content=f"申请人: {req.applicant_name or '—'}",
                 doc_label="采购申请",
+                selected_approver_user_ids=selected_approver_user_ids,
+                selected_approver_by_node=selected_approver_by_node,
             )
             req.status = DocumentStatus.PENDING_REVIEW.value
             req.review_status = ReviewStatus.PENDING.value
@@ -889,6 +897,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         approved_by: int = None,
         *,
         is_auto_approve: bool = False,
+        instance_data_patch: Optional[Dict[str, Any]] = None,
     ) -> PurchaseRequisitionResponse:
         """审核采购申请（通过或驳回）"""
         from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, normalize_status
@@ -967,6 +976,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 entity_id=requisition_id,
                 approver_id=approved_by,
                 flow_approve=_do_decide,
+                instance_data_patch=instance_data_patch,
             )
         else:
             result = await UniAuditService.reject_with_flow_fallback(
@@ -1025,11 +1035,12 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         requisition_id: int,
         operator_id: Optional[int] = None,
     ) -> PurchaseRequisitionResponse:
-        """撤销审核：一律回到草稿，须重新提交再审。"""
-        from apps.kuaizhizao.constants import ReviewStatus
+        """撤销审核：有流程则重开终审节点待再审；否则回草稿须重提。"""
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
         from core.services.approval.audit_transition import (
             resolve_revoke_to_draft_landing_phase,
         )
+        from core.services.approval.uni_audit_service import UniAuditService
 
         req = await PurchaseRequisition.get_or_none(
             tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
@@ -1049,20 +1060,41 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "purchase_request"
         )
-        _ = resolve_revoke_to_draft_landing_phase(manual_audit_enabled=audit_required)
-        req.status = "草稿"
-        req.review_status = ReviewStatus.PENDING.value
-        req.reviewer_id = None
-        req.reviewer_name = None
-        req.review_time = None
-        req.review_remarks = None
-        if operator_id:
-            user_info = await self.get_user_info(operator_id)
-            req.updated_by = operator_id
-            req.updated_by_name = user_info["name"]
-        await req.save()
+        op_id = int(operator_id) if operator_id else 0
 
-        return await self.get_requisition_by_id(tenant_id, requisition_id)
+        async def _do_revoke(*, reopened: bool = False) -> PurchaseRequisitionResponse:
+            landing = resolve_revoke_to_draft_landing_phase(
+                manual_audit_enabled=audit_required,
+                flow_reopened=reopened,
+            )
+            row = await PurchaseRequisition.get_or_none(
+                tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"采购申请不存在: {requisition_id}")
+            if landing == "pending":
+                row.status = DocumentStatus.PENDING_REVIEW.value
+            else:
+                row.status = DocumentStatus.DRAFT.value
+            row.review_status = ReviewStatus.PENDING.value
+            row.reviewer_id = None
+            row.reviewer_name = None
+            row.review_time = None
+            row.review_remarks = None
+            if op_id:
+                user_info = await self.get_user_info(op_id)
+                row.updated_by = op_id
+                row.updated_by_name = user_info["name"]
+            await row.save()
+            return await self.get_requisition_by_id(tenant_id, requisition_id)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="purchase_request",
+            entity_id=requisition_id,
+            operator_id=op_id,
+            flow_revoke=_do_revoke,
+        )
 
     @staticmethod
     def _resolve_line_supplier_id(item: PurchaseRequisitionItem, data: ConvertToPurchaseOrderRequest) -> Optional[int]:

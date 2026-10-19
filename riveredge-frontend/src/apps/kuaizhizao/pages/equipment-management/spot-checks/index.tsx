@@ -12,11 +12,11 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
-import { App, Button, Modal, Row, Col, Table, Switch, Input, Typography } from 'antd';
+import { App, Button, Grid, Modal, Row, Col, Table, Switch, Input, Typography, Select } from 'antd';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalGridBlock, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -62,7 +62,7 @@ function formatSpotCheckFormDate(value: unknown): string | undefined {
   return parsed.isValid() ? parsed.format('YYYY-MM-DD') : undefined;
 }
 
-interface SpotCheckLine {
+interface SpotCheckLine extends Record<string, unknown> {
   line_no?: number;
   item_id?: number;
   item_code?: string;
@@ -75,13 +75,13 @@ interface SpotCheckLine {
   numeric_min?: number | string | null;
   numeric_max?: number | string | null;
   measured_value?: string;
-  is_pass?: boolean;
+  is_pass?: boolean | null;
   photo_required?: boolean;
   remark?: string;
   attachments?: DocumentAttachmentFile[];
 }
 
-interface SpotCheck {
+interface SpotCheck extends Record<string, unknown> {
   id?: number;
   uuid?: string;
   document_no?: string;
@@ -113,6 +113,7 @@ const SpotChecksPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const screens = Grid.useBreakpoint();
   const perms = useResourcePermissions(RESOURCE);
   const canApprove = perms.canAction?.('approve') ?? false;
   const canReject = perms.canAction?.('reject') ?? false;
@@ -523,7 +524,7 @@ const SpotChecksPage: React.FC = () => {
     {
       title: t(`${P}.line.isPass`),
       dataIndex: 'is_pass',
-      width: 80,
+      width: 120,
       render: (_: unknown, row: SpotCheckLine, index: number) => (
         <Switch
           size="small"
@@ -594,7 +595,7 @@ const SpotChecksPage: React.FC = () => {
         title: t(`${P}.col.abnormality`),
         dataIndex: 'has_abnormality',
         render: (_, r) =>
-          r.has_abnormality ? (
+          r.status === '待执行' || r.status === '已取消' ? '-' : r.has_abnormality ? (
             <MarkerTag color="error">{t(`${P}.abnormal`)}</MarkerTag>
           ) : (
             <MarkerTag color="success">{t(`${P}.normal`)}</MarkerTag>
@@ -634,7 +635,7 @@ const SpotChecksPage: React.FC = () => {
         dataIndex: 'is_pass',
         width: 80,
         render: (_, row) =>
-          row.is_pass === false ? (
+          row.is_pass == null ? '-' : row.is_pass === false ? (
             <MarkerTag color="error">{t(`${P}.abnormal`)}</MarkerTag>
           ) : (
             <MarkerTag color="success">{t(`${P}.normal`)}</MarkerTag>
@@ -659,12 +660,18 @@ const SpotChecksPage: React.FC = () => {
 
   const columns: ProColumns<SpotCheck>[] = useMemo(() => alignProColumns<SpotCheck>([
       {
+        title: '执行班次', dataIndex: 'shift_name', search: false, width: 100,
+      },
+      {
+        title: '执行截止', dataIndex: 'due_at', search: false, valueType: 'dateTime', width: 165,
+      },
+      {
         title: t(`${P}.col.checkDate`),
         dataIndex: 'check_date_range',
         valueType: 'dateRange',
         hideInTable: true,
         formItemProps: formDateRangeFormItemProps,
-        search: { order: 10 } as ProColumns['search'],
+        search: { order: 10 } as unknown as ProColumns['search'],
       },
       {
         title: t('common.updatedAt'),
@@ -672,7 +679,7 @@ const SpotChecksPage: React.FC = () => {
         valueType: 'dateRange',
         hideInTable: true,
         formItemProps: formDateRangeFormItemProps,
-        search: { order: 11 } as ProColumns['search'],
+        search: { order: 11 } as unknown as ProColumns['search'],
       },
       {
         title: t('common.status'),
@@ -680,7 +687,7 @@ const SpotChecksPage: React.FC = () => {
         valueType: 'select',
         valueEnum: spotCheckStatusValueEnum,
         hideInTable: true,
-        search: { order: 20 } as ProColumns['search'],
+        search: { order: 20 } as unknown as ProColumns['search'],
       },
       {
         title: t(`${P}.col.abnormality`),
@@ -688,7 +695,7 @@ const SpotChecksPage: React.FC = () => {
         valueType: 'select',
         valueEnum: abnormalityValueEnum,
         hideInTable: true,
-        search: { order: 21 } as ProColumns['search'],
+        search: { order: 21 } as unknown as ProColumns['search'],
       },
       {
         title: t(`${P}.col.documentNo`),
@@ -700,7 +707,7 @@ const SpotChecksPage: React.FC = () => {
         ellipsis: true,
         fixed: 'left',
         sorter: true,
-        search: { order: 30 } as ProColumns['search'],
+        search: { order: 30 } as unknown as ProColumns['search'],
         render: (_, r) => (r.document_no != null && r.document_no !== '' ? String(r.document_no) : '-'),
       },
       {
@@ -760,7 +767,7 @@ const SpotChecksPage: React.FC = () => {
         sorter: true,
         hideInSearch: true,
         render: (_, r) =>
-          r.has_abnormality ? (
+          r.status === '待执行' || r.status === '已取消' ? '-' : r.has_abnormality ? (
             <MarkerTag color="error">{t(`${P}.abnormal`)}</MarkerTag>
           ) : (
             <MarkerTag color="success">{t(`${P}.normal`)}</MarkerTag>
@@ -805,7 +812,7 @@ const SpotChecksPage: React.FC = () => {
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => {
-          const editable = record.status === '待审核' || record.status === '已驳回';
+          const editable = ['待执行', '待审核', '已驳回'].includes(record.status || '');
           return (
             <>
               {perms.canRead ? (
@@ -871,7 +878,7 @@ const SpotChecksPage: React.FC = () => {
           );
         },
       },
-    ], SALES_DOC_LIST_FIELD_RANK),
+    ] as ProColumns<SpotCheck>[], SALES_DOC_LIST_FIELD_RANK),
     [t, perms, canApprove, canReject, spotCheckStatusValueEnum, abnormalityValueEnum, navigate, handleDetail],
   );
 
@@ -960,7 +967,7 @@ const SpotChecksPage: React.FC = () => {
           Boolean(
             detail &&
               perms.canUpdate &&
-              (detail.status === '待审核' || detail.status === '已驳回'),
+              ['待执行', '待审核', '已驳回'].includes(detail.status || ''),
           ),
           () => {
             if (!detail) return;
@@ -983,13 +990,14 @@ const SpotChecksPage: React.FC = () => {
         onFinish={handleSubmit}
         isEdit={isEdit}
         loading={submitting}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={screens.md ? MODAL_CONFIG.LARGE_WIDTH : Math.min(360, window.innerWidth - 24)}
         formRef={formRef}
         initialValues={formInitialValues}
         grid={false}
       >
+        <FormModalGridBlock>
         <Row gutter={16}>
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <ProFormSelect
               name="equipment_id"
               label={t(`${P}.form.equipment`)}
@@ -1032,7 +1040,7 @@ const SpotChecksPage: React.FC = () => {
               }}
             />
           </Col>
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <ProFormSelect
               name="scheme_id"
               label={t(`${P}.form.scheme`)}
@@ -1048,7 +1056,7 @@ const SpotChecksPage: React.FC = () => {
               }}
             />
           </Col>
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <ProFormDatePicker
               name="check_date"
               label={t(`${P}.col.checkDate`)}
@@ -1056,7 +1064,7 @@ const SpotChecksPage: React.FC = () => {
               fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
             />
           </Col>
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <EquipmentPersonSelect
               uuidFieldName="inspector_uuid"
               idFieldName="inspector_id"
@@ -1104,6 +1112,7 @@ const SpotChecksPage: React.FC = () => {
             <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
         </Row>
+        </FormModalGridBlock>
       </FormModalTemplate>
 
       <Modal

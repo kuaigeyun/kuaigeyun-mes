@@ -6,9 +6,10 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormTextArea, ProFormText, ProFormInstance } from '@ant-design/pro-components';
-import { App, Card, message, Upload, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions, Grid, Spin, Modal, Popconfirm, Tooltip, Input } from 'antd';
+import { App, Alert, Card, message, Upload, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions, Grid, Spin, Modal, Popconfirm, Tooltip, Input } from 'antd';
 import { WWLoginLangType } from '@wecom/jssdk';
 import { WecomWWLoginPanel } from '../../../components/WecomWWLoginPanel';
 import {
@@ -80,6 +81,11 @@ import {
 } from '../../../utils/generatedAvatar';
 import { getTenantId, setTenantId } from '../../../utils/auth';
 import { getSessionCurrentUser, patchSessionCurrentUser } from '../../../utils/sessionCurrentUser';
+import { getPasswordPolicy, type PublicPasswordPolicy } from '../../../services/siteSetting';
+import {
+  buildAntdPasswordRules,
+  passwordPolicyHintLines,
+} from '../../../utils/passwordPolicy';
 const { Title, Text } = Typography;
 
 const SOCIAL_BRAND = {
@@ -190,7 +196,14 @@ const UserProfilePage: React.FC = () => {
   const [profileGender, setProfileGender] = useState<string | undefined>(undefined);
   /** 用户主动清除头像后，不再自动展示 DiceBear 默认图 */
   const [suppressAutoAvatar, setSuppressAutoAvatar] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>('basic');
+  const [searchParams] = useSearchParams();
+  const forcePasswordChange =
+    searchParams.get('forcePasswordChange') === '1' ||
+    getSessionCurrentUser()?.requires_password_change === true;
+  const [activeTab, setActiveTab] = useState<string>(() =>
+    forcePasswordChange ? 'security' : 'basic',
+  );
+  const [passwordPolicy, setPasswordPolicy] = useState<PublicPasswordPolicy | null>(null);
   const [wecomBindModalOpen, setWecomBindModalOpen] = useState(false);
   const [wecomBindLoading, setWecomBindLoading] = useState(false);
   const [wecomUnbindLoading, setWecomUnbindLoading] = useState(false);
@@ -202,6 +215,45 @@ const UserProfilePage: React.FC = () => {
   const [giteeBindLoading, setGiteeBindLoading] = useState(false);
   const [giteeUnbindLoading, setGiteeUnbindLoading] = useState(false);
   const currentUser = useCurrentUser();
+
+  useEffect(() => {
+    if (forcePasswordChange) {
+      setActiveTab('security');
+    }
+  }, [forcePasswordChange]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getPasswordPolicy()
+      .then((policy) => {
+        if (!cancelled) setPasswordPolicy(policy);
+      })
+      .catch(() => {
+        if (!cancelled) setPasswordPolicy(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const passwordPersonalContext = useMemo(
+    () => ({
+      username: profileData?.username ?? currentUser?.username,
+      full_name: profileData?.full_name ?? currentUser?.full_name,
+      phone: profileData?.phone,
+    }),
+    [profileData, currentUser],
+  );
+
+  const newPasswordRules = useMemo(
+    () => buildAntdPasswordRules(passwordPolicy, t, passwordPersonalContext),
+    [passwordPolicy, t, passwordPersonalContext],
+  );
+
+  const passwordHintLines = useMemo(
+    () => passwordPolicyHintLines(passwordPolicy, t),
+    [passwordPolicy, t],
+  );
 
   const boundWecomUserid = profileData?.contact_info?.wecom_userid?.trim() || '';
   const boundDingtalkId =
@@ -854,6 +906,7 @@ const UserProfilePage: React.FC = () => {
       await changePassword({ old_password, new_password });
       
       messageApi.success(t('pages.personal.profile.passwordChangeSuccess'));
+      patchSessionCurrentUser({ requires_password_change: false });
       
       // 清空表单
       passwordFormRef.current?.resetFields();
@@ -1118,6 +1171,15 @@ const UserProfilePage: React.FC = () => {
                 : undefined
             }
           >
+            {forcePasswordChange ? (
+              <Alert
+                type="warning"
+                showIcon
+                title={t('pages.personal.profile.forcePasswordChangeTitle')}
+                description={t('pages.personal.profile.forcePasswordChangeDesc')}
+                style={{ marginBottom: 16 }}
+              />
+            ) : null}
             <Tabs
               activeKey={activeTab}
               onChange={setActiveTab}
@@ -1631,11 +1693,16 @@ const UserProfilePage: React.FC = () => {
                         }}
                         rules={[
                           { required: true, message: t('pages.personal.profile.currentPasswordPlaceholder') },
-                          { min: 8, message: t('pages.login.passwordLen') },
                           { max: 128, message: t('pages.login.passwordLenMax') },
                         ]}
                       />
-                      
+                      {passwordHintLines.length > 0 ? (
+                        <Typography.Paragraph type="secondary" style={{ marginTop: -8, marginBottom: 16 }}>
+                          {passwordHintLines.map((line) => (
+                            <div key={line}>{line}</div>
+                          ))}
+                        </Typography.Paragraph>
+                      ) : null}
                       <ProFormText.Password
                         name="new_password"
                         label={t('pages.personal.profile.newPassword')}
@@ -1643,11 +1710,7 @@ const UserProfilePage: React.FC = () => {
                           placeholder: t('pages.personal.profile.newPasswordPlaceholder'),
                           style: { width: 360 },
                         }}
-                        rules={[
-                          { required: true, message: t('pages.personal.profile.newPassword') },
-                          { min: 8, message: t('pages.login.passwordLen') },
-                          { max: 128, message: t('pages.login.passwordLenMax') },
-                        ]}
+                        rules={newPasswordRules}
                       />
                       
                       <ProFormText.Password

@@ -21,6 +21,13 @@ from core.models.user_preference import UserPreference
 from core.schemas.user_preference import UserPreferenceUpdate, UserPreferenceResponse
 from core.utils.timezone_utils import now_utc
 from infra.exceptions.exceptions import NotFoundError
+from infra.models.user import User
+
+
+async def _ensure_core_user_exists(user_id: int) -> None:
+    """偏好表 FK 指向 core_users；虚拟身份不得 INSERT。"""
+    if not await User.filter(id=user_id, deleted_at=None).exists():
+        raise NotFoundError("当前用户无法创建偏好设置（可能非租户用户）")
 
 # 出现在 patch 顶层时整段替换（不清空未提交的兄弟键，如 ui.tables）
 _REPLACE_TOP_LEVEL_KEYS: FrozenSet[str] = frozenset({"theme_config", "uni_tabs_state"})
@@ -78,6 +85,7 @@ class UserPreferenceService:
                 user_id=user_id,
             )
         except DoesNotExist:
+            await _ensure_core_user_exists(user_id)
             try:
                 user_preference = await UserPreference.create(
                     tenant_id=tenant_id,
@@ -106,6 +114,8 @@ class UserPreferenceService:
             raise ValueError("preferences patch is required")
         if not isinstance(patch, dict) or not patch:
             raise ValueError("preferences patch is required")
+
+        await _ensure_core_user_exists(user_id)
 
         conn = Tortoise.get_connection("default")
         patch_json = json.dumps(patch, ensure_ascii=False)

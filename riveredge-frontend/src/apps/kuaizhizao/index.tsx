@@ -161,10 +161,6 @@ const EquipmentPage = lazy(() => import('./pages/equipment-management/equipment'
 const EquipmentDetailPage = lazy(() => import('./pages/equipment-management/equipment/detail'));
 const EquipmentFaultsPage = lazy(() => import('./pages/equipment-management/equipment-faults'));
 const MaintenancePlansPage = lazy(() => import('./pages/equipment-management/maintenance-plans'));
-const SpotCheckPlansPage = lazy(() => import('./pages/equipment-management/spot-check-plans'));
-const SpotCheckPlanCalendarPage = lazy(
-  () => import('./pages/equipment-management/spot-check-plan-calendar'),
-);
 const MoldsPage = lazy(() => import('./pages/equipment-management/molds'));
 const MoldDetailPage = lazy(() => import('./pages/equipment-management/molds/detail'));
 const ToolLedgerPage = lazy(() => import('./pages/equipment-management/tool-ledger'));
@@ -541,8 +537,9 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/traceability" element={withPageSuspense(TraceabilityPage)} />
       <Route path="quality-management/inspection-plans" element={withPageSuspense(InspectionPlansPage)} />
       <Route path="quality-management/nonconforming-ledger" element={withPageSuspense(NonconformingLedgerPage)} />
-      <Route path="quality-management/eight-d-reports" element={withPageSuspense(EightDReportsPage)} />
+      {/* :id 工作台在前，与交付项目 projects/:id 一致，避免与列表路由歧义 */}
       <Route path="quality-management/eight-d-reports/:id" element={withPageSuspense(EightDWorkbenchPage)} />
+      <Route path="quality-management/eight-d-reports" element={withPageSuspense(EightDReportsPage)} />
       <Route path="quality-management/quality-complaints" element={withPageSuspense(QualityComplaintsPage)} />
       <Route path="quality-management/supplier-evaluations" element={withPageSuspense(SupplierEvaluationsPage)} />
       <Route path="quality-management/oqc-inspection" element={withPageSuspense(OQCInspectionPage)} />
@@ -580,11 +577,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/equipment-faults" element={withPageSuspense(EquipmentFaultsPage)} />
       <Route path="equipment-management/maintenance-plans" element={withPageSuspense(MaintenancePlansPage)} />
       <Route path="equipment-management/maintenance-plan-calendar" element={withPageSuspense(MaintenancePlanCalendarPage)} />
-      <Route path="equipment-management/spot-check-plans" element={withPageSuspense(SpotCheckPlansPage)} />
-      <Route
-        path="equipment-management/spot-check-plan-calendar"
-        element={withPageSuspense(SpotCheckPlanCalendarPage)}
-      />
       <Route path="equipment-management/maintenance-executions" element={withPageSuspense(MaintenanceExecutionsPage)} />
       <Route path="equipment-management/equipment-repairs" element={withPageSuspense(EquipmentRepairsPage)} />
       <Route path="equipment-management/equipment-calibrations" element={withPageSuspense(EquipmentCalibrationsPage)} />

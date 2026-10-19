@@ -75,7 +75,7 @@ def derive_sales_order_change_capabilities(
     is_rejected = _is_rejected(status)
     applied = _is_applied(doc)
 
-    update_allowed = is_draft or is_pending
+    update_allowed = is_draft or is_pending or is_rejected
     update_cap = _cap(
         update_allowed,
         "sales_order_change.update.not_draft" if not update_allowed else None,
@@ -86,9 +86,11 @@ def derive_sales_order_change_capabilities(
         "sales_order_change.delete.not_draft" if not is_draft else None,
     )
 
-    submit_allowed = is_draft and has_change_content
-    submit_reason = "sales_order_change.submit.not_draft" if not is_draft else (
-        "sales_order_change.submit.no_changes" if is_draft and not has_change_content else None
+    submit_allowed = (is_draft or is_rejected) and has_change_content
+    submit_reason = (
+        "sales_order_change.submit.not_draft"
+        if not (is_draft or is_rejected)
+        else ("sales_order_change.submit.no_changes" if not has_change_content else None)
     )
     submit_cap = _cap(submit_allowed, submit_reason)
 

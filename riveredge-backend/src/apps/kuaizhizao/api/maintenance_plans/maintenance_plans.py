@@ -103,8 +103,10 @@ async def list_maintenance_plans(
         uuid=uuid,
     )
     
-    items = [MaintenancePlanService.serialize_plan_response(plan) for plan in plans]
-    
+    items = [
+        await MaintenancePlanService.serialize_plan_response(plan) for plan in plans
+    ]
+
     return MaintenancePlanListResponse(
         items=items,
         total=total,

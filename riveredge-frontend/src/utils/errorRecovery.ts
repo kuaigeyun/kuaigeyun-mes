@@ -5,6 +5,7 @@
  */
 
 import { getAntdMessage, getAntdModal } from './antdAppApis';
+import { isBulkImportErrorToastSuppressed } from './bulkImportErrorSuppress';
 import { handleError } from './errorHandler';
 
 /**
@@ -244,6 +245,9 @@ export function handleNetworkError(error: any): void {
  * 检测服务器错误并提供恢复建议
  */
 export function handleServerError(error: any): void {
+  if (isBulkImportErrorToastSuppressed()) {
+    return;
+  }
   const status = error?.response?.status;
   
   if (status === 502 || status === 503 || status === 504) {

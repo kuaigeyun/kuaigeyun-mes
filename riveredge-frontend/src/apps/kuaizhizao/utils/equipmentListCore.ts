@@ -70,9 +70,11 @@ function resolveOrderBy(sort?: Record<string, unknown>) {
 
 export function buildSpotCheckStatusValueEnum(_t: TFunction): Record<string, { text: string }> {
   return {
+    待执行: { text: '待执行' },
     待审核: { text: '待审核' },
     已审核: { text: '已审核' },
     已驳回: { text: '已驳回' },
+    已取消: { text: '已取消' },
   };
 }
 
@@ -246,13 +248,23 @@ export function resolveMaintenancePlanEquipmentUuids(plan: {
   return plan.equipment_uuid ? [plan.equipment_uuid] : [];
 }
 
-export function formatMaintenancePlanEquipmentText(plan: {
-  equipment_name?: string;
-  equipment_code?: string;
-  equipment_items?: MaintenancePlanEquipmentItem[];
-}): string {
+export function formatMaintenancePlanEquipmentText(
+  plan: {
+    bound_equipment_count?: number;
+    equipment_name?: string;
+    equipment_code?: string;
+    equipment_items?: MaintenancePlanEquipmentItem[];
+  },
+  boundLabel?: (n: number) => string,
+): string {
+  if (typeof plan.bound_equipment_count === 'number' && boundLabel) {
+    return boundLabel(plan.bound_equipment_count);
+  }
   const items = plan.equipment_items;
   if (items?.length) {
+    if (boundLabel) {
+      return boundLabel(items.length);
+    }
     return items
       .map((item) => {
         const code = item.code?.trim();
@@ -260,6 +272,9 @@ export function formatMaintenancePlanEquipmentText(plan: {
         return code ? `${code} - ${name}` : name;
       })
       .join('、');
+  }
+  if (typeof plan.bound_equipment_count === 'number') {
+    return String(plan.bound_equipment_count);
   }
   const code = plan.equipment_code?.trim();
   const name = plan.equipment_name?.trim() || '-';

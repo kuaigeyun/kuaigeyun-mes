@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
+
+from tortoise.functions import Count
 
 from core.ai.schemas.stats import (
     AiAuditLogItem,
@@ -15,45 +19,91 @@ from core.ai.schemas.stats import (
 from core.models.ai_audit_log import AiAuditLog
 from core.utils.timezone_utils import to_api_isoformat
 
+# Pulse 规则引擎较重：短 TTL 进程内缓存，避免 hub 连点刷新重复扫业务表
+_PULSE_COUNT_CACHE: Dict[int, Tuple[float, int]] = {}
+_PULSE_COUNT_TTL_SEC = 60.0
+
 
 class AiStatsService:
     @staticmethod
-    async def get_overview(*, tenant_id: int, days: int = 7) -> AiStatsOverviewResponse:
+    async def get_capability_call_counts(*, tenant_id: int, days: int = 7) -> Dict[str, int]:
+        """仅按能力聚合调用次数（能力矩阵目录用，不跑 Pulse / 知识库计数）。"""
+        days = max(1, min(int(days or 7), 90))
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        rows = (
+            await AiAuditLog.filter(tenant_id=tenant_id, created_at__gte=since)
+            .annotate(c=Count("id"))
+            .group_by("capability")
+            .values("capability", "c")
+        )
+        out: Dict[str, int] = {}
+        for row in rows:
+            key = (row.get("capability") or "unknown").strip() or "unknown"
+            out[key] = int(row.get("c") or 0)
+        return out
+
+    @staticmethod
+    async def get_overview(
+        *,
+        tenant_id: int,
+        days: int = 7,
+        include_pulse: bool = False,
+    ) -> AiStatsOverviewResponse:
         days = max(1, min(int(days or 7), 90))
         since = datetime.now(timezone.utc) - timedelta(days=days)
 
-        base_qs = AiAuditLog.filter(tenant_id=tenant_id, created_at__gte=since)
-        total_calls = await base_qs.count()
+        async def _audit_bundle() -> tuple[int, Optional[int], List[AiCapabilityStat], List[AiDayStat]]:
+            # 单次只取聚合列，避免整行 ORM + 多次扫表
+            rows = await AiAuditLog.filter(tenant_id=tenant_id, created_at__gte=since).values(
+                "created_at", "latency_ms", "capability"
+            )
+            total_calls = len(rows)
+            latencies = [row["latency_ms"] for row in rows if row.get("latency_ms") is not None]
+            avg_latency = int(sum(latencies) / len(latencies)) if latencies else None
 
-        logs = await base_qs.all()
-        avg_latency: Optional[int] = None
-        latencies = [row.latency_ms for row in logs if row.latency_ms is not None]
-        if latencies:
-            avg_latency = int(sum(latencies) / len(latencies))
+            cap_map: Dict[str, int] = {}
+            day_map: Dict[str, int] = {}
+            for row in rows:
+                key = (row.get("capability") or "unknown").strip() or "unknown"
+                cap_map[key] = cap_map.get(key, 0) + 1
+                created = row.get("created_at")
+                if created is None:
+                    continue
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                day_key = created.astimezone(timezone.utc).strftime("%Y-%m-%d")
+                day_map[day_key] = day_map.get(day_key, 0) + 1
 
-        cap_map: Dict[str, int] = {}
-        day_map: Dict[str, int] = {}
-        for row in logs:
-            cap = (row.capability or "unknown").strip() or "unknown"
-            cap_map[cap] = cap_map.get(cap, 0) + 1
-            day_key = row.created_at.astimezone(timezone.utc).strftime("%Y-%m-%d")
-            day_map[day_key] = day_map.get(day_key, 0) + 1
+            by_capability = [
+                AiCapabilityStat(capability=k, count=v)
+                for k, v in sorted(cap_map.items(), key=lambda x: (-x[1], x[0]))
+            ]
 
-        by_capability = [
-            AiCapabilityStat(capability=k, count=v)
-            for k, v in sorted(cap_map.items(), key=lambda x: (-x[1], x[0]))
-        ]
+            day_cursor = since.astimezone(timezone.utc).date()
+            end_day = datetime.now(timezone.utc).date()
+            by_day: List[AiDayStat] = []
+            while day_cursor <= end_day:
+                key = day_cursor.isoformat()
+                by_day.append(AiDayStat(day=key, count=day_map.get(key, 0)))
+                day_cursor += timedelta(days=1)
+            return total_calls, avg_latency, by_capability, by_day
 
-        day_cursor = since.astimezone(timezone.utc).date()
-        end_day = datetime.now(timezone.utc).date()
-        by_day: List[AiDayStat] = []
-        while day_cursor <= end_day:
-            key = day_cursor.isoformat()
-            by_day.append(AiDayStat(day=key, count=day_map.get(key, 0)))
-            day_cursor += timedelta(days=1)
-
-        pulse_count = await AiStatsService._pulse_suggestion_count(tenant_id)
-        knowledge_count = await AiStatsService._knowledge_document_count(tenant_id)
+        audit_coro = _audit_bundle()
+        knowledge_coro = AiStatsService._knowledge_document_count(tenant_id)
+        if include_pulse:
+            (total_calls, avg_latency, by_capability, by_day), knowledge_count, pulse_count = (
+                await asyncio.gather(
+                    audit_coro,
+                    knowledge_coro,
+                    AiStatsService.get_pulse_suggestion_count(tenant_id),
+                )
+            )
+        else:
+            (total_calls, avg_latency, by_capability, by_day), knowledge_count = await asyncio.gather(
+                audit_coro,
+                knowledge_coro,
+            )
+            pulse_count = 0
 
         empty_reason: Optional[str] = None
         if total_calls == 0:
@@ -122,7 +172,17 @@ class AiStatsService:
         )
 
     @staticmethod
-    async def _pulse_suggestion_count(tenant_id: int) -> int:
+    async def get_pulse_suggestion_count(tenant_id: int) -> int:
+        now = time.monotonic()
+        cached = _PULSE_COUNT_CACHE.get(tenant_id)
+        if cached and (now - cached[0]) < _PULSE_COUNT_TTL_SEC:
+            return cached[1]
+        count = await AiStatsService._pulse_suggestion_count_uncached(tenant_id)
+        _PULSE_COUNT_CACHE[tenant_id] = (now, count)
+        return count
+
+    @staticmethod
+    async def _pulse_suggestion_count_uncached(tenant_id: int) -> int:
         try:
             from apps.kuaiai.services.suggestion_service import SuggestionService
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 from typing import Any, Iterable, Sequence
 
@@ -900,6 +901,28 @@ class PermissionPolicyService:
         return sorted(set(out))
 
     @classmethod
+    def _coerce_masked_numeric_zero(cls, value: object) -> object | None:
+        """金额/数量等标量：masked 须保持可进 Pydantic Decimal 的类型，禁止星号字符串。"""
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, Decimal):
+            return Decimal("0")
+        if isinstance(value, int):
+            return 0
+        if isinstance(value, float):
+            return 0.0
+        if isinstance(value, str):
+            s = value.strip()
+            if not s:
+                return None
+            try:
+                Decimal(s)
+            except InvalidOperation:
+                return None
+            return Decimal("0")
+        return None
+
+    @classmethod
     def _apply_single_mask(cls, value: object, level: str) -> object:
         if level == FieldMaskLevel.HIDDEN:
             return None
@@ -907,8 +930,9 @@ class PermissionPolicyService:
             return value
         if value is None:
             return None
-        if isinstance(value, (int, float)):
-            return 0
+        numeric_zero = cls._coerce_masked_numeric_zero(value)
+        if numeric_zero is not None:
+            return numeric_zero
         raw = str(value)
         if len(raw) <= 2:
             return "*" * len(raw)

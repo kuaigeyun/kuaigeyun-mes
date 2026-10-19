@@ -46,6 +46,7 @@ export const LINKED_DOCUMENT_DETAIL_TYPES = new Set([
   'reporting_record',
   'performance_summary',
   'delivery_project',
+  'payment',
 ]);
 
 export type LinkedDocumentType =
@@ -86,7 +87,8 @@ export type LinkedDocumentType =
   | 'customer_return_visit'
   | 'reporting_record'
   | 'performance_summary'
-  | 'delivery_project';
+  | 'delivery_project'
+  | 'payment';
 
 /** 后端偶发别名 → 标准 snake */
 const LINKED_DOCUMENT_TYPE_ALIASES: Record<string, string> = {
@@ -126,6 +128,8 @@ const LINKED_DOCUMENT_TYPE_ALIASES: Record<string, string> = {
   outsourceproductreturn: 'outsource_product_return',
   purchasereturn: 'purchase_return',
   reworkorder: 'rework_order',
+  financepayment: 'payment',
+  finance_payment: 'payment',
 };
 
 /**

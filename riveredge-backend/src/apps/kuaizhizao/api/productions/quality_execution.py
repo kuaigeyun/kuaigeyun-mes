@@ -448,6 +448,46 @@ async def list_incoming_inspections(
     )
 
 
+@router.get("/incoming-inspections/export", response_class=FileResponse, summary="Export incoming inspections")
+async def export_incoming_inspections(
+    status: Optional[str] = Query(None, description="检验状态"),
+    quality_status: Optional[str] = Query(None, description="质量状态"),
+    supplier_id: Optional[int] = Query(None, description="供应商ID"),
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    导出来料检验单到Excel文件
+
+    支持多种筛选条件。
+    """
+    try:
+        scoped_purchase_receipt_ids = await _scoped_purchase_receipt_ids(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
+        file_path = await IncomingInspectionService().export_to_excel(
+            tenant_id=tenant_id,
+            status=status,
+            quality_status=quality_status,
+            supplier_id=supplier_id,
+            material_id=material_id,
+            scoped_purchase_receipt_ids=scoped_purchase_receipt_ids,
+        )
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logger.error(f"导出来料检验单失败: {str(e)}")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
+
+
 @router.get("/incoming-inspections/{inspection_id}", response_model=IncomingInspectionResponse, summary="Get incoming inspection")
 async def get_incoming_inspection(
     inspection_id: int,
@@ -1100,46 +1140,6 @@ async def import_incoming_inspections(
     return JSONResponse(content=result)
 
 
-@router.get("/incoming-inspections/export", response_class=FileResponse, summary="Export incoming inspections")
-async def export_incoming_inspections(
-    status: Optional[str] = Query(None, description="检验状态"),
-    quality_status: Optional[str] = Query(None, description="质量状态"),
-    supplier_id: Optional[int] = Query(None, description="供应商ID"),
-    material_id: Optional[int] = Query(None, description="物料ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    导出来料检验单到Excel文件
-
-    支持多种筛选条件。
-    """
-    try:
-        scoped_purchase_receipt_ids = await _scoped_purchase_receipt_ids(
-            tenant_id=tenant_id,
-            current_user=current_user,
-        )
-        file_path = await IncomingInspectionService().export_to_excel(
-            tenant_id=tenant_id,
-            status=status,
-            quality_status=quality_status,
-            supplier_id=supplier_id,
-            material_id=material_id,
-            scoped_purchase_receipt_ids=scoped_purchase_receipt_ids,
-        )
-        return FileResponse(
-            path=file_path,
-            filename=os.path.basename(file_path),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    except Exception as e:
-        logger.error(f"导出来料检验单失败: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导出失败: {str(e)}"
-        )
-
-
 @router.post("/incoming-inspections/{inspection_id}/create-defect", response_model=DefectRecordResponse, summary="Create defect from incoming inspection")
 async def create_defect_from_incoming_inspection(
     inspection_id: int = Path(..., description="来料检验单ID"),
@@ -1311,6 +1311,42 @@ async def list_process_inspections(
         created_start_date=created_start_date,
         created_end_date=created_end_date,
     )
+
+
+@router.get("/process-inspections/export", response_class=FileResponse, summary="Export in-process inspections")
+async def export_process_inspections(
+    status: Optional[str] = Query(None, description="检验状态"),
+    quality_status: Optional[str] = Query(None, description="质量状态"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    operation_id: Optional[int] = Query(None, description="工序ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """导出过程检验单到Excel文件"""
+    try:
+        scoped_work_order_ids = await _scoped_work_order_ids(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
+        file_path = await ProcessInspectionService().export_to_excel(
+            tenant_id=tenant_id,
+            status=status,
+            quality_status=quality_status,
+            work_order_id=work_order_id,
+            operation_id=operation_id,
+            scoped_work_order_ids=scoped_work_order_ids,
+        )
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logger.error(f"导出过程检验单失败: {str(e)}")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
 
 
 @router.get("/process-inspections/{inspection_id}", response_model=ProcessInspectionResponse, summary="Get in-process inspection")
@@ -1571,42 +1607,6 @@ async def import_process_inspections(
     return JSONResponse(content=result)
 
 
-@router.get("/process-inspections/export", response_class=FileResponse, summary="Export in-process inspections")
-async def export_process_inspections(
-    status: Optional[str] = Query(None, description="检验状态"),
-    quality_status: Optional[str] = Query(None, description="质量状态"),
-    work_order_id: Optional[int] = Query(None, description="工单ID"),
-    operation_id: Optional[int] = Query(None, description="工序ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """导出过程检验单到Excel文件"""
-    try:
-        scoped_work_order_ids = await _scoped_work_order_ids(
-            tenant_id=tenant_id,
-            current_user=current_user,
-        )
-        file_path = await ProcessInspectionService().export_to_excel(
-            tenant_id=tenant_id,
-            status=status,
-            quality_status=quality_status,
-            work_order_id=work_order_id,
-            operation_id=operation_id,
-            scoped_work_order_ids=scoped_work_order_ids,
-        )
-        return FileResponse(
-            path=file_path,
-            filename=os.path.basename(file_path),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    except Exception as e:
-        logger.error(f"导出过程检验单失败: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导出失败: {str(e)}"
-        )
-
-
 @router.post("/process-inspections/{inspection_id}/create-defect", response_model=DefectRecordResponse, summary="Create defect from in-process inspection")
 async def create_defect_from_process_inspection(
     inspection_id: int = Path(..., description="过程检验单ID"),
@@ -1780,6 +1780,40 @@ async def list_finished_goods_inspections(
         created_start_date=created_start_date,
         created_end_date=created_end_date,
     )
+
+
+@router.get("/finished-goods-inspections/export", response_class=FileResponse, summary="Export finished goods inspections")
+async def export_finished_goods_inspections(
+    status: Optional[str] = Query(None, description="检验状态"),
+    quality_status: Optional[str] = Query(None, description="质量状态"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """导出成品检验单到Excel文件"""
+    try:
+        scoped_work_order_ids = await _scoped_work_order_ids(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
+        file_path = await FinishedGoodsInspectionService().export_to_excel(
+            tenant_id=tenant_id,
+            status=status,
+            quality_status=quality_status,
+            work_order_id=work_order_id,
+            scoped_work_order_ids=scoped_work_order_ids,
+        )
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logger.error(f"导出成品检验单失败: {str(e)}")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
 
 
 @router.get("/finished-goods-inspections/{inspection_id}", response_model=FinishedGoodsInspectionResponse, summary="Get finished goods inspection")
@@ -2233,40 +2267,6 @@ async def import_finished_goods_inspections(
         created_by=current_user.id
     )
     return JSONResponse(content=result)
-
-
-@router.get("/finished-goods-inspections/export", response_class=FileResponse, summary="Export finished goods inspections")
-async def export_finished_goods_inspections(
-    status: Optional[str] = Query(None, description="检验状态"),
-    quality_status: Optional[str] = Query(None, description="质量状态"),
-    work_order_id: Optional[int] = Query(None, description="工单ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """导出成品检验单到Excel文件"""
-    try:
-        scoped_work_order_ids = await _scoped_work_order_ids(
-            tenant_id=tenant_id,
-            current_user=current_user,
-        )
-        file_path = await FinishedGoodsInspectionService().export_to_excel(
-            tenant_id=tenant_id,
-            status=status,
-            quality_status=quality_status,
-            work_order_id=work_order_id,
-            scoped_work_order_ids=scoped_work_order_ids,
-        )
-        return FileResponse(
-            path=file_path,
-            filename=os.path.basename(file_path),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    except Exception as e:
-        logger.error(f"导出成品检验单失败: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导出失败: {str(e)}"
-        )
 
 
 @router.post("/finished-goods-inspections/{inspection_id}/create-defect", response_model=DefectRecordResponse, summary="Create defect from FG inspection")

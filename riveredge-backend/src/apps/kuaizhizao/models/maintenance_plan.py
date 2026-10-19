@@ -67,25 +67,31 @@ class MaintenancePlan(BaseModel):
     plan_no = fields.CharField(max_length=100, description="维护计划编号（组织内唯一）")
     plan_name = fields.CharField(max_length=200, description="计划名称")
     
-    # 关联设备（首台设备字段供列表/筛选/执行默认；多设备见 equipment_items）
-    equipment_id = fields.IntField(description="设备ID（关联设备，首台）")
-    equipment_uuid = fields.CharField(max_length=36, description="设备UUID（首台）")
-    equipment_name = fields.CharField(max_length=200, description="设备名称（首台或汇总展示）")
-    equipment_items = fields.JSONField(null=True, description="关联设备列表 [{id,uuid,code,name}]")
+    # 设备改由保养方案绑定展开；下列为首台快照（可空，列表/提醒兼容）
+    equipment_id = fields.IntField(null=True, description="设备ID（首台快照，可空）")
+    equipment_uuid = fields.CharField(max_length=36, null=True, description="设备UUID（首台快照，可空）")
+    equipment_name = fields.CharField(max_length=200, null=True, description="设备名称（首台或汇总展示，可空）")
+    equipment_items = fields.JSONField(null=True, description="历史关联设备列表（新计划不再写入）")
 
-    # 绑定保养方案（计划参数仍在计划上维护，方案仅用于执行项展开）
+    # 绑定保养方案（维护类型/周期从方案快照；设备从方案绑定展开）
     maintenance_scheme_id = fields.IntField(null=True, description="保养方案ID")
     scheme_code = fields.CharField(max_length=64, null=True, description="保养方案编码快照")
     scheme_name = fields.CharField(max_length=200, null=True, description="保养方案名称快照")
     
     # 计划类型
     plan_type = fields.CharField(max_length=50, description="计划类型（预防性维护、定期维护、临时维护）")
-    maintenance_type = fields.CharField(max_length=50, description="维护类型（日常保养、小修、中修、大修）")
+    maintenance_type = fields.CharField(
+        max_length=50, null=True, description="维护类型快照（来自保养方案）"
+    )
     
-    # 周期设置
-    cycle_type = fields.CharField(max_length=50, description="周期类型（按时间、按运行时长、按使用次数）")
-    cycle_value = fields.IntField(null=True, description="周期值")
-    cycle_unit = fields.CharField(max_length=20, null=True, description="周期单位（天、小时、次）")
+    # 周期快照（来自保养方案）
+    cycle_type = fields.CharField(
+        max_length=50, null=True, description="周期类型快照（来自保养方案）"
+    )
+    cycle_value = fields.IntField(null=True, description="周期值快照（来自保养方案）")
+    cycle_unit = fields.CharField(
+        max_length=20, null=True, description="周期单位快照（来自保养方案）"
+    )
     
     # 计划时间
     planned_start_date = fields.DatetimeField(null=True, description="计划开始日期")

@@ -38,6 +38,7 @@ export function UniPullQueryModal<T extends object>({
   selectedRowKeys,
   onSelectedRowKeysChange,
   isRowDisabled,
+  onDisabledRowClick,
   searchDraft,
   onSearchDraftChange,
   onSearchApply,
@@ -148,12 +149,17 @@ export function UniPullQueryModal<T extends object>({
   const handleRowClick = useCallback(
     (record: T, event: React.MouseEvent<HTMLElement>) => {
       const target = event.target as HTMLElement;
-      if (
-        target.closest('.ant-checkbox-wrapper, .ant-checkbox, .ant-radio-wrapper, .ant-radio, button, a, input, textarea, select')
-      ) {
+      const hitControl = Boolean(
+        target.closest(
+          '.ant-checkbox-wrapper, .ant-checkbox, .ant-radio-wrapper, .ant-radio, button, a, input, textarea, select',
+        ),
+      );
+      if (isRowDisabled?.(record)) {
+        // 点禁用单选/勾选或行体：均提示不可选原因（禁用控件本身不会触发 rowSelection.onChange）
+        onDisabledRowClick?.(record);
         return;
       }
-      if (isRowDisabled?.(record)) {
+      if (hitControl) {
         return;
       }
       const key = resolveRowKey(record, rowKey);
@@ -170,7 +176,15 @@ export function UniPullQueryModal<T extends object>({
       );
       onSelectedRowKeysChange(nextKeys, nextRows);
     },
-    [dataSource, isRowDisabled, onSelectedRowKeysChange, rowKey, selectedRowKeys, selectionType],
+    [
+      dataSource,
+      isRowDisabled,
+      onDisabledRowClick,
+      onSelectedRowKeysChange,
+      rowKey,
+      selectedRowKeys,
+      selectionType,
+    ],
   );
 
   const inner = (

@@ -22,12 +22,14 @@ import {
 } from 'antd';
 import {
   CheckCircleOutlined,
+  FileAddOutlined,
   PlusOutlined,
   StopOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -66,6 +68,7 @@ import {
   partnerPriceBookPartnerSearchColumn,
   resolvePartnerPriceBookListParams,
 } from '../../../utils/supplyChainListCore';
+import { PartnerPriceBookBatchRegisterModal } from './PartnerPriceBookBatchRegisterModal';
 
 function getMaterialAllowedUnits(material?: Material | null): string[] {
   if (!material) return [];
@@ -133,6 +136,11 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const priceBookApi = useMemo(() => createPartnerPriceBookApi(partnerType), [partnerType]);
   const isCustomer = partnerType === 'customer';
+  const pagePermissionResource = isCustomer
+    ? 'master-data:supply-chain:customer-price-book'
+    : 'master-data:supply-chain:supplier-price-book';
+  const { canCreate } = useResourcePermissions(pagePermissionResource);
+  const [batchRegisterOpen, setBatchRegisterOpen] = useState(false);
 
   const priceBookActiveValueEnum = useMemo(
     () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
@@ -675,6 +683,19 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           showCreateButton
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
+          toolBarActionsAfterCreate={
+            canCreate
+              ? [
+                  <Button
+                    key="partner-price-book-bulk-register"
+                    icon={<FileAddOutlined />}
+                    onClick={() => setBatchRegisterOpen(true)}
+                  >
+                    {t('app.master-data.priceBook.bulkRegister', '批量登记')}
+                  </Button>,
+                ]
+              : []
+          }
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('common.confirmBatchDelete', { count })}
@@ -726,6 +747,14 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
         />
       </ListPageTemplate>
+
+      <PartnerPriceBookBatchRegisterModal
+        partnerType={partnerType}
+        open={batchRegisterOpen}
+        onClose={() => setBatchRegisterOpen(false)}
+        onSuccess={() => actionRef.current?.reload()}
+        partnerOptions={partnerOptions}
+      />
 
       <MasterDataDetailDrawer
         title={pageTitle}

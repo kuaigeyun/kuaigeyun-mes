@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
-import { Typography, Button, Modal, Input, Tooltip, Progress, theme, message, Empty, Radio, Upload } from 'antd';
+import { Typography, Button, Modal, Input, InputNumber, Switch, Tooltip, Progress, theme, message, Empty, Radio, Upload } from 'antd';
 import type { UploadProps } from 'antd';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Billboard, useTexture } from '@react-three/drei';
@@ -24,10 +24,16 @@ import {
 } from './chartTheme';
 import { useThemeStore } from '../../../../stores/themeStore';
 import { SYSTEM_VIEWPORT_OFFSETS, getViewportHeightExpr } from '../../../../components/layout-templates/constants';
-import { getBusinessBoardTitle, putBusinessBoardTitle } from '../../../../services/businessBoardTitle';
+import {
+  EMPTY_VISIT_METRICS,
+  getBusinessBoardTitle,
+  putBusinessBoardTitle,
+  type BusinessBoardVisitMetrics,
+} from '../../../../services/businessBoardTitle';
 import { getFilePreview, uploadFile } from '../../../../services/file';
 import { useConfigStore } from '../../../../stores/configStore';
 import { useSiteLogoUrl } from '../../../../hooks/useSiteLogoUrl';
+import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 import i18n from '../../../../config/i18n';
 import {
   getSalesSummary,
@@ -894,21 +900,43 @@ const HeaderDecoration: React.FC<{ children: React.ReactNode }> = ({ children })
   </div>
 );
 
+const VISIT_METRIC_FIELDS: Array<{
+  key: keyof BusinessBoardVisitMetrics;
+  labelKey: string;
+  suffix?: string;
+  max?: number;
+}> = [
+  { key: 'today_output', labelKey: 'dashboard.businessBoard.hero.todayOutput' },
+  { key: 'qualified_rate', labelKey: 'dashboard.businessBoard.hero.qualifiedRate', suffix: '%', max: 100 },
+  { key: 'in_progress_wo', labelKey: 'dashboard.businessBoard.hero.inProgressWo' },
+  { key: 'pending_schedule', labelKey: 'dashboard.businessBoard.hero.pendingSchedule' },
+  { key: 'avg_cycle', labelKey: 'dashboard.businessBoard.hero.avgCycle', suffix: 'd' },
+  { key: 'on_time_delivery', labelKey: 'dashboard.businessBoard.hero.onTimeDelivery', suffix: '%', max: 100 },
+  { key: 'rework_count', labelKey: 'dashboard.businessBoard.hero.reworkOrders' },
+  { key: 'repairing_count', labelKey: 'dashboard.businessBoard.hero.repairingEquip' },
+];
+
 const BusinessBoardPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  const currentUser = useCurrentUser();
+  const canManageVisitMode = Boolean(currentUser?.is_tenant_admin || currentUser?.is_infra_admin);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState(formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss'));
   const containerRef = useRef<HTMLDivElement>(null);
   const [customBoardTitle, setCustomBoardTitle] = useState('');
   /** 中间配图文件 UUID，null 表示使用系统默认图 */
   const [customHeroImageUuid, setCustomHeroImageUuid] = useState<string | null>(null);
+  const [visitMode, setVisitMode] = useState(false);
+  const [visitMetrics, setVisitMetrics] = useState<BusinessBoardVisitMetrics>(EMPTY_VISIT_METRICS);
   const [heroTextureUrl, setHeroTextureUrl] = useState(DEFAULT_HERO_TEXTURE);
   const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   /** 弹窗内编辑中的中间图 UUID */
   const [heroImageUuidDraft, setHeroImageUuidDraft] = useState<string | null>(null);
   const [heroDraftPreviewUrl, setHeroDraftPreviewUrl] = useState(DEFAULT_HERO_TEXTURE);
+  const [visitModeDraft, setVisitModeDraft] = useState(false);
+  const [visitMetricsDraft, setVisitMetricsDraft] = useState<BusinessBoardVisitMetrics>(EMPTY_VISIT_METRICS);
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month'>('month');
 
   /** 根据 timeRange 推导 YYYY-MM-DD 区间；week 以周一为起点 */
@@ -954,6 +982,8 @@ const BusinessBoardPage: React.FC = () => {
           const fromApi = (res?.title || '').trim();
           setCustomBoardTitle(fromApi);
           setCustomHeroImageUuid(res?.hero_image_uuid ?? null);
+          setVisitMode(Boolean(res?.visit_mode));
+          setVisitMetrics({ ...EMPTY_VISIT_METRICS, ...(res?.visit_metrics || {}) });
           return;
         } catch {
           if (attempt < 2) {
@@ -962,6 +992,8 @@ const BusinessBoardPage: React.FC = () => {
           }
           setCustomBoardTitle('');
           setCustomHeroImageUuid(null);
+          setVisitMode(false);
+          setVisitMetrics(EMPTY_VISIT_METRICS);
         }
       }
     })();
@@ -1013,8 +1045,10 @@ const BusinessBoardPage: React.FC = () => {
   const openTitleModal = useCallback(() => {
     setTitleDraft(customBoardTitle || defaultBoardTitle);
     setHeroImageUuidDraft(customHeroImageUuid);
+    setVisitModeDraft(visitMode);
+    setVisitMetricsDraft({ ...EMPTY_VISIT_METRICS, ...visitMetrics });
     setTitleModalOpen(true);
-  }, [customBoardTitle, customHeroImageUuid, defaultBoardTitle]);
+  }, [customBoardTitle, customHeroImageUuid, defaultBoardTitle, visitMode, visitMetrics]);
 
   const handleHeroBeforeUpload = useCallback<NonNullable<UploadProps['beforeUpload']>>(
     async (file) => {
@@ -1044,31 +1078,49 @@ const BusinessBoardPage: React.FC = () => {
   const saveBoardTitle = useCallback(async () => {
     const nextTitle = titleDraft.trim() || null;
     try {
-      const data = await putBusinessBoardTitle({
+      const payload: Parameters<typeof putBusinessBoardTitle>[0] = {
         title: nextTitle,
         hero_image_uuid: heroImageUuidDraft,
-      });
+      };
+      if (canManageVisitMode) {
+        payload.visit_mode = visitModeDraft;
+        payload.visit_metrics = visitMetricsDraft;
+      }
+      const data = await putBusinessBoardTitle(payload);
       setCustomBoardTitle((data.title || '').trim());
       setCustomHeroImageUuid(data.hero_image_uuid ?? null);
+      setVisitMode(Boolean(data.visit_mode));
+      setVisitMetrics({ ...EMPTY_VISIT_METRICS, ...(data.visit_metrics || {}) });
       setTitleModalOpen(false);
     } catch (e: unknown) {
       message.error((e as Error)?.message || t('dashboard.businessBoard.error.saveFailed'));
     }
-  }, [titleDraft, heroImageUuidDraft]);
+  }, [titleDraft, heroImageUuidDraft, canManageVisitMode, visitModeDraft, visitMetricsDraft, t]);
 
   const resetBoardTitle = useCallback(async () => {
     try {
-      const data = await putBusinessBoardTitle({
+      const payload: Parameters<typeof putBusinessBoardTitle>[0] = {
         title: null,
         hero_image_uuid: customHeroImageUuid,
-      });
+      };
+      if (canManageVisitMode) {
+        payload.visit_mode = visitModeDraft;
+        payload.visit_metrics = visitMetricsDraft;
+      }
+      const data = await putBusinessBoardTitle(payload);
       setCustomBoardTitle((data.title || '').trim());
       setCustomHeroImageUuid(data.hero_image_uuid ?? null);
+      setVisitMode(Boolean(data.visit_mode));
+      setVisitMetrics({ ...EMPTY_VISIT_METRICS, ...(data.visit_metrics || {}) });
       setTitleDraft(defaultBoardTitle);
     } catch (e: unknown) {
       message.error((e as Error)?.message || t('dashboard.businessBoard.error.resetFailed'));
     }
-  }, [defaultBoardTitle, customHeroImageUuid]);
+  }, [defaultBoardTitle, customHeroImageUuid, canManageVisitMode, visitModeDraft, visitMetricsDraft, t]);
+
+  const patchVisitMetricDraft = useCallback((key: keyof BusinessBoardVisitMetrics, value: number | null) => {
+    setVisitMetricsDraft((prev) => ({ ...prev, [key]: value }));
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss')), 1000);
@@ -1464,7 +1516,7 @@ const BusinessBoardPage: React.FC = () => {
         okText={t('common.save')}
         cancelText={t('common.cancel')}
         destroyOnHidden
-        width={480}
+        width={canManageVisitMode ? 560 : 480}
       >
         <Input
           value={titleDraft}
@@ -1524,6 +1576,47 @@ const BusinessBoardPage: React.FC = () => {
             ) : null}
           </div>
         </div>
+
+        {canManageVisitMode ? (
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>
+                {t('dashboard.businessBoard.visitModeLabel')}
+              </div>
+              <Switch checked={visitModeDraft} onChange={setVisitModeDraft} />
+            </div>
+            <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: visitModeDraft ? 12 : 0 }}>
+              {t('dashboard.businessBoard.visitModeHint')}
+            </div>
+            {visitModeDraft ? (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 12,
+                }}
+              >
+                {VISIT_METRIC_FIELDS.map((field) => (
+                  <div key={field.key}>
+                    <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>
+                      {t(field.labelKey)}
+                      {field.suffix ? ` (${field.suffix})` : ''}
+                    </div>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      min={0}
+                      max={field.max}
+                      step={field.max === 100 ? 0.1 : 1}
+                      value={visitMetricsDraft[field.key] ?? null}
+                      onChange={(v) => patchVisitMetricDraft(field.key, typeof v === 'number' ? v : null)}
+                      placeholder={t('dashboard.businessBoard.visitMetricUseLive')}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </Modal>
 
       {/* 主体：左 2 + 中（装饰 + 1）+ 右 2 */}
@@ -1718,14 +1811,46 @@ const BusinessBoardPage: React.FC = () => {
             {/* 制造态势标题与实时标签已根据要求移除 */}
             <HudHero
               centerTextureUrl={heroTextureUrl}
-              todayOutput={Number(manufacturing?.today_output ?? 0)}
-              qualifiedRate={Number(manufacturing?.qualified_rate ?? 0)}
-              inProgressWo={Number(manufacturing?.in_progress_count ?? 0)}
-              pendingSchedule={Number(manufacturing?.pending_scheduling ?? 0)}
-              avgCycle={Number(metrics?.average_production_cycle ?? 0)}
-              onTimeDelivery={Number(metrics?.on_time_delivery_rate ?? 0)}
-              reworkCount={Number(manufacturing?.rework_count ?? 0)}
-              repairingCount={Number(equipment?.repairing_count ?? 0)}
+              todayOutput={Number(
+                visitMode && visitMetrics.today_output != null
+                  ? visitMetrics.today_output
+                  : (manufacturing?.today_output ?? 0),
+              )}
+              qualifiedRate={Number(
+                visitMode && visitMetrics.qualified_rate != null
+                  ? visitMetrics.qualified_rate
+                  : (manufacturing?.qualified_rate ?? 0),
+              )}
+              inProgressWo={Number(
+                visitMode && visitMetrics.in_progress_wo != null
+                  ? visitMetrics.in_progress_wo
+                  : (manufacturing?.in_progress_count ?? 0),
+              )}
+              pendingSchedule={Number(
+                visitMode && visitMetrics.pending_schedule != null
+                  ? visitMetrics.pending_schedule
+                  : (manufacturing?.pending_scheduling ?? 0),
+              )}
+              avgCycle={Number(
+                visitMode && visitMetrics.avg_cycle != null
+                  ? visitMetrics.avg_cycle
+                  : (metrics?.average_production_cycle ?? 0),
+              )}
+              onTimeDelivery={Number(
+                visitMode && visitMetrics.on_time_delivery != null
+                  ? visitMetrics.on_time_delivery
+                  : (metrics?.on_time_delivery_rate ?? 0),
+              )}
+              reworkCount={Number(
+                visitMode && visitMetrics.rework_count != null
+                  ? visitMetrics.rework_count
+                  : (manufacturing?.rework_count ?? 0),
+              )}
+              repairingCount={Number(
+                visitMode && visitMetrics.repairing_count != null
+                  ? visitMetrics.repairing_count
+                  : (equipment?.repairing_count ?? 0),
+              )}
               siteLogoUrl={siteLogoUrl}
               labels={heroLabels}
             />

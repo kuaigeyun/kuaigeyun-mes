@@ -20,6 +20,8 @@ import {
  * 审核 / 生命周期列不参与排序：UniTable 注入 `sorter: false`。
  */
 export const UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH = 80;
+/** 审核状态列：待我审核 / 您已审核 为四字，比三字「待审核」略宽 */
+export const UNI_TABLE_AUDIT_PHASE_COLUMN_WIDTH = 104;
 
 /**
  * 下推 / 交货 / 完成进度条列统一宽度。
@@ -318,6 +320,11 @@ export function resolveUniTableLifecycleColumnWidth(): number {
   return UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH;
 }
 
+/** 审核状态列：按当前审核人展示「待我审核 / 您已审核」 */
+export function resolveUniTableAuditPhaseColumnWidth(): number {
+  return UNI_TABLE_AUDIT_PHASE_COLUMN_WIDTH;
+}
+
 /**
  * 操作列注入 ProTable 的 width；非 fixed right 返回 undefined 由内容撑开。
  *
@@ -369,6 +376,9 @@ export function getUniTableColumnScrollContribution(col: unknown): number {
     return 0;
   }
 
+  if (isUniTableAuditPhaseColumn(col)) {
+    return resolveUniTableAuditPhaseColumnWidth();
+  }
   if (isUniTableLifecycleColumn(col)) {
     return resolveUniTableLifecycleColumnWidth();
   }

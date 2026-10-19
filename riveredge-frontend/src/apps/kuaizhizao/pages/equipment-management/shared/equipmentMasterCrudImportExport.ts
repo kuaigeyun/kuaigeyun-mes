@@ -138,6 +138,7 @@ export function createMasterCrudImportHandler(options: MasterCrudImportOptions) 
     const codeToId = await buildCodeIdMap(api);
     const result = await importInChunksViaPerItemCreate({
       items,
+      rowNumberForIndex: (globalIndex) => globalIndex + 3,
       createOne: async (item) => {
         const code = String(item.code ?? '').trim();
         if (!code) {
@@ -161,14 +162,8 @@ export function createMasterCrudImportHandler(options: MasterCrudImportOptions) 
     if (result.successCount > 0) {
       messageApi.success(t('common.importSuccess', { count: result.successCount }));
       actionRef.current?.reload();
-    }
-    if (result.failureCount > 0) {
-      messageApi.warning(
-        t('common.importResult', {
-          success_count: result.successCount,
-          failure_count: result.failureCount,
-        }),
-      );
+    } else if (result.failureCount > 0) {
+      actionRef.current?.reload();
     }
   };
 }

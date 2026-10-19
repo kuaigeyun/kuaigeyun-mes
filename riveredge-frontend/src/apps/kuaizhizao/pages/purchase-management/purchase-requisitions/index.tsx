@@ -123,7 +123,6 @@ import {
 } from './components/PurchaseRequisitionDetailDrawer';
 import {
   PurchaseRequisitionLineStockCell,
-  PurchaseRequisitionLineStockHint,
   PurchaseRequisitionLineStockProvider,
 } from './components/PurchaseRequisitionLineStock';
 import {
@@ -146,7 +145,8 @@ import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, t
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { coerceFormDate, formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import {
   purchaseRequisitionCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
@@ -285,8 +285,42 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const createFormRef = useRef<any>(null);
   const submitAfterSaveRef = useRef(false);
   const [formSubmitting, setFormSubmitting] = useState(false);
+  /** 上一次表头要求到货日，用于改表头时同步曾跟随表头的明细行（对齐采购订单/销售订单） */
+  const lastHeaderDeliveryRef = useRef<ReturnType<typeof dayjs> | null>(null);
   /** 程序化回填（服务端/草稿）期间禁止 onValuesChange 写草稿，避免空价覆盖手填 */
   const prFormHydratingRef = useRef(false);
+
+  const applyHeaderDeliveryToItemLines = useCallback((delivery: unknown) => {
+    const coerced = coerceFormDate(delivery);
+    if (coerced == null) return;
+    const prevHeader = lastHeaderDeliveryRef.current;
+    const items = normalizeFormListItems<any>(createFormRef.current?.getFieldValue('items'));
+    if (!items.length) return;
+    let changed = false;
+    const next = items.map((it: Record<string, unknown>) => {
+      const lineDate = coerceFormDate(it.required_date);
+      if (lineDate == null) {
+        changed = true;
+        return { ...it, required_date: coerced };
+      }
+      if (prevHeader && lineDate.isSame(prevHeader, 'day')) {
+        changed = true;
+        return { ...it, required_date: coerced };
+      }
+      return it;
+    });
+    lastHeaderDeliveryRef.current = coerced;
+    if (changed) {
+      createFormRef.current?.setFieldsValue({ items: next });
+    }
+  }, []);
+
+  const resolveHeaderRequiredDateDefault = useCallback(() => {
+    const mainRequired = createFormRef.current?.getFieldValue('required_date');
+    const coerced = coerceFormDate(mainRequired);
+    if (coerced != null) return coerced;
+    return undefined;
+  }, []);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
@@ -359,6 +393,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             : dayjs(requisitionDate)
           : dayjs();
       const priced = await resolvePurchaseDocumentMaterialLinesPricing(selected, { asOf });
+      const defaultDate = resolveHeaderRequiredDateDefault();
       const queue = priced.map(({ material: m, unitPrice }) => ({
         material_id: (m as Material).id,
         material_code: (m as Material).mainCode ?? (m as Material).code ?? '',
@@ -367,12 +402,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
         unit: resolveMaterialScenarioUnit(m as Material, 'purchase'),
         quantity: 1,
         suggested_unit_price: unitPrice,
-        required_date: undefined,
+        required_date: defaultDate,
         demand_computation_item_id: undefined,
         supplier_id: undefined,
         notes: undefined,
       }));
-      const items = [...(createFormRef.current?.getFieldValue('items') ?? [])].map((row: any) => ({ ...row }));
+      const items = [...normalizeFormListItems<any>(createFormRef.current?.getFieldValue('items'))].map(
+        (row: any) => ({ ...row }),
+      );
       for (let i = 0; i < items.length && queue.length > 0; i++) {
         if (isEmptyItemRow(items[i])) {
           items[i] = queue.shift()!;
@@ -384,12 +421,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
       createFormRef.current?.setFieldsValue({ items });
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
-    [messageApi, t]
+    [messageApi, resolveHeaderRequiredDateDefault, t]
   );
 
   const handleItemImport = useCallback(
     (data: any[][]) => {
       const rows = data.slice(2);
+      const defaultDate = resolveHeaderRequiredDateDefault();
       const newItems = rows
         .map((row) => {
           const materialCode = String(row[0] || '').trim();
@@ -410,7 +448,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
             unit: unit || '件',
             quantity: quantity || 1,
             suggested_unit_price: suggestedPrice,
-            required_date: requiredDate && dayjs(requiredDate).isValid() ? dayjs(requiredDate) : undefined,
+            required_date:
+              requiredDate && dayjs(requiredDate).isValid() ? dayjs(requiredDate) : defaultDate,
             notes: notes || undefined,
           };
         })
@@ -421,12 +460,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
         return;
       }
 
-      const currentItems = createFormRef.current?.getFieldValue('items') || [];
+      const currentItems = normalizeFormListItems<any>(createFormRef.current?.getFieldValue('items'));
       createFormRef.current?.setFieldsValue({ items: [...currentItems, ...newItems] });
       messageApi.success(t('app.kuaizhizao.salesOrder.importSuccessItems', { count: newItems.length }));
       setImportModalVisible(false);
     },
-    [messageApi, materialUnitImport, t],
+    [messageApi, materialUnitImport, resolveHeaderRequiredDateDefault, t],
   );
 
   const initialCreateItems = INITIAL_CREATE_ITEMS;
@@ -482,6 +521,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
         if (draftSnapshot && Object.keys(draftSnapshot).length > 0) {
           createFormRef.current?.setFieldsValue(draftSnapshot);
         }
+        // 表头有到货日、行为空时补入（与改表头带入同一套逻辑）
+        lastHeaderDeliveryRef.current = null;
+        applyHeaderDeliveryToItemLines(
+          createFormRef.current?.getFieldValue('required_date') ?? baseValues.required_date,
+        );
       } catch {
         messageApi.error(t('app.kuaizhizao.purchaseRequisition.loadFailed'));
         leavePurchaseRequisitionFormPage();
@@ -489,7 +533,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         prFormHydratingRef.current = false;
       }
     },
-    [messageApi, ensureSupplierList, leavePurchaseRequisitionFormPage, t, prFormDraftKey],
+    [messageApi, ensureSupplierList, leavePurchaseRequisitionFormPage, t, prFormDraftKey, applyHeaderDeliveryToItemLines],
   );
 
   const handleEdit = useCallback(
@@ -546,8 +590,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
     const draft = prFormDraftKey ? getDocumentFormDraft(prFormDraftKey) : null;
     if (draft && Object.keys(draft).length > 0) {
       applyCreateFormDefaults(draft);
+      lastHeaderDeliveryRef.current = null;
+      applyHeaderDeliveryToItemLines((draft as Record<string, unknown>).required_date);
       return;
     }
+    lastHeaderDeliveryRef.current = null;
     setPreviewCode(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
@@ -618,7 +665,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         });
       }
     }
-  }, [ensureSupplierList, prFormDraftKey, applyCreateFormDefaults, initialCreateItems]);
+  }, [ensureSupplierList, prFormDraftKey, applyCreateFormDefaults, initialCreateItems, applyHeaderDeliveryToItemLines]);
 
   const handleCreate = () => {
     navigate(PURCHASE_REQUISITION_CREATE_PATH);
@@ -882,21 +929,32 @@ const PurchaseRequisitionsPage: React.FC = () => {
       demand_computation_item_id?: number;
       supplier_id?: number;
       notes?: string;
-    }>
+    }>,
+    headerRequiredDateStr?: string,
   ) =>
-    validItems.map((i) => ({
-      material_id: i.material_id!,
-      material_code: i.material_code || '',
-      material_name: i.material_name || '',
-      material_spec: i.material_spec,
-      unit: i.unit || '件',
-      quantity: Number(i.quantity) || 0,
-      suggested_unit_price: Number(i.suggested_unit_price) || 0,
-      required_date: i.required_date?.format?.('YYYY-MM-DD') ?? i.required_date ?? undefined,
-      demand_computation_item_id: i.demand_computation_item_id,
-      supplier_id: i.supplier_id ?? undefined,
-      notes: typeof i.notes === 'string' && i.notes.trim() ? i.notes.trim() : undefined,
-    }));
+    validItems.map((i, index) => {
+      const lineDate =
+        coerceFormDate(i.required_date)?.format('YYYY-MM-DD') ??
+        (typeof i.required_date === 'string' && i.required_date.trim() ? i.required_date.trim() : undefined) ??
+        headerRequiredDateStr;
+      if (!lineDate) {
+        messageApi.error(t('app.kuaizhizao.purchaseRequisition.lineRequiredDateMissing', { row: index + 1 }));
+        throw new Error(t('app.kuaizhizao.purchaseRequisition.form.lineDeliveryRequired'));
+      }
+      return {
+        material_id: i.material_id!,
+        material_code: i.material_code || '',
+        material_name: i.material_name || '',
+        material_spec: i.material_spec,
+        unit: i.unit || '件',
+        quantity: Number(i.quantity) || 0,
+        suggested_unit_price: Number(i.suggested_unit_price) || 0,
+        required_date: lineDate,
+        demand_computation_item_id: i.demand_computation_item_id,
+        supplier_id: i.supplier_id ?? undefined,
+        notes: typeof i.notes === 'string' && i.notes.trim() ? i.notes.trim() : undefined,
+      };
+    });
 
   const handleModalSubmit = async (values: {
     requisition_code?: string;
@@ -923,10 +981,20 @@ const PurchaseRequisitionsPage: React.FC = () => {
   }) => {
     const requisitionDate =
       values.requisition_date?.format?.('YYYY-MM-DD') ?? values.requisition_date ?? undefined;
-    const requiredDate = values.required_date?.format?.('YYYY-MM-DD') ?? values.required_date;
-    const validItems = (values.items ?? []).filter((i) => i.material_id && (Number(i.quantity) || 0) > 0);
+    const requiredDate =
+      coerceFormDate(values.required_date)?.format('YYYY-MM-DD') ??
+      (typeof values.required_date === 'string' ? values.required_date : undefined);
+    const validItems = normalizeFormListItems<any>(values.items).filter(
+      (i) => i.material_id && (Number(i.quantity) || 0) > 0,
+    );
     if (validItems.length === 0) {
       messageApi.error(t('app.kuaizhizao.purchaseRequisition.atLeastOneItem'));
+      return;
+    }
+    let itemsPayload;
+    try {
+      itemsPayload = mapItemsForApi(validItems, requiredDate);
+    } catch {
       return;
     }
     const shouldSubmit = submitAfterSaveRef.current;
@@ -943,7 +1011,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           applicant_name: values.applicant_name,
           notes: values.notes,
           attachments: normalizeDocumentAttachments(values.attachments),
-          items: mapItemsForApi(validItems),
+          items: itemsPayload,
         });
         requisitionId = editingId;
         if (!shouldSubmit) {
@@ -970,7 +1038,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           applicant_name: values.applicant_name,
           notes: values.notes,
           attachments: normalizeDocumentAttachments(values.attachments),
-          items: mapItemsForApi(validItems),
+          items: itemsPayload,
         });
         requisitionId = created.id;
         if (!shouldSubmit) {
@@ -1637,14 +1705,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
-        const s = (record.status ?? '').toString().trim();
-        const isDraft = ['草稿', 'draft', 'DRAFT'].includes(s);
         const parts: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail(record)}>
             {t('common.detail')}
           </Button>,
         ];
-        if (isDraft) {
+        if (record.capabilities?.update?.allowed === true && purchaseRequisitionPerms.canUpdate) {
           parts.push(
             <Button {...rowActionKind('update')} key="e" onClick={() => handleEdit(record)}>
               {t('common.edit')}
@@ -1855,6 +1921,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 fieldName: 'required_date',
                 baseFieldName: 'requisition_date',
                 t,
+                onApply: (date) => {
+                  createFormRef.current?.setFieldValue?.('required_date', date);
+                  applyHeaderDeliveryToItemLines(date);
+                },
+                fieldProps: {
+                  onChange: (value: unknown) => {
+                    applyHeaderDeliveryToItemLines(value);
+                  },
+                },
               })}
             />
           </Col>
@@ -1905,8 +1980,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 type="default"
                 icon={<PlusOutlined />}
                 onClick={() => {
-                  const items = [...(createFormRef.current?.getFieldValue('items') ?? [])];
-                  items.push({ ...INITIAL_PR_FORM_ITEM_ROW });
+                  const items = [...normalizeFormListItems<any>(createFormRef.current?.getFieldValue('items'))];
+                  items.push({
+                    ...INITIAL_PR_FORM_ITEM_ROW,
+                    required_date: resolveHeaderRequiredDateDefault(),
+                  });
                   createFormRef.current?.setFieldsValue({ items });
                 }}
               >
@@ -1987,7 +2065,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                                   />
                                 </div>
                               </div>
-                              <PurchaseRequisitionLineStockHint materialId={mid} />
                               <AntForm.Item name={[index, 'demand_computation_item_id']} hidden>
                                 <Input type="hidden" />
                               </AntForm.Item>
@@ -1998,9 +2075,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.purchaseRequisition.form.warehouseStock'),
+                    title: t('app.kuaizhizao.purchaseRequisition.form.totalStock'),
                     dataIndex: '_warehouse_stock',
-                    width: 200,
+                    width: 120,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item
                         noStyle
@@ -2118,11 +2195,17 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     dataIndex: 'required_date',
                     width: 118,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'required_date']} style={{ margin: 0 }}>
+                      <AntForm.Item
+                        name={[index, 'required_date']}
+                        rules={[{ required: true, message: t('common.required') }]}
+                        style={{ margin: 0 }}
+                        getValueProps={(value) => ({ value: coerceFormDate(value) ?? undefined })}
+                        normalize={(value) => coerceFormDate(value) ?? undefined}
+                      >
                         <FutureDatePicker
                           size="small"
                           style={{ width: '100%' }}
-                          placeholder={t('app.kuaizhizao.purchaseRequisition.form.optional')}
+                          placeholder={t('app.kuaizhizao.purchaseRequisition.form.lineDelivery')}
                           getForm={() => createFormRef.current}
                           baseFieldName="requisition_date"
                           t={t}

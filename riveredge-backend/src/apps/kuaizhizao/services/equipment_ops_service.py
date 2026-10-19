@@ -767,6 +767,10 @@ class EquipmentMaintenanceSchemeService(_MasterCRUDMixin):
                 code=data.code,
                 name=data.name,
                 description=data.description,
+                maintenance_type=data.maintenance_type,
+                cycle_type=data.cycle_type,
+                cycle_value=data.cycle_value,
+                cycle_unit=data.cycle_unit,
                 is_active=data.is_active,
             )
             apply_create_audit(payload, current_user)
@@ -876,6 +880,14 @@ class EquipmentSchemeBindingService:
 
 class EquipmentSpotCheckService:
     scheme_service = EquipmentInspectionSchemeService()
+
+    async def _locked_header(self, tenant_id: int, row_id: int) -> EquipmentSpotCheck:
+        row = await EquipmentSpotCheck.filter(
+            tenant_id=tenant_id, id=row_id, deleted_at__isnull=True,
+        ).select_for_update().first()
+        if not row:
+            raise NotFoundError(f"点检单不存在: {row_id}")
+        return row
 
     async def _resolve_scheme_id(
         self,
@@ -1003,8 +1015,6 @@ class EquipmentSpotCheckService:
                 equipment_code=equipment.code,
                 equipment_name=equipment.name,
                 scheme_id=scheme.id,
-                plan_id=getattr(data, "plan_id", None),
-                plan_uuid=getattr(data, "plan_uuid", None),
                 capture_mode=capture_mode,
                 check_date=data.check_date or date.today(),
                 inspector_id=(
@@ -1149,7 +1159,7 @@ class EquipmentSpotCheckService:
         )
 
         async with in_transaction():
-            header = await self.get(tenant_id, row_id)
+            header = await self._locked_header(tenant_id, row_id)
             if header.status != "待审核":
                 raise ValidationError("仅待审核的点检单可审核通过")
             header.status = "已审核"
@@ -1179,7 +1189,7 @@ class EquipmentSpotCheckService:
         if not reason:
             raise ValidationError("驳回原因不能为空")
         async with in_transaction():
-            header = await self.get(tenant_id, row_id)
+            header = await self._locked_header(tenant_id, row_id)
             if header.status != "待审核":
                 raise ValidationError("仅待审核的点检单可驳回")
             header.status = "已驳回"
@@ -1290,11 +1300,13 @@ class EquipmentSpotCheckService:
 
     async def update(self, tenant_id: int, row_id: int, data: SpotCheckUpdate, current_user: Optional[User] = None) -> EquipmentSpotCheck:
         async with in_transaction():
-            header = await self.get(tenant_id, row_id)
+            header = await self._locked_header(tenant_id, row_id)
             if header.status not in ("待审核", "已驳回"):
                 raise ValidationError("仅待审核或已驳回的点检单可编辑")
             prev_status = header.status
             update_data = data.model_dump(exclude_unset=True, exclude={"lines"})
+            if data.status is not None and data.status != "待审核":
+                raise ValidationError("请通过审核操作变更点检状态")
             for k, v in update_data.items():
                 setattr(header, k, v)
             apply_update_audit(header, current_user)
@@ -1356,6 +1368,8 @@ class EquipmentSpotCheckService:
                         judgment_standard=line_input.judgment_standard,
                         value_type=line_input.value_type,
                         unit=line_input.unit,
+                        numeric_min=line_input.numeric_min,
+                        numeric_max=line_input.numeric_max,
                         measured_value=line_input.measured_value,
                         is_pass=is_pass,
                         photo_required=bool(line_input.photo_required),

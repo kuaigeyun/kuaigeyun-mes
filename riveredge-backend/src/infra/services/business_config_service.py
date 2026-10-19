@@ -270,9 +270,9 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.purchase.document_push_targets": {"type": "object"},
     "parameters.warehouse.kingdee_inventory_push": {"type": "object"},
     "parameters.warehouse.document_push_targets": {"type": "object"},
-    "parameters.common.quantity_decimal_places": {"type": "number", "min": 0, "max": 4},
-    "parameters.common.price_decimal_places": {"type": "number", "min": 0, "max": 4},
-    "parameters.common.amount_decimal_places": {"type": "number", "min": 0, "max": 4},
+    "parameters.common.quantity_decimal_places": {"type": "number", "min": 0, "max": 6},
+    "parameters.common.price_decimal_places": {"type": "number", "min": 0, "max": 6},
+    "parameters.common.amount_decimal_places": {"type": "number", "min": 0, "max": 6},
     "parameters.purchase.tolerance_percentage": {"type": "number", "min": 0, "max": 100},
     "parameters.purchase.price_fluctuation_limit_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.work_order.material_shortage_block_level": {"type": "number", "min": 0, "max": 3},
@@ -1250,7 +1250,7 @@ class BusinessConfigService:
     async def get_quantity_decimal_places(self, tenant_id: int) -> int:
         """数量小数位（默认 2，上限 4）。"""
         return await self._get_decimal_places_param(
-            tenant_id, "quantity_decimal_places", default=2, max_places=4
+            tenant_id, "quantity_decimal_places", default=2, max_places=6
         )
 
     async def get_over_issue_allowance_ratio(self, tenant_id: int) -> Decimal:
@@ -1274,13 +1274,13 @@ class BusinessConfigService:
     async def get_price_decimal_places(self, tenant_id: int) -> int:
         """单价小数位（默认 2，上限 4，对齐采购单价 Decimal 字段）。"""
         return await self._get_decimal_places_param(
-            tenant_id, "price_decimal_places", default=2, max_places=4
+            tenant_id, "price_decimal_places", default=2, max_places=6
         )
 
     async def get_amount_decimal_places(self, tenant_id: int) -> int:
         """金额小数位（默认 2，上限 4）。"""
         return await self._get_decimal_places_param(
-            tenant_id, "amount_decimal_places", default=2, max_places=4
+            tenant_id, "amount_decimal_places", default=2, max_places=6
         )
 
     async def allow_production_without_material(self, tenant_id: int) -> bool:

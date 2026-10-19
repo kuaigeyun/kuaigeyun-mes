@@ -51,10 +51,6 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
         "apps.kuaizhizao.models.equipment_ops",
         "EquipmentSpotCheck",
     ),
-    "equipment_spot_check_plan_code": (
-        "apps.kuaizhizao.models.equipment_spot_check_plan",
-        "EquipmentSpotCheckPlan",
-    ),
     "equipment_route_patrol_code": (
         "apps.kuaizhizao.models.equipment_ops",
         "EquipmentRoutePatrol",
@@ -258,8 +254,8 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
     "KUAI_PLM_PROJECT_PROPOSAL_CODE": ("apps.kuaiplm.models.project_proposal", "ProjectProposal"),
     "KUAI_PLM_MOLD_SAMPLE_CODE": ("apps.kuaiplm.models.mold_sample_order", "MoldSampleOrder"),
     "RD_REQUIREMENT_CODE": ("apps.kuaiplm.models.phase2", "RdRequirement"),
-    "OTHER_INCOME_CODE": ("apps.kuaicaiwu.models.other_voucher", "OtherIncome"),
-    "OTHER_EXPENSE_CODE": ("apps.kuaicaiwu.models.other_voucher", "OtherExpense"),
+    "OTHER_INCOME_CODE": ("apps.kuaizhizao.models.other_voucher", "OtherIncome"),
+    "OTHER_EXPENSE_CODE": ("apps.kuaizhizao.models.other_voucher", "OtherExpense"),
     "RECEIPT_CODE": ("apps.kuaicaiwu.models.receipt", "Receipt"),
     "RECEIPT_NOTICE_CODE": ("apps.kuaizhizao.models.receipt_notice", "ReceiptNotice"),
     "RECEIPT_REFUND_CODE": ("apps.kuaicaiwu.models.receipt", "Receipt"),

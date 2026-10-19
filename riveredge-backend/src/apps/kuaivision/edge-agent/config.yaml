@@ -1,0 +1,16 @@
+base_url: "http://localhost:8100"
+device_token: "replace-with-device-token"
+heartbeat_interval_seconds: 15
+config_pull_interval_seconds: 20
+pipeline_tick_seconds: 2
+buffer_db_path: "buffer.db"
+agent_version: "0.2.0"
+# 厚度 POC：按序循环模拟激光读数（mm）
+mock_thickness_values:
+  - 1.40
+  - 1.52
+  - 1.70
+# 步骤 POC：缺省模拟「缺最后一步」
+mock_step_missing_last: true
+# 本地图目录（可选，有则写入 image_refs 占位路径）
+mock_image_dir: "samples"

@@ -107,6 +107,163 @@ class PermissionSyncService:
                     )
 
     @classmethod
+    async def ensure_app_permissions(
+        cls,
+        tenant_id: int,
+        app_code: str,
+    ) -> dict[str, int]:
+        """仅 upsert 单个应用的权限码（无全量扫描、无废弃/清理）。
+
+        应用启用、行业模块授权、单应用菜单同步应走此路径；
+        全量治理仍用 ``ensure_permissions``（角色页手动同步 / 定时任务）。
+        """
+        code = (app_code or "").strip()
+        if not code:
+            return {
+                "created": 0,
+                "updated": 0,
+                "deprecated": 0,
+                "purged": 0,
+                "merged": 0,
+                "orphaned": 0,
+                "scanned": 0,
+                "type_repaired": 0,
+                "dry_run": 0,
+                "scoped": 1,
+            }
+
+        desired_definitions = PermissionRegistryService.collect_definitions_for_app(code)
+        desired_codes = set(desired_definitions.keys())
+        if not desired_codes:
+            return {
+                "created": 0,
+                "updated": 0,
+                "deprecated": 0,
+                "purged": 0,
+                "merged": 0,
+                "orphaned": 0,
+                "scanned": 0,
+                "type_repaired": 0,
+                "dry_run": 0,
+                "scoped": 1,
+            }
+
+        create_rows: list[tuple[Any, ...]] = []
+        update_rows: list[tuple[Any, ...]] = []
+        conn = await get_db_connection()
+        try:
+            existing_rows = await conn.fetch(
+                """
+                SELECT id, code, name, permission_type, deprecated_at,
+                       source_type, source_app, source_path
+                FROM core_permissions
+                WHERE tenant_id = $1
+                  AND deleted_at IS NULL
+                  AND code = ANY($2::text[])
+                """,
+                tenant_id,
+                list(desired_codes),
+            )
+            existing_by_code = {str(r["code"]): r for r in existing_rows}
+            now_dt = now_utc()
+
+            for perm_code in sorted(desired_codes):
+                spec = desired_definitions[perm_code]
+                resource, action = cls._split_code(perm_code)
+                permission_type = cls._infer_permission_type(perm_code)
+                desired_name = cls._build_permission_name(
+                    perm_code, resource, action, permission_type
+                )
+                existing = existing_by_code.get(perm_code)
+                if not existing:
+                    create_rows.append(
+                        (
+                            str(uuid4()),
+                            tenant_id,
+                            desired_name,
+                            perm_code,
+                            resource[:50],
+                            action[:50],
+                            f"自动同步权限: {perm_code}",
+                            permission_type,
+                            True,
+                            spec.source_type,
+                            spec.source_app,
+                            spec.source_path,
+                            now_dt,
+                            now_dt,
+                        )
+                    )
+                    continue
+                if (
+                    str(existing["name"]) != desired_name
+                    or str(existing["permission_type"]) != permission_type
+                    or existing.get("deprecated_at") is not None
+                    or str(existing.get("source_type") or "") != str(spec.source_type or "")
+                    or str(existing.get("source_app") or "") != str(spec.source_app or "")
+                    or str(existing.get("source_path") or "") != str(spec.source_path or "")
+                ):
+                    update_rows.append(
+                        (
+                            desired_name,
+                            permission_type,
+                            spec.source_type,
+                            spec.source_app,
+                            spec.source_path,
+                            now_dt,
+                            int(existing["id"]),
+                            tenant_id,
+                        )
+                    )
+
+            if create_rows:
+                await cls._upsert_create_rows(
+                    conn,
+                    create_rows,
+                    tenant_id=tenant_id,
+                    desired_codes=desired_codes,
+                )
+            if update_rows:
+                await conn.executemany(
+                    """
+                    UPDATE core_permissions
+                    SET name = $1,
+                        permission_type = $2,
+                        source_type = $3,
+                        source_app = $4,
+                        source_path = $5,
+                        deprecated_at = NULL,
+                        updated_at = $6
+                    WHERE id = $7 AND tenant_id = $8
+                    """,
+                    update_rows,
+                )
+        finally:
+            await conn.close()
+
+        PermissionRegistryService.invalidate_definitions_cache(tenant_id)
+        logger.info(
+            "租户 {} 应用 {} 权限增量同步完成 created={} updated={} scanned={}",
+            tenant_id,
+            code,
+            len(create_rows),
+            len(update_rows),
+            len(desired_codes),
+        )
+        return {
+            "created": len(create_rows),
+            "updated": len(update_rows),
+            "deprecated": 0,
+            "purged": 0,
+            "merged": 0,
+            "orphaned": 0,
+            "scanned": len(desired_codes),
+            "type_repaired": 0,
+            "dry_run": 0,
+            "scoped": 1,
+        }
+
+    @classmethod
     async def ensure_permissions(
         cls,
         tenant_id: int,

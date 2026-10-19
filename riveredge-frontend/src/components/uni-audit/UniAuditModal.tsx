@@ -31,6 +31,8 @@ import {
   Flex,
 
   Alert,
+  Radio,
+  message,
 
 } from 'antd';
 
@@ -51,14 +53,20 @@ import {
 } from '@ant-design/icons';
 
 import { getApprovalStatus, type ApprovalStatusResponse } from '../../services/approvalInstance';
+import { DOCUMENT_STATUS_SEMANTIC_COLOR } from '../../constants/documentStatusColors';
+import { MarkerTag, StatusTag } from '../../constants/statusBadges';
 import { resolveAuditFlowExecutePermission } from '../../utils/auditFlowViewerGate';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 import ApprovalFlowPreview from './ApprovalFlowPreview';
+import { formatApprovalExecutionComment } from './formatApprovalExecutionComment';
 import UniAuditAdvancedActionModal, { type AdvancedActionState } from './UniAuditAdvancedActionModal';
 import type { UniAuditAction } from './types';
+import { documentCodeFromInstanceTitle } from './resolveRecordDocumentCode';
 import { getSessionCurrentUser } from '../../utils/sessionCurrentUser';
 import { isAdminBypass, resolveUserForMenuPermission } from '../../utils/permission';
 import { formatDateTimeBySiteSetting } from '../../utils/format';
 import { useTranslation } from 'react-i18next';
+import type { GlobalToken } from 'antd/es/theme/interface';
 
 
 
@@ -83,6 +91,12 @@ export interface UniAuditHubAction {
   /** 不可执行时的原因（如非当前节点待办人）；优先于通用「无权限」提示 */
   disabledReason?: string;
 
+  /**
+   * 模块 RBAC 是否允许该动作。弹窗内用 live viewer_actions 再裁剪执行权。
+   * 缺省回退 canExecute（兼容旧调用）。
+   */
+  rbacAllowed?: boolean;
+
 }
 
 
@@ -97,6 +111,9 @@ interface UniAuditModalProps {
 
   entityName: string;
 
+  /** 业务单号（采购申请号等）；缺省时可从 flowStatus.instance.title 兜底 */
+  documentCode?: string;
+
   actionTitle?: string;
 
   actionDescription?: string;
@@ -109,13 +126,24 @@ interface UniAuditModalProps {
 
   hubActions?: UniAuditHubAction[];
 
+  /** 模块审核 RBAC；列表未带出 approve 项时 reinject 仍须按此门禁 */
+  rbacAllowed?: boolean;
+
   hubTitle?: string;
 
   onCancel: () => void;
 
-  onConfirm?: (reason?: string) => Promise<void>;
+  onConfirm?: (reason?: string, payload?: Record<string, unknown>) => Promise<void>;
 
-  onAction?: (action: UniAuditAction, reason?: string, payload?: Record<string, unknown>) => Promise<void>;
+  /**
+   * 执行审核动作。返回 true 表示流程仍 pending、弹窗应保持打开并刷新状态
+   * （多级审核同一人连续审下一级）。
+   */
+  onAction?: (
+    action: UniAuditAction,
+    reason?: string,
+    payload?: Record<string, unknown>,
+  ) => Promise<boolean | void>;
 
 }
 
@@ -149,17 +177,51 @@ const ACTION_TAG_COLOR: Partial<Record<UniAuditAction, string>> = {
 
 const NODE_STATUS_LABEL: Record<string, { color: string; text: string }> = {
 
-  pending: { color: 'processing', text: '进行中' },
+  pending: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.active, text: '进行中' },
 
-  approved: { color: 'success', text: '已通过' },
+  approved: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.success, text: '已通过' },
 
-  rejected: { color: 'error', text: '已驳回' },
+  rejected: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.danger, text: '已驳回' },
 
-  waiting: { color: 'default', text: '待到达' },
+  waiting: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.muted, text: '待到达' },
 
-  skipped: { color: 'default', text: '已跳过' },
+  skipped: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.pending, text: '已跳过' },
 
 };
+
+function resolveNodeExecutionCardStyle(
+  status: string,
+  token: GlobalToken,
+): { border: string; background: string } {
+  switch (status) {
+    case 'approved':
+      return {
+        border: `1px solid ${token.colorSuccessBorder}`,
+        background: token.colorSuccessBg,
+      };
+    case 'rejected':
+      return {
+        border: `1px solid ${token.colorErrorBorder}`,
+        background: token.colorErrorBg,
+      };
+    case 'pending':
+      return {
+        border: `1px solid ${token.colorPrimary}`,
+        background: token.colorPrimaryBg,
+      };
+    case 'skipped':
+      return {
+        border: `1px solid ${token.colorWarningBorder}`,
+        background: token.colorWarningBg,
+      };
+    case 'waiting':
+    default:
+      return {
+        border: `1px solid ${token.colorBorderSecondary}`,
+        background: token.colorFillAlter,
+      };
+  }
+}
 
 
 
@@ -175,31 +237,59 @@ const EXECUTION_ACTION_LABEL: Record<string, string> = {
   transferred: '转交',
   withdraw: '撤回提交',
   withdrawn: '撤回提交',
+  revoke: '撤销审核',
+  revoked: '撤销审核',
   submit: '提交',
   submitted: '提交',
   pending: '待处理',
   unknown: '未知操作',
 };
 
+/** 执行动作徽章色：走单据语义色板，禁止 antd 预设 green/red（偏艳） */
 const EXECUTION_ACTION_TAG_COLOR: Record<string, string> = {
-  approve: 'green',
-  approved: 'green',
-  reject: 'red',
-  rejected: 'red',
-  cancel: 'orange',
-  cancelled: 'orange',
-  canceled: 'orange',
-  withdraw: 'orange',
-  withdrawn: 'orange',
-  revoke: 'volcano',
-  revoked: 'volcano',
-  submit: 'blue',
-  submitted: 'blue',
-  transfer: 'cyan',
-  transferred: 'cyan',
-  pending: 'default',
-  unknown: 'default',
+  approve: DOCUMENT_STATUS_SEMANTIC_COLOR.success,
+  approved: DOCUMENT_STATUS_SEMANTIC_COLOR.success,
+  审核通过: DOCUMENT_STATUS_SEMANTIC_COLOR.success,
+  reject: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
+  rejected: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
+  驳回: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
+  cancel: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  cancelled: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  canceled: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  withdraw: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  withdrawn: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  撤回: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  撤回提交: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  recall_own: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  撤回本级: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  revoke: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
+  revoked: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
+  撤销审核: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
+  submit: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  submitted: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  提交: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  transfer: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  transferred: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  转交: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  condition_route: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  condition: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  条件分支: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  pending: DOCUMENT_STATUS_SEMANTIC_COLOR.muted,
+  unknown: DOCUMENT_STATUS_SEMANTIC_COLOR.muted,
 };
+
+/** 结果类动作用 StatusTag（solid），信息类动作用 MarkerTag（filled） */
+const EXECUTION_ACTION_STATUS_SOLID = new Set([
+  'approve',
+  'approved',
+  '审核通过',
+  'reject',
+  'rejected',
+  '驳回',
+  'revoke',
+  'revoked',
+  '撤销审核',
+]);
 
 function formatDateTime(value?: string | null): string {
   return formatDateTimeBySiteSetting(value ?? null);
@@ -211,9 +301,39 @@ function formatExecutionAction(action?: string | null, actionLabel?: string | nu
   return EXECUTION_ACTION_LABEL[key] || '未知操作';
 }
 
-function getExecutionActionTagColor(action?: string | null): string {
-  const key = String(action ?? '').trim().toLowerCase();
-  return EXECUTION_ACTION_TAG_COLOR[key] ?? 'default';
+function resolveExecutionActionColorKey(
+  action?: string | null,
+  actionLabel?: string | null,
+): string {
+  const rawAction = String(action ?? '').trim();
+  const rawLabel = String(actionLabel ?? '').trim();
+  // 英文码用小写查；中文文案保持原样（表内有中文键）
+  const candidates = [
+    rawAction.toLowerCase(),
+    rawAction,
+    rawLabel.toLowerCase(),
+    rawLabel,
+  ].filter(Boolean);
+  for (const key of candidates) {
+    if (key in EXECUTION_ACTION_TAG_COLOR) return key;
+  }
+  return 'unknown';
+}
+
+function getExecutionActionTagColor(
+  action?: string | null,
+  actionLabel?: string | null,
+): string {
+  const key = resolveExecutionActionColorKey(action, actionLabel);
+  return EXECUTION_ACTION_TAG_COLOR[key] ?? DOCUMENT_STATUS_SEMANTIC_COLOR.muted;
+}
+
+function isExecutionActionStatusSolid(
+  action?: string | null,
+  actionLabel?: string | null,
+): boolean {
+  const key = resolveExecutionActionColorKey(action, actionLabel);
+  return EXECUTION_ACTION_STATUS_SOLID.has(key);
 }
 
 function AuditMetaLabel({
@@ -257,17 +377,26 @@ function AuditHubDetailPanel({
 
   entityName,
 
+  documentCode,
+
   flowStatus,
 
   flowLoading,
+
+  /** Modal zoom 动画结束后再挂载 React Flow，避免父级 transform 导致连线偏移 */
+  flowCanvasReady = false,
 
 }: {
 
   entityName: string;
 
+  documentCode?: string;
+
   flowStatus: ApprovalStatusResponse | null;
 
   flowLoading: boolean;
+
+  flowCanvasReady?: boolean;
 
 }) {
 
@@ -278,6 +407,9 @@ function AuditHubDetailPanel({
   const instance = flowStatus?.instance;
 
   const nodesOverview = flowStatus?.nodes_overview ?? [];
+
+  const resolvedDocumentCode =
+    String(documentCode || '').trim() || documentCodeFromInstanceTitle(instance?.title);
 
 
 
@@ -298,22 +430,54 @@ function AuditHubDetailPanel({
 
 
   return (
+    <>
+      <style>{`
+        .uni-audit-hub-panel,
+        .uni-audit-hub-scroll {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .uni-audit-hub-panel::-webkit-scrollbar,
+        .uni-audit-hub-scroll::-webkit-scrollbar {
+          width: 0;
+          height: 0;
+          display: none;
+        }
+      `}</style>
+    <Row
+      className="uni-audit-hub-panel"
+      gutter={16}
+      wrap={false}
+      align="stretch"
+      style={{ height: '100%', minHeight: 0, overflow: 'hidden' }}
+    >
 
-    <Row gutter={16} wrap={false} style={{ minHeight: 360 }}>
+      <Col
+        flex="0 0 44%"
+        style={{
+          minWidth: 0,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignSelf: 'stretch',
+          overflow: 'hidden',
+        }}
+      >
 
-      <Col flex="0 0 42%" style={{ minWidth: 0 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
+            minHeight: 0,
+            gap: 12,
+            overflow: 'hidden',
+          }}
+        >
 
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+          <div style={{ flex: '0 0 auto' }}>
 
-          <div>
-
-            <Text type="secondary" style={{ fontSize: 12 }}>
-
-              审核流程
-
-            </Text>
-
-            <Title level={5} style={{ margin: '4px 0 0' }}>
+            <Title level={5} style={{ margin: 0 }}>
 
               {process?.name || '未绑定审批流程'}
 
@@ -321,15 +485,15 @@ function AuditHubDetailPanel({
 
           </div>
 
-          <ApprovalFlowPreview
-
-            graph={process?.nodes}
-
-            nodesOverview={nodesOverview}
-
-            height={340}
-
-          />
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            {flowCanvasReady ? (
+              <ApprovalFlowPreview
+                graph={process?.nodes}
+                nodesOverview={nodesOverview}
+                height="100%"
+              />
+            ) : null}
+          </div>
 
           {!process?.nodes?.nodes?.length && (
 
@@ -337,27 +501,32 @@ function AuditHubDetailPanel({
 
           )}
 
-        </Space>
+        </div>
 
       </Col>
 
 
 
-      <Col flex="1" style={{ minWidth: 0, borderLeft: `1px solid ${token.colorBorderSecondary}`, paddingLeft: 16 }}>
+      <Col
+        flex="1"
+        style={{
+          minWidth: 0,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          borderLeft: `1px solid ${token.colorBorderSecondary}`,
+          paddingLeft: 16,
+          overflow: 'hidden',
+        }}
+      >
 
-        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+        <div style={{ flex: '0 0 auto' }}>
 
           <div>
 
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Title level={5} style={{ margin: 0 }}>
 
-              单据
-
-            </Text>
-
-            <Title level={5} style={{ margin: '4px 0 0' }}>
-
-              {entityName}
+              {resolvedDocumentCode ? `${entityName} ${resolvedDocumentCode}` : entityName}
 
             </Title>
 
@@ -366,13 +535,12 @@ function AuditHubDetailPanel({
 
 
           <Descriptions
-            column={1}
+            column={2}
             size="small"
             colon={false}
             styles={{
               label: {
-                width: 108,
-                paddingRight: 16,
+                paddingRight: 8,
                 verticalAlign: 'middle',
                 whiteSpace: 'nowrap',
               },
@@ -415,6 +583,7 @@ function AuditHubDetailPanel({
 
 
           <Text strong>节点执行记录</Text>
+        </div>
 
           {nodesOverview.length === 0 ? (
 
@@ -422,11 +591,23 @@ function AuditHubDetailPanel({
 
           ) : (
 
+            <div
+              className="uni-audit-hub-scroll"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflow: 'auto',
+                marginTop: 12,
+                paddingRight: 2,
+              }}
+            >
+
             <Space orientation="vertical" size={12} style={{ width: '100%' }}>
 
               {nodesOverview.map((node) => {
 
                 const statusMeta = NODE_STATUS_LABEL[node.status] || NODE_STATUS_LABEL.waiting;
+                const cardStyle = resolveNodeExecutionCardStyle(node.status, token);
 
                 return (
 
@@ -440,9 +621,9 @@ function AuditHubDetailPanel({
 
                       borderRadius: token.borderRadiusLG,
 
-                      border: `1px solid ${node.is_current ? token.colorPrimary : token.colorBorderSecondary}`,
+                      border: cardStyle.border,
 
-                      background: node.is_current ? token.colorPrimaryBg : token.colorFillAlter,
+                      background: cardStyle.background,
 
                     }}
 
@@ -452,7 +633,7 @@ function AuditHubDetailPanel({
 
                       <Text strong>{node.label}</Text>
 
-                      <Tag color={statusMeta.color} variant="solid">{statusMeta.text}</Tag>
+                      <StatusTag color={statusMeta.color}>{statusMeta.text}</StatusTag>
 
                     </Space>
 
@@ -460,25 +641,41 @@ function AuditHubDetailPanel({
 
                     {node.eligible_approvers.length > 0 && (
 
-                      <div style={{ marginTop: 8 }}>
+                      <Flex align="flex-start" gap={8} style={{ marginTop: 10 }}>
 
-                        <Text type="secondary" style={{ fontSize: 12 }}>
+                        <Text type="secondary" style={{ fontSize: 12, flexShrink: 0, lineHeight: '22px' }}>
 
-                          可审核人员：
+                          可审核人员
 
                         </Text>
 
-                        <Space size={[4, 4]} wrap style={{ marginTop: 4 }}>
+                        <Flex wrap gap={12} style={{ flex: 1, minWidth: 0 }}>
 
                           {node.eligible_approvers.map((u) => (
 
-                            <Tag key={u.user_id}>{u.name}</Tag>
+                            <span
+                              key={u.user_id}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                fontSize: 13,
+                                lineHeight: '22px',
+                                color: token.colorText,
+                              }}
+                            >
+
+                              <UserOutlined style={{ fontSize: 12, color: token.colorTextSecondary }} />
+
+                              {u.name}
+
+                            </span>
 
                           ))}
 
-                        </Space>
+                        </Flex>
 
-                      </div>
+                      </Flex>
 
                     )}
 
@@ -488,8 +685,9 @@ function AuditHubDetailPanel({
 
                       <div style={{ marginTop: 8, fontSize: 12 }}>
 
-                        {node.executions.map((ex, idx) => (
-
+                        {node.executions.map((ex, idx) => {
+                          const displayComment = formatApprovalExecutionComment(ex.comment);
+                          return (
                           <div key={`${node.node_id}-ex-${idx}`} style={{ marginBottom: 4 }}>
 
                             <div
@@ -501,13 +699,27 @@ function AuditHubDetailPanel({
                               }}
                             >
 
-                              <Text>{ex.action_by_name || ex.action_by || '系统'}</Text>
+                              <Text style={{ fontWeight: 500 }}>
 
-                              <Tag color={getExecutionActionTagColor(ex.action)} variant="solid">
+                                {ex.action_by_name || ex.action_by || '系统'}
 
-                                {formatExecutionAction(ex.action, ex.action_label)}
+                              </Text>
 
-                              </Tag>
+                              {isExecutionActionStatusSolid(ex.action, ex.action_label) ? (
+                                <StatusTag
+                                  color={getExecutionActionTagColor(ex.action, ex.action_label)}
+                                  style={{ cursor: 'default', pointerEvents: 'none', marginInlineEnd: 0 }}
+                                >
+                                  {formatExecutionAction(ex.action, ex.action_label)}
+                                </StatusTag>
+                              ) : (
+                                <MarkerTag
+                                  color={getExecutionActionTagColor(ex.action, ex.action_label)}
+                                  style={{ cursor: 'default', pointerEvents: 'none' }}
+                                >
+                                  {formatExecutionAction(ex.action, ex.action_label)}
+                                </MarkerTag>
+                              )}
 
                               <Text type="secondary" style={{ marginLeft: 'auto', flexShrink: 0 }}>
 
@@ -517,15 +729,11 @@ function AuditHubDetailPanel({
 
                             </div>
 
-                            {ex.comment && (
-
+                            {displayComment ? (
                               <div>
-
-                                <Text type="secondary">{ex.comment}</Text>
-
+                                <Text type="secondary">{displayComment}</Text>
                               </div>
-
-                            )}
+                            ) : null}
 
                             {ex.field_changes && ex.field_changes.length > 0 && (
 
@@ -546,8 +754,8 @@ function AuditHubDetailPanel({
                             )}
 
                           </div>
-
-                        ))}
+                          );
+                        })}
 
                       </div>
 
@@ -569,13 +777,14 @@ function AuditHubDetailPanel({
 
             </Space>
 
-          )}
+            </div>
 
-        </Space>
+          )}
 
       </Col>
 
     </Row>
+    </>
 
   );
 
@@ -593,6 +802,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
   entityName,
 
+  documentCode,
+
   actionTitle,
 
   actionDescription,
@@ -604,6 +815,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
   canExecute = true,
 
   hubActions = [],
+
+  rbacAllowed: rbacAllowedProp,
 
   hubTitle = '审核',
 
@@ -625,8 +838,18 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
   const [flowLoading, setFlowLoading] = useState(false);
 
   const [flowStatus, setFlowStatus] = useState<ApprovalStatusResponse | null>(null);
+  const [flowLoadError, setFlowLoadError] = useState<string | null>(null);
 
   const [advancedAction, setAdvancedAction] = useState<AdvancedActionState | null>(null);
+  /** null=未选择；双分支条件必须显式选是/否，禁止默认跳边 */
+  const [branchDecision, setBranchDecision] = useState<number | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<'previous' | 'submitter'>('previous');
+  /** antd Modal 默认 zoom 动画期间父级有 transform；结束后再挂流程预览 */
+  const [flowCanvasReady, setFlowCanvasReady] = useState(false);
+
+  useEffect(() => {
+    if (!open) setFlowCanvasReady(false);
+  }, [open]);
 
   const sessionUser = resolveUserForMenuPermission(getSessionCurrentUser());
   const adminOpen = isAdminBypass(sessionUser);
@@ -641,45 +864,170 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     const hasMyPendingTask =
       viewerActions?.has_my_pending_task ?? flowStatus?.has_my_pending_task ?? false;
 
-    if (flowPending) {
-      const caps = flowStatus.node_capabilities ?? {};
+    // live 未返回前：审核/驳回不可点，避免列表态 canExecute 或空 viewer_actions 误放行导致第一次点击空跑
+    if (flowLoading) {
       items = items.map((item) => {
         if (item.action !== 'approve' && item.action !== 'reject') {
           return item;
         }
+        return {
+          ...item,
+          canExecute: false,
+          disabledReason: t('components.uniAudit.flowStatusLoading'),
+        };
+      });
+      return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
+    }
+
+    // 流程实例已结束：禁止再展示审核/驳回
+    if (flowStatus?.has_instance && flowStatus.status !== 'pending') {
+      items = items.map((item) => {
+        if (item.action !== 'approve' && item.action !== 'reject') {
+          return item;
+        }
+        return {
+          ...item,
+          canExecute: false,
+          disabledReason: t('components.uniAudit.noPermission'),
+        };
+      });
+      return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
+    }
+
+    if (flowPending) {
+      const caps = flowStatus.node_capabilities ?? {};
+      const isSubmitter = flowStatus.instance?.submitter_id === currentUserId;
+      const submitterAwaitingOthers =
+        Boolean(isSubmitter) && !hasMyPendingTask && !adminOpen;
+      const moduleRbac =
+        rbacAllowedProp
+        ?? items.find((item) => item.action === 'approve' || item.action === 'reject')?.rbacAllowed
+        ?? adminOpen;
+
+      // 已审过：即使 hub 未带 approve 项，也要展示「您已审核」提示
+      if (viewerActions?.my_acted && viewerActions.block_reason) {
+        assigneeBlockHint = viewerActions.block_reason;
+      }
+
+      // live 已返回但无 viewer_actions：默认不可审（禁止 fail-open）
+      if (!viewerActions && !adminOpen) {
+        const blockReason = t('components.uniAudit.notNodeAssignee');
+        assigneeBlockHint = blockReason;
+        items = items.map((item) => {
+          if (item.action !== 'approve' && item.action !== 'reject') {
+            return item;
+          }
+          return {
+            ...item,
+            canExecute: false,
+            disabledReason: !moduleRbac
+              ? t('components.uniAudit.missingReviewPermission')
+              : blockReason,
+          };
+        });
+        return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
+      }
+
+      items = items.map((item) => {
+        if (item.action !== 'approve' && item.action !== 'reject') {
+          return item;
+        }
+        const rbacAllowed = item.rbacAllowed ?? rbacAllowedProp ?? item.canExecute;
         const flowPerm = resolveAuditFlowExecutePermission(
           item.action === 'approve' ? 'approve' : 'reject',
           {
             adminBypass: adminOpen,
-            rbacAllowed: item.canExecute,
+            rbacAllowed: Boolean(rbacAllowed),
             liveViewerActions: viewerActions ?? null,
             flowPending: true,
           },
         );
-        if (!flowPerm.canExecute && item.canExecute && !assigneeBlockHint) {
-          assigneeBlockHint =
-            flowPerm.blockReason
-            || viewerActions?.block_reason
-            || (() => {
-                const currentNode = (flowStatus.nodes_overview ?? []).find((n) => n.is_current);
-                const names = (currentNode?.eligible_approvers ?? [])
-                  .map((u) => String(u.name || '').trim())
-                  .filter(Boolean);
-                return names.length
-                  ? t('components.uniAudit.notNodeAssigneeWithNames', { names: names.join('、') })
-                  : t('components.uniAudit.notNodeAssignee');
-              })();
+        const liveBlockReason =
+          flowPerm.blockReason
+          || viewerActions?.block_reason
+          || (() => {
+              const currentNode = (flowStatus.nodes_overview ?? []).find((n) => n.is_current);
+              const names = (currentNode?.eligible_approvers ?? [])
+                .map((u) => String(u.name || '').trim())
+                .filter(Boolean);
+              return names.length
+                ? t('components.uniAudit.notNodeAssigneeWithNames', { names: names.join('、') })
+                : t('components.uniAudit.notNodeAssignee');
+            })();
+        if (!flowPerm.canExecute && rbacAllowed && !assigneeBlockHint) {
+          assigneeBlockHint = liveBlockReason;
         }
+        const blockedAsSubmitter =
+          submitterAwaitingOthers
+          && (item.action === 'approve' || item.action === 'reject');
         return {
           ...item,
-          canExecute: flowPerm.canExecute,
-          disabledReason:
-            item.canExecute && !flowPerm.canExecute
-              ? flowPerm.blockReason || assigneeBlockHint
-              : item.disabledReason,
+          canExecute: blockedAsSubmitter ? false : flowPerm.canExecute,
+          // 流程已加载时禁止沿用列表态旧 block_reason（节点推进后会误显示上一节点待办人）
+          disabledReason: !rbacAllowed
+            ? t('components.uniAudit.missingReviewPermission')
+            : blockedAsSubmitter
+              ? t('components.uniAudit.submitterAwaitingOthers')
+              : (flowPerm.canExecute ? undefined : liveBlockReason),
         };
       });
-      if ((hasMyPendingTask || adminOpen) && caps.allow_transfer) {
+      // 仅当 live viewer 明确放行时补齐/抬升；管理员也不冒充待办人
+      const liveCanApprove =
+        Boolean(moduleRbac)
+        && !submitterAwaitingOthers
+        && Boolean(viewerActions?.approve);
+      const liveCanReject =
+        Boolean(moduleRbac)
+        && !submitterAwaitingOthers
+        && Boolean(viewerActions?.reject);
+      if (liveCanApprove && !items.some((item) => item.action === 'approve')) {
+        items.push({
+          action: 'approve',
+          title: t('components.uniAudit.approveAction'),
+          canExecute: true,
+          rbacAllowed: true,
+          primary: true,
+        });
+      }
+      if (liveCanReject && !items.some((item) => item.action === 'reject')) {
+        items.push({
+          action: 'reject',
+          title: t('components.uniAudit.rejectAction'),
+          canExecute: true,
+          rbacAllowed: true,
+          danger: true,
+        });
+      }
+      if (liveCanApprove || liveCanReject) {
+        items = items.map((item) => {
+          if (item.action === 'approve' && liveCanApprove) {
+            return { ...item, canExecute: true, rbacAllowed: true };
+          }
+          if (item.action === 'reject' && liveCanReject) {
+            return { ...item, canExecute: true, rbacAllowed: true };
+          }
+          return item;
+        });
+      }
+      items = items.map((item) => {
+        if (item.action === 'withdraw' && flowStatus?.viewer_can_withdraw_submit === false) {
+          return {
+            ...item,
+            canExecute: false,
+            disabledReason: t('components.uniAudit.noPermission'),
+          };
+        }
+        if (item.action === 'recall_own' && !flowStatus?.viewer_can_recall_own) {
+          return {
+            ...item,
+            canExecute: false,
+            disabledReason: t('components.uniAudit.noPermission'),
+          };
+        }
+        return item;
+      });
+      // 转交/加签/委托须本人持有当前待办；禁止管理员旁路伪装成待办人
+      if (hasMyPendingTask && caps.allow_transfer) {
         items.push({ action: 'transfer', title: t('components.uniAudit.transfer'), canExecute: true });
       }
       if ((hasMyPendingTask || adminOpen) && caps.allow_add_sign) {
@@ -688,13 +1036,20 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
       if (hasMyPendingTask || adminOpen) {
         items.push({ action: 'delegate', title: t('components.uniAudit.delegate'), canExecute: true });
       }
-      const isSubmitter = flowStatus.instance?.submitter_id === currentUserId;
       if (isSubmitter) {
         items.push({ action: 'urge', title: t('components.uniAudit.urge'), canExecute: true });
       }
+      if (flowStatus.viewer_can_recall_own && !items.some((item) => item.action === 'recall_own')) {
+        items.push({
+          action: 'recall_own',
+          title: t('components.uniAudit.recallOwnAction'),
+          canExecute: true,
+          rbacAllowed: Boolean(moduleRbac),
+        });
+      }
     }
     return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
-  }, [hubActions, flowStatus, currentUserId, adminOpen, t]);
+  }, [hubActions, flowStatus, flowLoading, currentUserId, adminOpen, rbacAllowedProp, t]);
 
 
 
@@ -713,6 +1068,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     if (!entityType || !entityId) {
 
       setFlowStatus(null);
+      setFlowLoadError(t('components.uniAudit.flowStatusMissingEntity'));
 
       return;
 
@@ -721,18 +1077,26 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     let cancelled = false;
 
     setFlowLoading(true);
+    setFlowLoadError(null);
 
     getApprovalStatus(entityType, entityId)
 
       .then((res) => {
 
-        if (!cancelled) setFlowStatus(res);
+        if (!cancelled) {
+          setFlowStatus(res);
+          setFlowLoadError(null);
+        }
 
       })
 
-      .catch(() => {
+      .catch((err: unknown) => {
 
-        if (!cancelled) setFlowStatus(null);
+        if (!cancelled) {
+          setFlowStatus(null);
+          const msg = err instanceof Error ? err.message : String(err || '');
+          setFlowLoadError(msg || t('components.uniAudit.flowStatusLoadFailed'));
+        }
 
       })
 
@@ -748,9 +1112,45 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     };
 
-  }, [open, entityType, entityId]);
+  }, [open, entityType, entityId, t]);
 
+  const nodeDecision = flowStatus?.current_node_decision;
 
+  useEffect(() => {
+    if (!nodeDecision?.field) {
+      setBranchDecision(null);
+      return;
+    }
+    // 须显式选择时保持未选；仅当配置了明确默认值时预填
+    if (nodeDecision.requireExplicit !== false && nodeDecision.defaultValue == null) {
+      setBranchDecision(null);
+    } else if (typeof nodeDecision.defaultValue === 'number') {
+      setBranchDecision(nodeDecision.defaultValue);
+    } else {
+      setBranchDecision(nodeDecision.defaultValue ? 0 : 1);
+    }
+  }, [nodeDecision?.field, nodeDecision?.defaultValue, nodeDecision?.requireExplicit, open]);
+
+  const rejectOptions = flowStatus?.reject_options;
+  useEffect(() => {
+    const target = rejectOptions?.default_target;
+    if (target === 'previous' || target === 'submitter') {
+      setRejectTarget(target);
+    }
+  }, [rejectOptions?.default_target, open]);
+
+  const buildRejectPayload = (): Record<string, unknown> => ({
+    reject_target: rejectTarget,
+  });
+
+  const buildApprovePayload = (): Record<string, unknown> | undefined => {
+    if (!nodeDecision?.field || branchDecision === null) return undefined;
+    return {
+      instance_data_patch: {
+        [nodeDecision.field]: branchDecision,
+      },
+    };
+  };
 
   const handleOk = async () => {
 
@@ -760,7 +1160,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     try {
 
-      await onConfirm(reason.trim() || undefined);
+      const payload = action === 'reject' ? buildRejectPayload() : undefined;
+      await onConfirm(reason.trim() || undefined, payload);
 
     } finally {
 
@@ -774,21 +1175,51 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
   const handleHubAction = async (item: UniAuditHubAction) => {
 
-    if (!onAction || !item.canExecute) return;
+    if (!onAction) return;
+
+    if (!item.canExecute) {
+      message.warning(item.disabledReason || t('components.uniAudit.noPermission'));
+      return;
+    }
 
     if (item.action === 'transfer' || item.action === 'add_sign' || item.action === 'delegate') {
       setAdvancedAction({ action: item.action, open: true });
       return;
     }
 
+    if (item.action === 'approve' && nodeDecision?.field && branchDecision === null) {
+      message.warning(
+        t('components.uniAudit.branchDecisionRequired', { label: nodeDecision.label }),
+      );
+      return;
+    }
+
     setBusyAction(item.action);
 
     try {
-
-      await onAction(
+      const payload =
+        item.action === 'approve'
+          ? buildApprovePayload()
+          : item.action === 'reject'
+            ? buildRejectPayload()
+            : undefined;
+      const keepOpen = await onAction(
         item.action,
         item.action === 'reject' || item.action === 'urge' ? reason.trim() || undefined : undefined,
+        payload,
       );
+      if (keepOpen && entityType && entityId) {
+        setBranchDecision(null);
+        setFlowLoading(true);
+        try {
+          const res = await getApprovalStatus(entityType, entityId);
+          setFlowStatus(res);
+        } catch {
+          setFlowStatus(null);
+        } finally {
+          setFlowLoading(false);
+        }
+      }
 
     } finally {
 
@@ -804,6 +1235,10 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     if (flowLoading || flowStatus?.process?.nodes?.nodes?.length) return null;
 
+    if (flowLoadError) {
+      return flowLoadError;
+    }
+
     if (flowStatus?.has_flow) {
 
       return '当前使用单据审核绑定流程；若未配置节点图，请在「审批流程」设计器中完善。';
@@ -812,13 +1247,19 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     return '当前单据未启用平台审批流，将执行单据审核生命周期操作。';
 
-  }, [flowLoading, flowStatus]);
+  }, [flowLoading, flowStatus, flowLoadError]);
 
 
 
   if (mode === 'hub') {
-
-    const hasReject = effectiveHubActions.some((a) => a.action === 'reject');
+    // 不可审核/驳回时直接不展示（含加载中），避免非待办人仍看到可点入口
+    const visibleHubActions = effectiveHubActions.filter((item) => {
+      if (item.action !== 'approve' && item.action !== 'reject') return true;
+      if (flowLoading) return false;
+      return Boolean(item.canExecute);
+    });
+    const hasReject = visibleHubActions.some((a) => a.action === 'reject' && a.canExecute);
+    const hasVisibleApprove = visibleHubActions.some((a) => a.action === 'approve');
 
     return (
 
@@ -832,145 +1273,246 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
         footer={null}
 
-        width={960}
+        width={1120}
 
         destroyOnHidden
 
-        styles={{ body: { paddingTop: 12 } }}
+        // 禁用 zoom：父级 transform 会破坏 React Flow 手柄坐标系（生产更易复现连线偏移）
+        transitionName=""
+
+        afterOpenChange={setFlowCanvasReady}
+
+        maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+
+        wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+
+        styles={{
+          body: {
+            paddingTop: 12,
+            paddingBottom: 0,
+            // 定高才能让 flex 子项收缩；仅 maxHeight 时内容会撑开并把底栏按钮裁掉
+            height: 'min(720px, calc(100vh - 120px))',
+            maxHeight: 'calc(100vh - 120px)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          },
+        }}
 
       >
 
-        <AuditHubDetailPanel
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
-          entityName={entityName}
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
-          flowStatus={flowStatus}
+          <AuditHubDetailPanel
 
-          flowLoading={flowLoading}
+            entityName={entityName}
 
-        />
+            documentCode={documentCode}
 
+            flowStatus={flowStatus}
 
+            flowLoading={flowLoading}
 
-        {simpleFlowHint && (
-
-          <Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 12 }}>
-
-            {simpleFlowHint}
-
-          </Text>
-
-        )}
-
-
-
-        <Divider style={{ margin: '16px 0' }} />
-
-
-
-        {hasReject && (
-
-          <Input.TextArea
-
-            value={reason}
-
-            onChange={(e) => setReason(e.target.value)}
-
-            rows={3}
-
-            placeholder="如需驳回，请输入驳回原因（可选）"
-
-            style={{ marginBottom: 12 }}
+            flowCanvasReady={flowCanvasReady}
 
           />
 
-        )}
+          </div>
 
+          {simpleFlowHint && (
 
+            <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12, flex: '0 0 auto' }}>
 
-        {flowAssigneeBlockHint ? (
+              {simpleFlowHint}
 
-          <Alert
+            </Text>
 
-            type="info"
+          )}
 
-            showIcon
+        </div>
 
-            title={flowAssigneeBlockHint}
+        <div
+          style={{
+            flex: '0 0 auto',
+            marginTop: 12,
+            paddingTop: 12,
+            paddingBottom: 16,
+            borderTop: '1px solid rgba(0, 0, 0, 0.06)',
+            background: '#fff',
+          }}
+        >
 
-            style={{ marginBottom: 12 }}
+          {hasReject && (
+            <>
+              {(rejectOptions?.allowed_targets?.length ?? 0) > 1 ? (
+                <div style={{ marginBottom: 12 }}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+                    {t('components.uniAudit.rejectTargetHint')}
+                  </Text>
+                  <Radio.Group
+                    value={rejectTarget}
+                    onChange={(e) => setRejectTarget(e.target.value)}
+                  >
+                    {rejectOptions?.allowed_targets?.includes('previous') ? (
+                      <Radio value="previous">
+                        {t('components.uniAudit.rejectTargetPrevious')}
+                        {rejectOptions?.previous_node_label
+                          ? ` (${rejectOptions.previous_node_label})`
+                          : ''}
+                      </Radio>
+                    ) : null}
+                    {rejectOptions?.allowed_targets?.includes('submitter') ? (
+                      <Radio value="submitter">{t('components.uniAudit.rejectTargetSubmitter')}</Radio>
+                    ) : null}
+                  </Radio.Group>
+                </div>
+              ) : null}
+              <Input.TextArea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                placeholder={t('components.uniAudit.rejectReasonPlaceholder')}
+                style={{ marginBottom: 12 }}
+              />
+            </>
+          )}
 
-          />
+          {flowAssigneeBlockHint ? (
 
-        ) : null}
+            <Alert
 
+              type="info"
 
+              showIcon
 
-        {effectiveHubActions.length > 0 ? (
+              title={flowAssigneeBlockHint}
 
-          <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
+              style={{ marginBottom: 12 }}
 
-            <Space wrap>
+            />
 
-            {effectiveHubActions.map((item) => (
+          ) : null}
 
-              <Button
-
-                key={item.action}
-
-                type={item.primary ? 'primary' : 'default'}
-
-                danger={item.danger}
-
-                disabled={!item.canExecute}
-
-                loading={busyAction === item.action}
-
-                title={item.canExecute ? undefined : (item.disabledReason || t('components.uniAudit.noPermission'))}
-
-                icon={
-
-                  item.action === 'approve' ? <CheckCircleOutlined />
-
-                    : item.action === 'reject' ? <CloseCircleOutlined />
-
-                      : item.action === 'withdraw' ? <RollbackOutlined />
-
-                        : <AuditOutlined />
-
-                }
-
-                onClick={() => handleHubAction(item)}
-
+          {nodeDecision && hasVisibleApprove ? (
+            <div
+              style={{
+                marginBottom: 12,
+                padding: '10px 12px',
+                border: '1px solid rgba(0, 0, 0, 0.06)',
+                borderRadius: 6,
+                background: '#f7f8fa',
+              }}
+            >
+              <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                {nodeDecision.label}
+              </Text>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+                {t('components.uniAudit.branchDecisionHint')}
+              </Text>
+              <Radio.Group
+                value={branchDecision === null ? undefined : branchDecision}
+                onChange={(e) => setBranchDecision(Number(e.target.value))}
+                buttonStyle="solid"
               >
+                {(nodeDecision.branches?.length
+                  ? nodeDecision.branches
+                  : [
+                      { index: 0, label: nodeDecision.trueBranchLabel || t('common.yes') },
+                      { index: 1, label: nodeDecision.falseBranchLabel || t('common.no') },
+                    ]
+                ).map((b) => (
+                  <Radio.Button key={b.index} value={b.index}>
+                    {b.label}
+                  </Radio.Button>
+                ))}
+              </Radio.Group>
+            </div>
+          ) : null}
 
-                {item.title}
+          {visibleHubActions.length > 0 ? (
 
-              </Button>
+            <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
 
-            ))}
+              <Space wrap>
 
-            </Space>
+              {visibleHubActions.map((item) => {
+                const approveNeedsBranch =
+                  item.action === 'approve'
+                  && Boolean(nodeDecision?.field)
+                  && branchDecision === null;
+                const actionDisabled = !item.canExecute || approveNeedsBranch;
+                const actionLoading =
+                  busyAction === item.action
+                  || (flowLoading && (item.action === 'approve' || item.action === 'reject'));
 
-            <Button onClick={onCancel}>{t('common.close')}</Button>
+                return (
 
-          </Flex>
+                <Button
 
-        ) : (
+                  key={item.action}
 
-          <>
+                  type={item.primary ? 'primary' : 'default'}
 
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前阶段没有可执行的审核操作" />
+                  danger={item.danger}
 
-            <Flex justify="flex-end" style={{ marginTop: 12 }}>
+                  disabled={actionDisabled}
+
+                  loading={actionLoading}
+
+                  title={
+                    approveNeedsBranch
+                      ? t('components.uniAudit.branchDecisionRequired', { label: nodeDecision?.label })
+                      : (item.canExecute ? undefined : (item.disabledReason || t('components.uniAudit.noPermission')))
+                  }
+
+                  icon={
+
+                    item.action === 'approve' ? <CheckCircleOutlined />
+
+                      : item.action === 'reject' ? <CloseCircleOutlined />
+
+                        : item.action === 'withdraw' ? <RollbackOutlined />
+
+                          : <AuditOutlined />
+
+                  }
+
+                  onClick={() => handleHubAction(item)}
+
+                >
+
+                  {item.title}
+
+                </Button>
+
+                );
+              })}
+
+              </Space>
 
               <Button onClick={onCancel}>{t('common.close')}</Button>
 
             </Flex>
 
-          </>
+          ) : (
 
-        )}
+            <>
+
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前阶段没有可执行的审核操作" />
+
+              <Flex justify="flex-end" style={{ marginTop: 12 }}>
+
+                <Button onClick={onCancel}>{t('common.close')}</Button>
+
+              </Flex>
+
+            </>
+
+          )}
+
+        </div>
 
         <UniAuditAdvancedActionModal
           state={advancedAction}
@@ -1018,9 +1560,17 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
       confirmLoading={confirming}
 
-      width={720}
+      width={1120}
 
       destroyOnHidden
+
+      transitionName=""
+
+      afterOpenChange={setFlowCanvasReady}
+
+      maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+
+      wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
 
     >
 
@@ -1043,28 +1593,51 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         )}
 
         {canExecute && action === 'reject' && (
-
-          <Input.TextArea
-
-            value={reason}
-
-            onChange={(e) => setReason(e.target.value)}
-
-            rows={4}
-
-            placeholder="请输入驳回原因（可选）"
-
-          />
-
+          <>
+            {(rejectOptions?.allowed_targets?.length ?? 0) > 1 ? (
+              <div>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+                  {t('components.uniAudit.rejectTargetHint')}
+                </Text>
+                <Radio.Group
+                  value={rejectTarget}
+                  onChange={(e) => setRejectTarget(e.target.value)}
+                  style={{ marginBottom: 12 }}
+                >
+                  {rejectOptions?.allowed_targets?.includes('previous') ? (
+                    <Radio value="previous">
+                      {t('components.uniAudit.rejectTargetPrevious')}
+                      {rejectOptions?.previous_node_label
+                        ? ` (${rejectOptions.previous_node_label})`
+                        : ''}
+                    </Radio>
+                  ) : null}
+                  {rejectOptions?.allowed_targets?.includes('submitter') ? (
+                    <Radio value="submitter">{t('components.uniAudit.rejectTargetSubmitter')}</Radio>
+                  ) : null}
+                </Radio.Group>
+              </div>
+            ) : null}
+            <Input.TextArea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={4}
+              placeholder={t('components.uniAudit.rejectReasonPlaceholder')}
+            />
+          </>
         )}
 
         <AuditHubDetailPanel
 
           entityName={entityName}
 
+          documentCode={documentCode}
+
           flowStatus={flowStatus}
 
           flowLoading={flowLoading}
+
+          flowCanvasReady={flowCanvasReady}
 
         />
 

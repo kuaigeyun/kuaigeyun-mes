@@ -21,6 +21,15 @@ import {
   resolveDocumentAttachmentFileUuid,
   type DocumentAttachmentFile,
 } from '../utils/documentAttachments';
+import { DocumentAttachmentsReadonly } from './DocumentAttachmentsReadonly';
+
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+
+function looksLikeImage(name?: string): boolean {
+  const n = String(name || '').trim();
+  if (!n || !n.includes('.')) return true;
+  return IMAGE_EXT_RE.test(n);
+}
 
 type Props = {
   value?: DocumentAttachmentFile[] | null;
@@ -172,6 +181,11 @@ export const LineAttachmentsUpload: React.FC<Props> = ({
 
   if (readOnly) {
     if (!fileList.length) return <span>—</span>;
+    // PDF/证书等非图片：走 DocumentAttachmentsReadonly → FilePreviewModal
+    const hasNonImage = fileList.some((f) => !looksLikeImage(f.name));
+    if (hasNonImage) {
+      return <DocumentAttachmentsReadonly attachments={value} />;
+    }
     return (
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {fileList.map((f) => {

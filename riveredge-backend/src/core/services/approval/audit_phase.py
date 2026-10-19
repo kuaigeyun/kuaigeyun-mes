@@ -11,8 +11,8 @@ phase 仍由 status / review_status 派生，UI 须展示审核状态列。
 
 phase ∈ ``draft`` | ``pending`` | ``approved`` | ``rejected`` | ``none``
 
-撤销审核落点见 ``audit_transition``：全单据一律 draft
-（``resolve_revoke_to_draft_landing_phase`` / ``resolve_revoke_landing_phase``）。
+撤销审核落点见 ``audit_transition``：人工审且重开终审节点 → pending；
+否则 draft（``resolve_revoke_to_draft_landing_phase`` / ``resolve_revoke_landing_phase``）。
 """
 
 from __future__ import annotations
@@ -20,7 +20,15 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 _DRAFT = {"draft", "草稿"}
-_PENDING = {"pending_review", "pending_approval", "待审核", "已提交", "pending"}
+# pendingreview：其他费用收支等 PascalCase PendingReview 经 _norm 后的形态
+_PENDING = {
+    "pending_review",
+    "pendingreview",
+    "pending_approval",
+    "待审核",
+    "已提交",
+    "pending",
+}
 _SENT_AWAITING_REVIEW = {"已发送", "sent"}
 _AUDITED_STRICT = {"audited", "已审核", "approved"}
 _APPROVED_ONGOING = {

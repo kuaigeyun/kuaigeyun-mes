@@ -11,8 +11,8 @@ import {
   getWorkOrderMaterialLossTotal,
 } from '../utils/workOrderReporting';
 import { warehouseApi } from '../services/warehouse-execution';
+import { formatQuantity } from '../../../utils/format';
 import { convertBaseQtyToProductionDisplay } from '../../../utils/materialScenarioUnit';
-
 export interface ReportableQuantityPanelProps {
   operation: any;
   /** 工单计划数量（基础单位） */
@@ -48,7 +48,8 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
   const unitSuffix = (() => {
     const productUnit = String(unitContext?.product_unit ?? unitContext?.productUnit ?? '').trim();
     const baseUnit = String(unitContext?.base_unit ?? unitContext?.baseUnit ?? '').trim();
-    return productUnit && baseUnit && productUnit !== baseUnit ? ` ${productUnit}` : '';
+    const raw = productUnit || baseUnit;
+    return raw ? ` ${raw}` : '';
   })();
 
   const operationQualified =
@@ -98,7 +99,7 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
     {
       key: 'loss',
       title: t('apps.kuaizhizao.workOrder.quickReport.cumulativeMaterialLoss'),
-      value: `${toDisplay(cumulativeLoss)}${unitSuffix}`,
+      value: `${formatQuantity(toDisplay(cumulativeLoss))}${unitSuffix}`,
       valueStyle: {
         color: cumulativeLoss > 0 ? token.colorError : token.colorTextTertiary,
       },

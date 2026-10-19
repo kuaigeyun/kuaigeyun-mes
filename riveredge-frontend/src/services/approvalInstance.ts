@@ -113,6 +113,8 @@ export interface ApprovalFlowViewerActions {
   has_my_pending_task: boolean;
   approve: boolean;
   reject: boolean;
+  /** 当前人已通过本单某一级，流程仍在后续节点 */
+  my_acted?: boolean;
   block_reason?: string | null;
 }
 
@@ -134,7 +136,31 @@ export interface ApprovalStatusResponse {
     allow_transfer?: boolean;
     allow_add_sign?: boolean;
     allow_edit_during_approval?: boolean;
+    allow_submitter_withdraw?: boolean;
+    allow_approver_recall?: boolean;
   };
+  viewer_can_revoke?: boolean;
+  viewer_can_withdraw_submit?: boolean;
+  viewer_can_recall_own?: boolean;
+  /** manifest.audit 资源前缀，供跨模块审批 UI 做 RBAC */
+  audit_resource?: string | null;
+  /** 下一节点为 previous_approver 条件时，审核前须按下标选边 */
+  current_node_decision?: {
+    field: string;
+    label: string;
+    kind?: 'branch_index' | 'boolean';
+    branches?: Array<{ index: number; label: string }>;
+    trueBranchLabel?: string;
+    falseBranchLabel?: string;
+    requireExplicit?: boolean;
+    defaultValue?: boolean | number | null;
+  } | null;
+  reject_options?: {
+    allowed_targets: Array<'previous' | 'submitter'>;
+    default_target: 'previous' | 'submitter';
+    previous_node_id?: string | null;
+    previous_node_label?: string | null;
+  } | null;
   tasks?: Array<{
     uuid: string;
     node_id?: string;

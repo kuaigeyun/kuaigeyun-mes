@@ -51,6 +51,7 @@ import { useResourcePermissions } from '../../../../../../hooks/useResourcePermi
 import { FutureDatePicker } from '../../../../../../utils/futureDatePickerShortcuts';
 import { uploadMultipleFiles } from '../../../../../../services/file';
 import { normalizeDocumentAttachments } from '../../../../utils/documentAttachments';
+import { DocumentAttachmentsReadonly } from '../../../../components/DocumentAttachmentsReadonly';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
 import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintModal';
@@ -118,6 +119,7 @@ interface MoldCalibration {
   certificate_no?: string;
   expiry_date?: string;
   remark?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
 }
 
 function moldStatusTag(
@@ -363,6 +365,14 @@ const MoldDetailPage: React.FC = () => {
         dataIndex: 'expiry_date',
         width: 120,
         render: (v: string) => (v ? formatDateBySiteSetting(v) : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.mold.attachments'),
+        dataIndex: 'attachments',
+        width: 120,
+        render: (files: MoldCalibration['attachments']) => (
+          <DocumentAttachmentsReadonly attachments={files} variant="count" showEmpty />
+        ),
       },
       { title: t('common.remark'), dataIndex: 'remark', ellipsis: true },
     ],

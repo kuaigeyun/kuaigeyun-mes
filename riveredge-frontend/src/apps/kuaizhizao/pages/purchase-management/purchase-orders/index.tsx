@@ -175,8 +175,12 @@ const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
 
-import { useGlobalStore } from '../../../../../stores';
+import { getSessionCurrentUser } from '../../../../../utils/sessionCurrentUser';
 import { displayItemsToUsers, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
+import {
+  applyDocumentLineExclAmountEdit,
+  calcDocumentLineAmounts,
+} from '../../../utils/documentLineAmounts';
 import {
   DocumentStatus,
   ReviewStatusEnum,
@@ -358,6 +362,20 @@ const defaultOrderItem = {
   tax_rate: 0,
   required_date: undefined,
 };
+
+/** 新建采购订单未填采购员时，默认当前登录用户（对齐销售订单业务员） */
+function resolveDefaultPurchaseOrderBuyer(): {
+  buyer_id?: number;
+  buyer_name?: string;
+} {
+  const u = getSessionCurrentUser();
+  const id = Number(u?.id);
+  if (!Number.isFinite(id) || id <= 0) return {};
+  const name = normalizeUserDisplayName(
+    u?.full_name || u?.fullName || u?.username || u?.name,
+  );
+  return { buyer_id: id, buyer_name: name };
+}
 
 /** 采购订单头表 tax_rate 存小数（0.13），表单与详情展示用百分比 */
 function purchaseOrderTaxRateToPercent(raw: unknown): number {
@@ -592,6 +610,10 @@ const PurchaseOrdersPage: React.FC = () => {
   const leavePurchaseOrderFormPage = useLeaveFormTab(PURCHASE_ORDER_LIST_PATH);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
+  /** 未税金额正在编辑的行：失焦时反算单价（index/value 用 ref，避免 Form.Item shouldUpdate 闭包过期） */
+  const [editingExcl, setEditingExcl] = useState<{ index: number; value: number | null } | null>(null);
+  const editingExclIndexRef = useRef<number | null>(null);
+  const editingExclValueRef = useRef<number | null>(null);
 
   // Modal 相关状态
   const [modalVisible, setModalVisible] = useState(false);
@@ -705,6 +727,16 @@ const PurchaseOrdersPage: React.FC = () => {
     void loadUsers();
     void loadBankAccounts();
   }, [currentUser, isFormPage]);
+
+  // 新建页：会话用户晚于表单 init 时再补一次采购员默认
+  useEffect(() => {
+    if (!isFormPage || !isCreatePage) return;
+    const raw = formRef.current?.getFieldValue?.('buyer_id');
+    if (raw != null && raw !== '' && Number.isFinite(Number(raw)) && Number(raw) > 0) return;
+    const def = resolveDefaultPurchaseOrderBuyer();
+    if (def.buyer_id == null) return;
+    formRef.current?.setFieldsValue?.(def);
+  }, [isFormPage, isCreatePage, currentUser]);
 
   const purchaseOrderSupplierSearchOptions = useMemo(
     () =>
@@ -2476,7 +2508,12 @@ const PurchaseOrdersPage: React.FC = () => {
     resetPurchaseOrderFormFieldValues();
     formRef.current?.resetFields();
     window.setTimeout(() => {
-      formRef.current?.setFieldsValue({ items: [defaultOrderItem], price_type: 'tax_exclusive' });
+      const defaultBuyer = resolveDefaultPurchaseOrderBuyer();
+      formRef.current?.setFieldsValue({
+        items: [defaultOrderItem],
+        price_type: 'tax_exclusive',
+        ...defaultBuyer,
+      });
     }, 0);
   }
 
@@ -2859,8 +2896,14 @@ const PurchaseOrdersPage: React.FC = () => {
           }
         }
       } else {
-        data.buyer_id = undefined;
-        data.buyer_name = undefined;
+        const defBuyer = resolveDefaultPurchaseOrderBuyer();
+        if (defBuyer.buyer_id != null) {
+          data.buyer_id = defBuyer.buyer_id;
+          data.buyer_name = defBuyer.buyer_name;
+        } else {
+          data.buyer_id = undefined;
+          data.buyer_name = undefined;
+        }
       }
       // 处理附件
       const formAttachments = data.attachments || [];
@@ -3228,6 +3271,14 @@ const PurchaseOrdersPage: React.FC = () => {
                           (s as any).buyerName ??
                           (s as any).buyer_name ??
                           (buyer ? normalizeUserDisplayName(buyer.full_name || buyer.username) : '');
+                        // 供应商无归属采购员时保留表单已选（含新建默认的当前用户）
+                        const buyerPatch =
+                          bId != null
+                            ? {
+                                buyer_id: bId,
+                                buyer_name: normalizeUserDisplayName(bName),
+                              }
+                            : {};
                         formRef.current?.setFieldsValue({
                           supplier_name: s.name ?? (s as any).supplier_name,
                           supplier_contact:
@@ -3244,16 +3295,13 @@ const PurchaseOrdersPage: React.FC = () => {
                             (Array.isArray((s as any).contacts) && (s as any).contacts[0]
                               ? (s as any).contacts[0].phone
                               : undefined),
-                          buyer_id: bId,
-                          buyer_name: normalizeUserDisplayName(bName),
+                          ...buyerPatch,
                         });
                       } else {
                         formRef.current?.setFieldsValue({
                           supplier_name: undefined,
                           supplier_contact: undefined,
                           supplier_phone: undefined,
-                          buyer_id: undefined,
-                          buyer_name: undefined,
                         });
                       }
                     }}
@@ -3564,12 +3612,59 @@ const PurchaseOrdersPage: React.FC = () => {
                           render: (_: any, __: any, index: number) => (
                             <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                               {({ getFieldValue }: any) => {
-                                const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
+                                const items = normalizeFormListItems<any>(getFieldValue('items'));
+                                const row = items[index];
                                 const qty = Number(row?.ordered_quantity) || 0;
-                                const price = Number(row?.unit_price) || 0;
-                                const taxRate = Number(row?.tax_rate) || 0;
-                                const exclAmt = price > 0 ? (qty * price) / (1 + taxRate / 100) : 0;
-                                return <span>¥{exclAmt.toFixed(amountDecimals)}</span>;
+                                const line = calcDocumentLineAmounts(
+                                  row?.ordered_quantity,
+                                  row?.unit_price,
+                                  row?.tax_rate,
+                                  priceType,
+                                );
+                                const isEditing = editingExcl?.index === index;
+                                const displayValue = isEditing ? editingExcl.value : line.excl;
+                                return (
+                                  <InputNumber
+                                    placeholder={t('app.kuaizhizao.purchaseOrder.col.exclAmount')}
+                                    min={0}
+                                    precision={amountDecimals}
+                                    prefix="¥"
+                                    style={{ width: '100%' }}
+                                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                                    value={displayValue}
+                                    onChange={(val) => {
+                                      const v = val ?? null;
+                                      editingExclIndexRef.current = index;
+                                      editingExclValueRef.current = v;
+                                      setEditingExcl({ index, value: v });
+                                    }}
+                                    onFocus={() => {
+                                      editingExclIndexRef.current = index;
+                                      setEditingExcl((prev) => {
+                                        if (prev?.index === index) return prev;
+                                        editingExclValueRef.current = line.excl;
+                                        return { index, value: line.excl };
+                                      });
+                                    }}
+                                    onBlur={() => {
+                                      const excl = editingExclValueRef.current;
+                                      if (editingExclIndexRef.current === index && excl != null && qty > 0) {
+                                        const applied = applyDocumentLineExclAmountEdit({
+                                          qty,
+                                          taxRate: row?.tax_rate,
+                                          priceType,
+                                          exclAmount: excl,
+                                          priceDecimals,
+                                        });
+                                        const next = [...items];
+                                        next[index] = { ...row, unit_price: applied.unit_price };
+                                        formRef.current?.setFieldsValue({ items: next });
+                                      }
+                                      editingExclIndexRef.current = null;
+                                      setEditingExcl(null);
+                                    }}
+                                  />
+                                );
                               }}
                             </AntForm.Item>
                           ),
@@ -3605,12 +3700,13 @@ const PurchaseOrdersPage: React.FC = () => {
                             <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                               {({ getFieldValue }: any) => {
                                 const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
-                                const qty = Number(row?.ordered_quantity) || 0;
-                                const price = Number(row?.unit_price) || 0;
-                                const taxRate = Number(row?.tax_rate) || 0;
-                                const exclAmt = price > 0 ? (qty * price) / (1 + taxRate / 100) : 0;
-                                const taxAmt = exclAmt * (taxRate / 100);
-                                return <span>¥{taxAmt.toFixed(amountDecimals)}</span>;
+                                const line = calcDocumentLineAmounts(
+                                  row?.ordered_quantity,
+                                  row?.unit_price,
+                                  row?.tax_rate,
+                                  priceType,
+                                );
+                                return <span>¥{line.tax.toFixed(amountDecimals)}</span>;
                               }}
                             </AntForm.Item>
                           ),
@@ -3624,14 +3720,63 @@ const PurchaseOrdersPage: React.FC = () => {
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                         {({ getFieldValue }: any) => {
-                          const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
+                          const items = normalizeFormListItems<any>(getFieldValue('items'));
+                          const row = items[index];
                           const qty = Number(row?.ordered_quantity) || 0;
-                          const price = Number(row?.unit_price) || 0;
-                          const taxRate = Number(row?.tax_rate) || 0;
-                          const exclAmt = showTaxColumns && price > 0 ? (qty * price) / (1 + taxRate / 100) : qty * price;
-                          const taxAmt = showTaxColumns ? exclAmt * (taxRate / 100) : 0;
-                          const totalIncl = exclAmt + taxAmt;
-                          return <span>¥{totalIncl.toFixed(amountDecimals)}</span>;
+                          const line = calcDocumentLineAmounts(
+                            row?.ordered_quantity,
+                            row?.unit_price,
+                            row?.tax_rate,
+                            priceType,
+                          );
+                          if (showTaxColumns) {
+                            return <span>¥{line.incl.toFixed(amountDecimals)}</span>;
+                          }
+                          // 不含税模式：合计即未税金额，可编辑并反算单价
+                          const isEditing = editingExcl?.index === index;
+                          const displayValue = isEditing ? editingExcl.value : line.excl;
+                          return (
+                            <InputNumber
+                              placeholder={t('app.kuaizhizao.purchaseOrder.col.totalPrice')}
+                              min={0}
+                              precision={amountDecimals}
+                              prefix="¥"
+                              style={{ width: '100%' }}
+                              size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                              value={displayValue}
+                              onChange={(val) => {
+                                const v = val ?? null;
+                                editingExclIndexRef.current = index;
+                                editingExclValueRef.current = v;
+                                setEditingExcl({ index, value: v });
+                              }}
+                              onFocus={() => {
+                                editingExclIndexRef.current = index;
+                                setEditingExcl((prev) => {
+                                  if (prev?.index === index) return prev;
+                                  editingExclValueRef.current = line.excl;
+                                  return { index, value: line.excl };
+                                });
+                              }}
+                              onBlur={() => {
+                                const excl = editingExclValueRef.current;
+                                if (editingExclIndexRef.current === index && excl != null && qty > 0) {
+                                  const applied = applyDocumentLineExclAmountEdit({
+                                    qty,
+                                    taxRate: row?.tax_rate,
+                                    priceType: 'tax_exclusive',
+                                    exclAmount: excl,
+                                    priceDecimals,
+                                  });
+                                  const next = [...items];
+                                  next[index] = { ...row, unit_price: applied.unit_price };
+                                  formRef.current?.setFieldsValue({ items: next });
+                                }
+                                editingExclIndexRef.current = null;
+                                setEditingExcl(null);
+                              }}
+                            />
+                          );
                         }}
                       </AntForm.Item>
                     ),
@@ -3782,7 +3927,11 @@ const PurchaseOrdersPage: React.FC = () => {
                 }}
                 initialValues={
                   isCreatePage
-                    ? { items: [defaultOrderItem], price_type: 'tax_exclusive' }
+                    ? {
+                        items: [defaultOrderItem],
+                        price_type: 'tax_exclusive',
+                        ...resolveDefaultPurchaseOrderBuyer(),
+                      }
                     : undefined
                 }
               >

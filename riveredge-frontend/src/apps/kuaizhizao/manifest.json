@@ -1,7 +1,7 @@
 {
   "code": "kuaizhizao",
   "name": "快制造",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "制造业全流程一体化管控与协同平台",
   "icon": "production",
   "author": "RiverEdge Team",
@@ -541,9 +541,19 @@
             "permission": "kuaizhizao:production-execution-packing-binding:read"
           },
           {
+            "title": "app.kuaizhizao.menu.production-execution.reporting.statistics",
+            "path": "/apps/kuaizhizao/production-execution/reporting/statistics",
+            "icon": "chartBar",
+            "sort_order": 9,
+            "meta": {
+              "module": "production"
+            },
+            "permission": "kuaizhizao:production-execution-reporting-statistics:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.production-execution.exception-management",
             "icon": "alert-circle",
-            "sort_order": 9,
+            "sort_order": 10,
             "meta": {
               "module": "production"
             },
@@ -599,16 +609,6 @@
                 "permission": "kuaizhizao:production-execution-exception-statistics:read"
               }
             ]
-          },
-          {
-            "title": "app.kuaizhizao.menu.production-execution.reporting.statistics",
-            "path": "/apps/kuaizhizao/production-execution/reporting/statistics",
-            "icon": "chartBar",
-            "sort_order": 10,
-            "meta": {
-              "module": "production"
-            },
-            "permission": "kuaizhizao:production-execution-reporting-statistics:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.reports",
@@ -2539,18 +2539,6 @@
     "kuaizhizao:equipment-spot-check:audit",
     "kuaizhizao:equipment-spot-check:reject",
     "kuaizhizao:equipment-spot-check:print",
-    "kuaizhizao:equipment-spot-check-plan:read",
-    "kuaizhizao:equipment-spot-check-plan:create",
-    "kuaizhizao:equipment-spot-check-plan:delete",
-    "kuaizhizao:equipment-spot-check-plan:update",
-    "kuaizhizao:equipment-spot-check-plan:import",
-    "kuaizhizao:equipment-spot-check-plan:export",
-    "kuaizhizao:equipment-spot-check-plan:submit",
-    "kuaizhizao:equipment-spot-check-plan:revoke",
-    "kuaizhizao:equipment-spot-check-plan:approve",
-    "kuaizhizao:equipment-spot-check-plan:audit",
-    "kuaizhizao:equipment-spot-check-plan:reject",
-    "kuaizhizao:equipment-spot-check-plan:print",
     "kuaizhizao:equipment-status:read",
     "kuaizhizao:equipment-status:create",
     "kuaizhizao:equipment-status:delete",
@@ -5356,18 +5344,6 @@
       "module_icon": "tool",
       "auto_generate": true,
       "rule_code": "equipment_spot_check_code",
-      "allow_manual_edit": false
-    },
-    {
-      "page_code": "kuaizhizao-equipment-spot-check-plan",
-      "page_name": "设备点检计划",
-      "page_path": "/apps/kuaizhizao/equipment-management/spot-check-plans",
-      "code_field": "plan_no",
-      "code_field_label": "计划编号",
-      "module": "快制造",
-      "module_icon": "tool",
-      "auto_generate": true,
-      "rule_code": "equipment_spot_check_plan_code",
       "allow_manual_edit": false
     },
     {

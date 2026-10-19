@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ProFormCheckbox,
   ProFormSelect,
   ProFormSwitch,
   ProFormDependency,
@@ -8,7 +9,7 @@ import {
   ProFormText,
   ProFormTreeSelect,
 } from '@ant-design/pro-components';
-import { theme } from 'antd';
+import { Tabs, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { searchUserDisplay } from '../../../../../services/user';
 import { formatUserDisplayLabel } from '../../../../../utils/userDisplay';
@@ -34,6 +35,7 @@ const APPROVER_OPTIONS = (t: (k: string) => string) => [
   { label: t('pages.approval.designer.approverTypeRole'), value: 'role' },
   { label: t('pages.approval.designer.approverTypeDept'), value: 'department' },
   { label: t('pages.approval.designer.approverTypeManager'), value: 'manager' },
+  { label: t('pages.approval.designer.approverTypeMultiLevelManager'), value: 'multi_level_manager' },
   { label: t('pages.approval.designer.approverTypeOptional'), value: 'initiator_select' },
 ];
 
@@ -41,8 +43,7 @@ interface ApprovalNodeFormProps {
   conditionFieldOptions?: { label: string; value: string }[];
 }
 
-export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
-  const { t } = useTranslation();
+function ApprovalNodeApproverFields({ t }: { t: (key: string) => string }) {
   return (
     <>
       <ProFormSelect
@@ -85,6 +86,19 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
                 label={t('pages.approval.designer.selectRole')}
                 request={async () => (await getRoleList({})).items.map((r) => ({ label: r.name, value: r.uuid }))}
                 mode="multiple"
+              />
+            );
+          }
+          if (approverType === 'multi_level_manager') {
+            return (
+              <ProFormDigit
+                name="managerLevel"
+                label={t('pages.approval.designer.managerLevel')}
+                tooltip={t('pages.approval.designer.managerLevelTip')}
+                min={2}
+                initialValue={2}
+                fieldProps={{ precision: 0, style: { width: '100%' } }}
+                rules={[{ required: true, message: t('pages.approval.designer.managerLevelRequired') }]}
               />
             );
           }
@@ -138,6 +152,13 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
           return null;
         }}
       </ProFormDependency>
+    </>
+  );
+}
+
+function ApprovalNodeActionFields({ t }: { t: (key: string) => string }) {
+  return (
+    <>
       <ProFormSwitch name="allowEditDuringApproval" label={t('pages.approval.designer.allowEditDuringApproval')} />
       <ProFormDependency name={['allowEditDuringApproval']}>
         {({ allowEditDuringApproval }) =>
@@ -172,6 +193,85 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
         tooltip={t('pages.approval.designer.timeoutHoursTip')}
       />
     </>
+  );
+}
+
+function ApprovalNodeRecallRejectFields({ t }: { t: (key: string) => string }) {
+  return (
+    <>
+      <ProFormSwitch
+        name="allowSubmitterWithdraw"
+        label={t('pages.approval.designer.allowSubmitterWithdraw')}
+        initialValue
+      />
+      <ProFormSwitch
+        name="submitterWithdrawOnlyBeforeAnyApprove"
+        label={t('pages.approval.designer.submitterWithdrawOnlyBeforeAnyApprove')}
+      />
+      <ProFormSwitch
+        name="allowApproverRecall"
+        label={t('pages.approval.designer.allowApproverRecall')}
+      />
+      <ProFormCheckbox.Group
+        name="rejectAllowedTargets"
+        label={t('pages.approval.designer.rejectAllowedTargets')}
+        initialValue={['previous', 'submitter']}
+        options={[
+          { label: t('pages.approval.designer.rejectTargetPrevious'), value: 'previous' },
+          { label: t('pages.approval.designer.rejectTargetSubmitter'), value: 'submitter' },
+        ]}
+      />
+      <ProFormSelect
+        name="rejectDefaultTarget"
+        label={t('pages.approval.designer.rejectDefaultTarget')}
+        initialValue="previous"
+        options={[
+          { label: t('pages.approval.designer.rejectTargetPrevious'), value: 'previous' },
+          { label: t('pages.approval.designer.rejectTargetSubmitter'), value: 'submitter' },
+        ]}
+      />
+      <ProFormSwitch
+        name="allowRevokeAfterApproved"
+        label={t('pages.approval.designer.allowRevokeAfterApproved')}
+        initialValue
+      />
+      <ProFormSelect
+        name="revokeLanding"
+        label={t('pages.approval.designer.revokeLanding')}
+        initialValue="reopen_final"
+        options={[
+          { label: t('pages.approval.designer.revokeLandingReopenFinal'), value: 'reopen_final' },
+          { label: t('pages.approval.designer.revokeLandingToDraft'), value: 'to_draft' },
+        ]}
+      />
+    </>
+  );
+}
+
+export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
+  const { t } = useTranslation();
+  return (
+    <Tabs
+      destroyOnHidden={false}
+      size="small"
+      items={[
+        {
+          key: 'approver',
+          label: t('pages.approval.designer.tab.approver'),
+          children: <ApprovalNodeApproverFields t={t} />,
+        },
+        {
+          key: 'actions',
+          label: t('pages.approval.designer.tab.actions'),
+          children: <ApprovalNodeActionFields t={t} />,
+        },
+        {
+          key: 'recallReject',
+          label: t('pages.approval.designer.tab.recallReject'),
+          children: <ApprovalNodeRecallRejectFields t={t} />,
+        },
+      ]}
+    />
   );
 };
 
@@ -228,9 +328,15 @@ interface ConditionNodeFormProps {
 export const ConditionNodeForm: React.FC<ConditionNodeFormProps> = ({ branchCount, fieldOptions }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  const routeModeOptions = [
+    { label: t('pages.approval.designer.routeModePreviousApprover'), value: 'previous_approver' },
+    { label: t('pages.approval.designer.routeModeInitiator'), value: 'initiator' },
+    { label: t('pages.approval.designer.routeModeFormula'), value: 'formula' },
+  ];
   const opOptions = [
     { label: t('pages.approval.designer.opEqual'), value: '==' },
     { label: t('pages.approval.designer.opNotEqual'), value: '!=' },
+    { label: t('pages.approval.designer.opStrictGreater'), value: '>' },
     { label: t('pages.approval.designer.opGreater'), value: '>=' },
     { label: t('pages.approval.designer.opLess'), value: '<' },
     { label: t('pages.approval.designer.opContains'), value: 'contains' },
@@ -248,52 +354,118 @@ export const ConditionNodeForm: React.FC<ConditionNodeFormProps> = ({ branchCoun
           margin: 0;
         }
       `}</style>
-      <ProFormList
-        name="conditions"
-        label={t('pages.approval.designer.conditions')}
-        creatorButtonProps={{ creatorButtonText: t('pages.approval.designer.addConditionRule') }}
-        copyIconProps={false}
-        min={branchCount > 1 ? branchCount : 0}
-        max={Math.max(branchCount, 1)}
-        initialValue={Array.from({ length: Math.max(branchCount, 1) }, (_, i) => ({
-          label: t('pages.approval.designer.branchLabel', { index: i + 1 }),
-          operator: '>=',
-        }))}
-        itemRender={({ listDom, action }, { index }) => (
-          <div
-            className="approval-condition-rule-card"
-            key={index}
-            style={{
-              position: 'relative',
-              padding: token.paddingSM,
-              marginBottom: token.marginSM,
-              backgroundColor: token.colorFillQuaternary,
-              borderRadius: token.borderRadiusLG,
-              border: `1px solid ${token.colorBorderSecondary}`,
-            }}
-          >
-            {action ? (
-              <div style={{ position: 'absolute', top: token.paddingXS, right: token.paddingXS, zIndex: 1 }}>
-                {action}
-              </div>
-            ) : null}
-            <div style={{ paddingRight: action ? 28 : 0 }}>{listDom}</div>
-          </div>
-        )}
-      >
-        {() => (
-          <>
-            <ProFormText name="label" label={t('pages.approval.designer.branchName')} />
-            <ProFormSelect name="field" label={t('pages.approval.designer.field')} options={fieldOptions} />
-            <ProFormSelect name="operator" label={t('pages.approval.designer.operator')} options={opOptions} />
-            <ProFormDigit
-              name="value"
-              label={t('pages.approval.designer.value')}
-              fieldProps={{ style: { width: '100%' } }}
-            />
-          </>
-        )}
-      </ProFormList>
+      {branchCount > 1 ? (
+        <ProFormSelect
+          name="routeMode"
+          label={t('pages.approval.designer.routeMode')}
+          options={routeModeOptions}
+          rules={[{ required: true, message: t('pages.approval.designer.routeModeRequired') }]}
+          initialValue="previous_approver"
+        />
+      ) : null}
+      <ProFormDependency name={['routeMode']}>
+        {({ routeMode }) => {
+          const mode = branchCount > 1 ? routeMode || 'formula' : 'formula';
+          const isManual = mode === 'previous_approver' || mode === 'initiator';
+          return (
+            <ProFormList
+              name="conditions"
+              label={
+                isManual
+                  ? t('pages.approval.designer.branchList')
+                  : t('pages.approval.designer.conditions')
+              }
+              creatorButtonProps={
+                isManual
+                  ? false
+                  : { creatorButtonText: t('pages.approval.designer.addConditionRule') }
+              }
+              copyIconProps={false}
+              min={branchCount > 1 ? branchCount : 0}
+              max={Math.max(branchCount, 1)}
+              initialValue={Array.from({ length: Math.max(branchCount, 1) }, (_, i) => ({
+                label: t('pages.approval.designer.branchLabel', { index: i + 1 }),
+                operator: '>=',
+              }))}
+              itemRender={({ listDom, action }, { index }) => (
+                <div
+                  className="approval-condition-rule-card"
+                  key={index}
+                  style={{
+                    position: 'relative',
+                    padding: token.paddingSM,
+                    marginBottom: token.marginSM,
+                    backgroundColor: token.colorFillQuaternary,
+                    borderRadius: token.borderRadiusLG,
+                    border: `1px solid ${token.colorBorderSecondary}`,
+                  }}
+                >
+                  {action && !isManual ? (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: token.paddingXS,
+                        right: token.paddingXS,
+                        zIndex: 1,
+                      }}
+                    >
+                      {action}
+                    </div>
+                  ) : null}
+                  <div style={{ paddingRight: action && !isManual ? 28 : 0 }}>{listDom}</div>
+                </div>
+              )}
+            >
+              {(_meta, index) =>
+                isManual ? (
+                  <ProFormText
+                    name="label"
+                    label={t('pages.approval.designer.branchName')}
+                    rules={[{ required: true, message: t('pages.approval.designer.branchNameRequired') }]}
+                  />
+                ) : (
+                  <>
+                    <ProFormText name="label" label={t('pages.approval.designer.branchName')} />
+                    <ProFormSwitch
+                      name="else"
+                      label={t('pages.approval.designer.conditionElseBranch')}
+                    />
+                    <ProFormDependency name={['else']}>
+                      {({ else: elseBranch }) =>
+                        elseBranch ? null : (
+                          <>
+                            <ProFormSelect
+                              name="field"
+                              label={t('pages.approval.designer.field')}
+                              options={fieldOptions}
+                              rules={[
+                                { required: true, message: t('pages.approval.designer.fieldRequired') },
+                              ]}
+                            />
+                            <ProFormSelect
+                              name="operator"
+                              label={t('pages.approval.designer.operator')}
+                              options={opOptions}
+                            />
+                            <ProFormDigit
+                              name="value"
+                              label={t('pages.approval.designer.value')}
+                              rules={[
+                                { required: true, message: t('pages.approval.designer.valueRequired') },
+                              ]}
+                              fieldProps={{ style: { width: '100%' } }}
+                            />
+                          </>
+                        )
+                      }
+                    </ProFormDependency>
+                  </>
+                )
+              }
+            </ProFormList>
+          );
+        }}
+      </ProFormDependency>
     </>
   );
 };

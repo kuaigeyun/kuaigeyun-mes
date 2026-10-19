@@ -36,14 +36,44 @@ def _uni_audit_required_permission_codes(resource: str, permission_action: str) 
     return [f"{prefix}:{act}"]
 
 
+@router.get("/{entity_type}/submit-initiator-nodes")
+async def get_submit_initiator_nodes(
+    entity_type: str,
+    auth: AuthContext = Depends(get_auth_context),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """提交前查询流程中需发起人自选的审批节点（含是否必选）。"""
+    entry = entry_by_entity_type(entity_type)
+    if entry is None:
+        raise ValidationError(f"实体 {entity_type} 未在任何 manifest.audit 中声明为可审核")
+
+    from core.services.approval.audit_submit_requirements import (
+        list_initiator_branch_conditions_for_entity,
+        list_initiator_select_nodes_for_entity,
+    )
+
+    nodes = await list_initiator_select_nodes_for_entity(
+        tenant_id,
+        entity_type,
+        node_key=entry.node_key,
+    )
+    branch_conditions = await list_initiator_branch_conditions_for_entity(
+        tenant_id,
+        entity_type,
+        node_key=entry.node_key,
+    )
+    return {"entity_type": entity_type, "nodes": nodes, "branch_conditions": branch_conditions}
+
+
 @router.post("/{entity_type}/{entity_id}/{action}")
 async def execute_audit_action(
     entity_type: str,
     entity_id: int,
     action: str,
     request: Request,
+    # 单一 Body：勿再并列 embed reason，否则 FastAPI 期望 {body, reason}，
+    # 前端扁平的 instance_data_patch / selected_approver_by_node 会被整段丢弃。
     body: Optional[dict] = Body(default=None),
-    reason: Optional[str] = Body(default=None, embed=True),
     auth: AuthContext = Depends(get_auth_context),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -62,7 +92,7 @@ async def execute_audit_action(
     )
 
     payload = dict(body or {})
-    merged_reason = payload.pop("reason", None) or payload.pop("comment", None) or reason
+    merged_reason = payload.pop("reason", None) or payload.pop("comment", None)
 
     return await execute_uni_audit(
         entity_type=entity_type,

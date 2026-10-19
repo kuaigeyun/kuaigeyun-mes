@@ -9,16 +9,19 @@ import { ActionConfirmPopconfirm } from '../../../../../components/action-confir
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { DetailDrawerActions, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import {
   financeAmountDigitFieldProps,
   financeColFull,
@@ -61,11 +64,14 @@ import {
 import { linkAcceptanceNoteAfterVoucherCreate } from '../../../components/AcceptanceBillLinkFields';
 import { financeNoteService, type FinanceNote } from '../../../services/finance/note';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import {
+  mapAttachmentsToUploadList,
+  normalizeDocumentAttachments,
+} from '../../../utils/documentAttachments';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { getStatusDisplay } from '../../../constants/documentStatus';
 import { paymentCapabilityReasonMessage } from '../../../utils/paymentCapabilityMessages';
-import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount, todaySiteDateString } from '../../../../../utils/format';
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
   financeDocCodePartnerSearchColumns,
@@ -124,6 +130,7 @@ const PaymentsPage: React.FC = () => {
   const [pullSourceKind, setPullSourceKind] = useState<'payable' | 'payment_application'>('payable');
   const paymentPerms = useResourcePermissions(PAYMENT_RESOURCE);
   const paymentRefundPerms = useResourcePermissions(PAYMENT_REFUND_RESOURCE);
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const { openFinanceVoucherDetail } = useFinanceVoucherDetail();
   const voucherLinkHandlers = useMemo(
     () =>
@@ -436,6 +443,7 @@ const PaymentsPage: React.FC = () => {
             source: pullAction.sourceLabel,
             code: pullPreviewData.source_code,
           }),
+        require_payment_voucher: Boolean(pullPreviewData.require_payment_voucher),
         attachments: normalizeDocumentAttachments(values.attachments),
       });
       if (pullSourceKind === 'payable') {
@@ -464,23 +472,32 @@ const PaymentsPage: React.FC = () => {
     }
   };
 
+  const paymentHasAttachments = (record: PaymentVoucher) => {
+    const list = Array.isArray(record.attachments) ? record.attachments : [];
+    return list.length > 0;
+  };
+
   const executeConfirm = async (record: PaymentVoucher) => {
+    if (record.require_payment_voucher && !paymentHasAttachments(record)) {
+      messageApi.warning(t(`${P}.requirePaymentVoucherMissing`));
+      return;
+    }
     try {
-          await paymentService.confirmPayment(record.id);
-          messageApi.success(t(`${P}.confirmSuccess`));
-    actionRef.current?.reload();
-          refreshOpenDetail();
-        } catch (e: any) {
-          messageApi.error(
-            e?.response?.data?.detail?.message ||
-              e?.response?.data?.detail ||
-              e?.message ||
-              t('common.operationFailed'),
-          );
-          // 过账中途失败时库内状态可能已变，刷新避免界面仍显示草稿
-          actionRef.current?.reload();
-          refreshOpenDetail();
-        }
+      await paymentService.confirmPayment(record.id);
+      messageApi.success(t(`${P}.confirmSuccess`));
+      actionRef.current?.reload();
+      refreshOpenDetail();
+    } catch (e: any) {
+      messageApi.error(
+        e?.response?.data?.detail?.message ||
+          e?.response?.data?.detail ||
+          e?.message ||
+          t('common.operationFailed'),
+      );
+      // 过账中途失败时库内状态可能已变，刷新避免界面仍显示草稿
+      actionRef.current?.reload();
+      refreshOpenDetail();
+    }
   };
 
   const executeCancelVoucher = async (record: PaymentVoucher) => {
@@ -516,8 +533,15 @@ const PaymentsPage: React.FC = () => {
     }
   };
 
-  const openEdit = (record: PaymentVoucher) => {
-    setEditingRecord(record);
+  const openEdit = async (record: PaymentVoucher) => {
+    try {
+      const full = await paymentService.getPayment(record.id);
+      setEditingRecord(full);
+    } catch (e: any) {
+      messageApi.error(
+        e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t('common.loadFailed'),
+      );
+    }
   };
 
   const handleUpdate = async (values: any) => {
@@ -639,6 +663,13 @@ const PaymentsPage: React.FC = () => {
     formatCurrencyAmount(v || 0);
 
   const tableRowsRef = useRef<PaymentVoucher[]>([]);
+  const selectedPaymentsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is PaymentVoucher => row != null),
+    [selectedRowKeys],
+  );
 
   const handleBatchCreateRefund = async (keys: React.Key[]) => {
     if (!paymentRefundPerms.canCreate) {
@@ -1024,6 +1055,61 @@ const PaymentsPage: React.FC = () => {
             menuItems={batchMenuItems}
           />,
         ]}
+        rightToolBarActionsBeforeExport={[
+          <UniCapabilityBatchButton
+            key="payment-print"
+            selectedRowKeys={selectedRowKeys}
+            selectedRecords={selectedPaymentsForBatch}
+            capabilityKey="print"
+            permAllowed={paymentPerms.canPrint}
+            batchAllowed={(records, perm) =>
+              Boolean(perm) && records.some((record) => record.capabilities?.print?.allowed === true)
+            }
+            singleOnly
+            onRun={async (id) => {
+              openPrint({ documentType: 'finance_payment', documentId: id });
+            }}
+            labels={{
+              single: t('components.uniAction.print'),
+              batch: t('components.uniAction.print'),
+            }}
+            icon={<PrinterOutlined />}
+            size="medium"
+          />,
+        ]}
+        showExportButton
+        onExport={async (type, keys, pageData) => {
+          try {
+            let items =
+              type === 'currentPage'
+                ? (pageData ?? [])
+                : await fetchAllListItems((p) =>
+                    paymentService.listPayments({
+                      ...lastListParamsRef.current,
+                      skip: p.skip,
+                      limit: p.limit,
+                    }),
+                  );
+            if (type === 'currentPage' && pageData?.length) {
+              items = pageData;
+            } else if (type === 'selected' && keys?.length) {
+              items = items.filter(
+                (d: PaymentVoucher) => d.id != null && keys.includes(d.id),
+              );
+            }
+            if (items.length === 0) {
+              messageApi.warning(t('common.noDataToExport'));
+              return;
+            }
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `payments-${todaySiteDateString()}.xlsx`,
+            );
+            messageApi.success(t('common.exportSuccess', { count: items.length }));
+          } catch (error: any) {
+            messageApi.error(error?.message || t('common.exportFailed'));
+          }
+        }}
         toolBarRender={() => [
           <UniPullCreateToolbar
             compactKey="create-payment-with-pull"
@@ -1276,7 +1362,11 @@ const PaymentsPage: React.FC = () => {
                   partnerFieldName="supplier_id"
                 />
                 <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 3 }} colProps={financeColFull} />
-                <DocumentAttachmentsField category="payment_attachments" />
+                <DocumentAttachmentsField
+                  category="payment_attachments"
+                  required={Boolean(pullPreviewData?.require_payment_voucher)}
+                  requiredMessage={t(`${P}.requirePaymentVoucherMissing`)}
+                />
               </ProForm>
             ) : null}
           </div>
@@ -1361,6 +1451,9 @@ const PaymentsPage: React.FC = () => {
                 bank_account_id: editingRecord.bank_account_id,
                 bank_account: editingRecord.bank_account,
                 notes: editingRecord.notes,
+                attachments: mapAttachmentsToUploadList(
+                  editingRecord.attachments as Parameters<typeof mapAttachmentsToUploadList>[0],
+                ),
               }
             : undefined
         }
@@ -1415,7 +1508,11 @@ const PaymentsPage: React.FC = () => {
           partnerFieldName="supplier_id"
         />
         <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
-        <DocumentAttachmentsField category="payment_attachments" />
+        <DocumentAttachmentsField
+          category="payment_attachments"
+          required={Boolean(editingRecord?.require_payment_voucher)}
+          requiredMessage={t(`${P}.requirePaymentVoucherMissing`)}
+        />
       </ModalForm>
 
       <FinanceVoucherDetailDrawer
@@ -1438,6 +1535,24 @@ const PaymentsPage: React.FC = () => {
           detailRecord ? (
             <DetailDrawerActions
               items={[
+                {
+                  key: 'print',
+                  visible: Boolean(paymentPerms.canPrint) && detailRecord.id != null,
+                  render: (
+                    <Button
+                      {...rowActionKind('print')}
+                      icon={<PrinterOutlined />}
+                      onClick={() =>
+                        openPrint({
+                          documentType: 'finance_payment',
+                          documentId: detailRecord.id,
+                        })
+                      }
+                    >
+                      {t('components.uniAction.print')}
+                    </Button>
+                  ),
+                },
                 {
                   key: 'create-refund',
                   visible:
@@ -1574,6 +1689,7 @@ const PaymentsPage: React.FC = () => {
           ) : null
         }
       />
+      {PrintModal}
     </ListPageTemplate>
   );
 };

@@ -27,6 +27,22 @@ export interface UpdateSiteSettingData {
   settings: Record<string, any>;
 }
 
+export interface PublicPasswordPolicy {
+  mode: 'simple' | 'strengthened';
+  min_length: number;
+  min_char_classes: number;
+  check_personal_weak: boolean;
+  max_age_days: number;
+  reset_help: string;
+}
+
+export async function getPasswordPolicy(): Promise<PublicPasswordPolicy> {
+  const res = await apiRequest<{ success: boolean; data: PublicPasswordPolicy }>(
+    '/core/site-settings/password-policy',
+  );
+  return res.data;
+}
+
 export interface SubtenantCapability {
   tenant_id: number;
   is_subtenant: boolean;

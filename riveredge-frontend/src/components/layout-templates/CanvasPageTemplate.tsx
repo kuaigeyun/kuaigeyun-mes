@@ -15,7 +15,6 @@ import { Card } from 'antd';
 import {
   PAGE_SPACING,
   CANVAS_PAGE_LAYOUT,
-  CANVAS_VISUAL_BASE,
   SYSTEM_VIEWPORT_OFFSETS,
   getViewportHeightExpr,
 } from './constants';
@@ -182,8 +181,6 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
                 height: '100%',
                 flex: 1,
                 position: 'relative',
-                border: `1px solid ${CANVAS_VISUAL_BASE.BORDER_COLOR}`,
-                borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS,
                 overflow: 'hidden',
                 boxSizing: 'border-box',
               }}

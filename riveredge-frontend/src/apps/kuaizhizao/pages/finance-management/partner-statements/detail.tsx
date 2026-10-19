@@ -1,11 +1,11 @@
 /**
- * 往来对账单详情页
+ * 往来对账单详情页（快制造财务管理；启用轻财务后由 kuaicaiwu 托管菜单）
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Descriptions, Input, Modal, Space, Spin, Table, Tag, Typography, message } from 'antd';
+import { Alert, Button, Descriptions, Dropdown, Input, Space, Spin, Table, Tag, Typography, message } from 'antd';
+import { DownOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import dayjs from 'dayjs';
 import {
   DOCUMENT_DETAIL_PAGE_HEADER_STYLE,
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
@@ -21,6 +21,9 @@ import {
   partnerStatementExpandableProps,
   usePartnerStatementInboundDetail,
 } from '../../../components/PartnerStatementInboundDetail';
+import MergeFinanceDocsModal, {
+  type MergeFinanceSourceRow,
+} from '../../../components/MergeFinanceDocsModal';
 import {
   buildPartnerStatementStatusEnum,
   formatSentChannel,
@@ -38,8 +41,24 @@ import { usePartnerStatementLineColumns } from '../../../utils/partnerStatementL
 import { useFinanceVoucherDetail } from '../../../components/FinanceVoucherDetailProvider';
 import { resolvePartnerStatementVoucherTarget } from '../../../utils/financeVoucherDocType';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { pullPaymentApplicationFromReconciliation } from '../../../services/payment-application';
+import { purchaseInvoiceService } from '../../../services/finance/purchase-invoice';
+
 const PS = 'app.kuaicaiwu.partnerStatement';
 const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';
+
+function collectPayableStatementLines(lines: PartnerStatementLine[]): PartnerStatementLine[] {
+  return lines.filter((ln) => {
+    if (String(ln.doc_type || '').trim() !== '应付单') return false;
+    if (ln.doc_id == null) return false;
+    if (Number(ln.tree_level ?? 0) > 0) return false;
+    return Number(ln.statement_amount ?? ln.debit ?? 0) > 0;
+  });
+}
+
+function linePushAmount(ln: PartnerStatementLine): number {
+  return Number(ln.statement_amount ?? ln.remaining_amount ?? ln.doc_amount ?? ln.debit ?? 0);
+}
 
 const money = (v: number | string | undefined) =>
   formatCurrencyAmount(v ?? 0);
@@ -47,6 +66,8 @@ const money = (v: number | string | undefined) =>
 const PartnerStatementDetailPage: React.FC = () => {
   const { t } = useTranslation();
   const statementPerms = useResourcePermissions(PARTNER_STATEMENT_RESOURCE);
+  const paymentApplicationPerms = useResourcePermissions('kuaizhizao:payment-application');
+  const purchaseInvoicePerms = useResourcePermissions('kuaicaiwu:purchase-invoice');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const printRef = useRef<HTMLDivElement>(null);
@@ -62,6 +83,10 @@ const PartnerStatementDetailPage: React.FC = () => {
   const [linesDirty, setLinesDirty] = useState(false);
   const [savingLines, setSavingLines] = useState(false);
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
+  const [pushingPaymentApp, setPushingPaymentApp] = useState(false);
+  const [pushingInvoice, setPushingInvoice] = useState(false);
+  const [mergeInvoiceOpen, setMergeInvoiceOpen] = useState(false);
+  const [mergeInvoiceSources, setMergeInvoiceSources] = useState<MergeFinanceSourceRow[]>([]);
   const { cache: lineDetailCache, loadLineDetail, clearCache: clearLineDetailCache } = usePartnerStatementInboundDetail();
 
   const statusEnum = useMemo(() => buildPartnerStatementStatusEnum(t), [t]);
@@ -291,6 +316,127 @@ const PartnerStatementDetailPage: React.FC = () => {
     window.print();
   };
 
+  const canPushDownstream =
+    !!data &&
+    data.partner_type === 'Supplier' &&
+    (data.status === 'Confirmed' || data.status === 'Sent');
+
+  const handlePushPaymentApplication = useCallback(async () => {
+    if (!data) return;
+    if (data.partner_type !== 'Supplier') {
+      message.warning(t(`${PS}.detail.pushSupplierOnly`));
+      return;
+    }
+    if (data.status !== 'Confirmed' && data.status !== 'Sent') {
+      message.warning(t(`${PS}.detail.pushNeedConfirmed`));
+      return;
+    }
+    const payableLines = collectPayableStatementLines(localLines);
+    if (!payableLines.length) {
+      message.warning(t(`${PS}.detail.pushSelectPayable`));
+      return;
+    }
+    setPushingPaymentApp(true);
+    try {
+      const app = await pullPaymentApplicationFromReconciliation({
+        supplierId: data.partner_id,
+        items: payableLines.map((ln) => ({
+          doc_type: 'payable',
+          doc_id: Number(ln.doc_id),
+          amount: linePushAmount(ln),
+        })),
+      });
+      message.success(
+        t(`${PS}.detail.paymentApplicationCreated`, { code: app.applicationCode || '' }),
+      );
+      navigate('/apps/kuaizhizao/purchase-management/payment-applications');
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      message.error(err.message || t(`${PS}.detail.paymentApplicationFailed`));
+    } finally {
+      setPushingPaymentApp(false);
+    }
+  }, [data, localLines, navigate, t]);
+
+  const handlePushPurchaseInvoice = useCallback(async () => {
+    if (!data) return;
+    if (data.partner_type !== 'Supplier') {
+      message.warning(t(`${PS}.detail.pushSupplierOnly`));
+      return;
+    }
+    if (data.status !== 'Confirmed' && data.status !== 'Sent') {
+      message.warning(t(`${PS}.detail.pushNeedConfirmed`));
+      return;
+    }
+    const payableLines = collectPayableStatementLines(localLines);
+    if (!payableLines.length) {
+      message.warning(t(`${PS}.detail.pushSelectPayable`));
+      return;
+    }
+    setPushingInvoice(true);
+    try {
+      const sources: MergeFinanceSourceRow[] = [];
+      for (const ln of payableLines) {
+        const payableId = Number(ln.doc_id);
+        const preview = await purchaseInvoiceService.previewPullFromPayable(payableId);
+        if (preview.has_blocking_issues) {
+          continue;
+        }
+        const pushable = Number(preview.items?.[0]?.max_push_quantity ?? 0);
+        const stmtAmt = linePushAmount(ln);
+        const amount = Math.min(stmtAmt, pushable > 0 ? pushable : stmtAmt);
+        if (!(amount > 0)) continue;
+        sources.push({
+          id: payableId,
+          code: String(ln.doc_code || payableId),
+          partnerId: Number(data.partner_id),
+          partnerName: String(data.partner_name || ''),
+          availableAmount: amount,
+        });
+      }
+      if (!sources.length) {
+        message.warning(t(`${PS}.detail.purchaseInvoiceNoEligible`));
+        return;
+      }
+      setMergeInvoiceSources(sources);
+      setMergeInvoiceOpen(true);
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      message.error(err.message || t(`${PS}.detail.purchaseInvoiceFailed`));
+    } finally {
+      setPushingInvoice(false);
+    }
+  }, [data, localLines, t]);
+
+  const pushMenuItems = useMemo(() => {
+    const items: Array<{ key: string; label: string; disabled?: boolean; onClick: () => void }> = [];
+    if (paymentApplicationPerms.canCreate) {
+      items.push({
+        key: 'payment-application',
+        label: t(`${PS}.detail.pushPaymentApplication`),
+        disabled: pushingPaymentApp,
+        onClick: () => void handlePushPaymentApplication(),
+      });
+    }
+    if (purchaseInvoicePerms.canCreate) {
+      items.push({
+        key: 'purchase-invoice',
+        label: t(`${PS}.detail.pushPurchaseInvoice`),
+        disabled: pushingInvoice,
+        onClick: () => void handlePushPurchaseInvoice(),
+      });
+    }
+    return items;
+  }, [
+    handlePushPaymentApplication,
+    handlePushPurchaseInvoice,
+    paymentApplicationPerms.canCreate,
+    purchaseInvoicePerms.canCreate,
+    pushingInvoice,
+    pushingPaymentApp,
+    t,
+  ]);
+
   if (!id) return null;
 
   const statusMeta = data ? statusEnum[data.status as keyof typeof statusEnum] : null;
@@ -317,6 +463,13 @@ const PartnerStatementDetailPage: React.FC = () => {
         ) : null}
         {data.status === 'Confirmed' && statementPerms.canUpdate ? (
           <Button type="primary" onClick={handleMarkSent}>{t(`${PS}.detail.markSent`)}</Button>
+        ) : null}
+        {canPushDownstream && pushMenuItems.length > 0 ? (
+          <Dropdown menu={{ items: pushMenuItems }} trigger={['click']}>
+            <Button loading={pushingPaymentApp || pushingInvoice}>
+              {t('components.uniPush.push')} <DownOutlined />
+            </Button>
+          </Dropdown>
         ) : null}
         {(data.status === 'Sent' || data.status === 'Confirmed') && statementPerms.canUpdate ? (
           <Button danger onClick={handleDispute}>{t(`${PS}.detail.recordDispute`)}</Button>
@@ -425,6 +578,12 @@ const PartnerStatementDetailPage: React.FC = () => {
           </Typography.Paragraph>
         </div>
       )}
+      <MergeFinanceDocsModal
+        open={mergeInvoiceOpen}
+        mode="merge_purchase_invoice"
+        sources={mergeInvoiceSources}
+        onOpenChange={setMergeInvoiceOpen}
+      />
     </div>
   );
 };

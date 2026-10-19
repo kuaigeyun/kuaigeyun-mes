@@ -16,6 +16,8 @@ class MenuTakeoverRule:
     consumer_app_code: str
     source_app_code: str
     path_prefixes: Tuple[str, ...]
+    source_menu_title: str | None = None
+    consumer_takeover_key: str | None = None
 
 
 MENU_TAKEOVER_RULES: Dict[str, MenuTakeoverRule] = {
@@ -47,6 +49,8 @@ MENU_TAKEOVER_RULES: Dict[str, MenuTakeoverRule] = {
         consumer_app_code="kuaicaiwu",
         source_app_code="kuaizhizao",
         path_prefixes=("/apps/kuaizhizao/finance-management",),
+        source_menu_title="app.kuaicaiwu.menu.finance-management",
+        consumer_takeover_key="kuaizhizao-finance-management",
     ),
 }
 

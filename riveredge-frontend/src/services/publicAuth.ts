@@ -41,6 +41,7 @@ export interface LoginResponse {
   }>;
   default_tenant_id?: number;
   requires_tenant_selection?: boolean;
+  requires_password_change?: boolean;
 }
 
 /** 登录响应中的组织名称（唯一来源：后端 user.tenant_name） */
@@ -160,6 +161,24 @@ export async function guestLogin(): Promise<LoginResponse> {
 export interface WeComAuthorizeUrlResponse {
   authorize_url: string;
   state: string;
+}
+
+export interface WeComResolveTenantResponse {
+  tenant_id: number;
+  tenant_domain: string;
+  candidates_count: number;
+}
+
+export async function resolveWecomTenant(params: {
+  corp_id: string;
+  agent_id: number;
+}): Promise<WeComResolveTenantResponse> {
+  return publicRequest<WeComResolveTenantResponse>('/auth/wecom/resolve-tenant', {
+    params: {
+      corp_id: params.corp_id,
+      agent_id: params.agent_id,
+    },
+  });
 }
 
 export async function getWecomAuthorizeUrl(params: {

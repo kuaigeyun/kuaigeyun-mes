@@ -91,6 +91,10 @@ class LoginResponse(BaseModel):
         default=False,
         description="是否需要输入手机号后四位（同名同密且跨租户手机号不一致时）",
     )
+    requires_password_change: bool = Field(
+        default=False,
+        description="是否须先修改登录密码（加强策略到期或管理员重置临时密）",
+    )
 
 
 class SwitchTenantRequest(BaseModel):

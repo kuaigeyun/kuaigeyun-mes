@@ -246,6 +246,20 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
               width: 150,
             },
             {
+              title: t('app.kuaizhizao.warehouseInbound.col.spec'),
+              dataIndex: 'material_spec',
+              width: 120,
+              ellipsis: true,
+              render: (v) => (v != null && String(v).trim() ? String(v) : '—'),
+            },
+            {
+              title: t('app.kuaizhizao.warehouseInbound.col.model'),
+              dataIndex: 'material_model',
+              width: 100,
+              ellipsis: true,
+              render: (v) => (v != null && String(v).trim() ? String(v) : '—'),
+            },
+            {
               title: t('app.kuaizhizao.warehouseInbound.col.actualQty'),
               dataIndex: 'receipt_quantity',
               width: 100,

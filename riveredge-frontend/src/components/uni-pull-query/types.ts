@@ -37,6 +37,8 @@ export interface UniPullQueryModalProps<T extends object> {
   selectedRowKeys: React.Key[];
   onSelectedRowKeysChange: (keys: React.Key[], rows: T[]) => void;
   isRowDisabled?: (record: T) => boolean;
+  /** 点击不可选行时回调（用于提示不可取单原因） */
+  onDisabledRowClick?: (record: T) => void;
 
   /** 搜索框草稿（输入中，未提交） */
   searchDraft: string;

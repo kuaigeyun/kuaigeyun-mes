@@ -71,6 +71,7 @@ import {
 } from '../../../../utils/appSolarIcons';
 import { useGlobalStore } from '../../../../stores';
 import { getPlatformSettingsPublic } from '../../../../services/platformSettings';
+import { resolveSessionTenantScope } from '../../../../config/sessionQueries';
 import {
   getApplicationList,
   getApplicationByUuid,
@@ -229,6 +230,7 @@ const CARD_HEADER_TINT: Record<string, string> = {
   'master-data': '#a78bfa',
   kuaiai: '#fb7185',
   kuaiiot: '#2dd4bf',
+  kuaivision: '#818cf8',
   bi: '#4ade80',
   kuaicrm: '#fb923c',
   kuaiplm: '#a78bfa',
@@ -264,6 +266,7 @@ const getCardGradient = (code: string, isActive: boolean, token: GlobalToken, is
     'master-data': 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)', // 丁香紫
     kuaiai: 'linear-gradient(135deg, #fff1f2 0%, #fecdd3 100%)',      // 玫瑰粉
     kuaiiot: 'linear-gradient(135deg, #e6fffb 0%, #b5f5ec 100%)',     // 青绿色
+    kuaivision: 'linear-gradient(135deg, #eef2ff 0%, #c7d2fe 100%)',  // 视觉靛
     bi: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',          // 翡翠绿
     kuaicrm: 'linear-gradient(135deg, #fff7ed 0%, #fdba74 100%)',     // 橙色
     kuaiplm: 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)',     // 丁香紫
@@ -315,6 +318,10 @@ const ApplicationListPage: React.FC = () => {
   const [proKeySubmitting, setProKeySubmitting] = useState(false);
   const [proKeyTargetApp, setProKeyTargetApp] = useState<Application | null>(null);
   const [pendingEnableAfterActivation, setPendingEnableAfterActivation] = useState(false);
+  /** 启用/禁用进行中的应用 uuid；用于 Switch loading，避免重复点击 */
+  const [togglingActiveUuid, setTogglingActiveUuid] = useState<string | null>(null);
+  /** 开关成功后的乐观状态，列表 reload 完成前避免开关弹回 */
+  const [activeOverrides, setActiveOverrides] = useState<Record<string, boolean>>({});
   const [resetModalVisible, setResetModalVisible] = useState(false);
   const [resetTargetApp, setResetTargetApp] = useState<Application | null>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
@@ -337,8 +344,9 @@ const ApplicationListPage: React.FC = () => {
   const currentUser = useCurrentUser();
   const isInfraAdmin = Boolean(currentUser?.is_infra_admin);
 
+  const sessionTenantScope = resolveSessionTenantScope();
   const { data: centerCapabilities } = useQuery({
-    queryKey: ['application-center-capabilities'],
+    queryKey: ['application-center-capabilities', sessionTenantScope ?? null],
     queryFn: getApplicationCenterCapabilities,
     staleTime: 30_000,
   });
@@ -350,32 +358,42 @@ const ApplicationListPage: React.FC = () => {
   });
   const showCustomAppsContactQr = platformSettingsPublic?.custom_apps_contact_qr_enabled === true;
 
+  const canActAsLifecycleManager = useCallback(
+    (caps: ApplicationCenterCapabilities | undefined): boolean => {
+      if (isInfraAdmin || caps?.is_infra_admin) return true;
+      if (caps?.is_tenant_admin || caps?.can_manage_lifecycle) return true;
+      return false;
+    },
+    [isInfraAdmin],
+  );
+
   const canToggleAppLifecycle = useCallback(
     (app: Application | Record<string, unknown>): boolean => {
-      if (isInfraAdmin) return true;
       const caps = centerCapabilities as ApplicationCenterCapabilities | undefined;
-      if (!caps?.is_tenant_admin) return false;
+      if (!canActAsLifecycleManager(caps)) return false;
+      if (isInfraAdmin || caps?.is_infra_admin) return true;
       const edition = resolveAppEdition(app as Application);
-      const effective = caps.effective?.[edition];
+      const effective = caps?.effective?.[edition];
       if (!effective?.can_self_service_toggle) return false;
-      if (requiresProLicense(app as Application) && !caps.package?.allow_pro_apps) return false;
+      if (requiresProLicense(app as Application) && !caps?.package?.allow_pro_apps) return false;
       return true;
     },
-    [centerCapabilities, isInfraAdmin],
+    [canActAsLifecycleManager, centerCapabilities, isInfraAdmin],
   );
 
   const lifecycleDisabledTooltip = useCallback(
     (app?: Application | Record<string, unknown>) => {
-      if (isInfraAdmin) return undefined;
-      if (!centerCapabilities?.is_tenant_admin) {
+      const caps = centerCapabilities as ApplicationCenterCapabilities | undefined;
+      if (isInfraAdmin || caps?.is_infra_admin) return undefined;
+      if (!canActAsLifecycleManager(caps)) {
         return t('pages.system.applications.platformAdminOnlyLifecycle');
       }
-      if (app && requiresProLicense(app as Application) && !centerCapabilities.package?.allow_pro_apps) {
+      if (app && requiresProLicense(app as Application) && !caps?.package?.allow_pro_apps) {
         return t('pages.system.applications.lifecycleBlockedByPackagePro');
       }
       return t('pages.system.applications.lifecyclePermissionDenied');
     },
-    [centerCapabilities, isInfraAdmin, t],
+    [canActAsLifecycleManager, centerCapabilities, isInfraAdmin, t],
   );
 
   /** static 目录通过 Vite publicDir 挂载到站点根路径，见 vite.config `publicDir` */
@@ -681,24 +699,40 @@ const ApplicationListPage: React.FC = () => {
       showProPlaceholderHelp(record);
       return;
     }
+    if (togglingActiveUuid) {
+      return;
+    }
+    if (checked) {
+      const isProApp = requiresProLicense(record);
+      if (isProApp && record.can_access === false) {
+        openProLicenseKeyModal(record, true);
+        return;
+      }
+    }
     try {
+      setTogglingActiveUuid(record.uuid);
       if (checked) {
-        const isProApp = requiresProLicense(record);
-        if (isProApp && record.can_access === false) {
-          openProLicenseKeyModal(record, true);
-          return;
-        }
-
         await enableApplication(record.uuid);
         messageApi.success(t('pages.system.applications.enableSuccess'));
       } else {
         await disableApplication(record.uuid);
         messageApi.success(t('pages.system.applications.disableSuccess'));
       }
-      actionRef.current?.reload();
+      setActiveOverrides((prev) => ({ ...prev, [record.uuid]: checked }));
       refreshApplicationMenusAfterBackendMenuChange();
+      void queryClient.invalidateQueries({ queryKey: ['installedApplications'] });
+      void Promise.resolve(actionRef.current?.reload()).finally(() => {
+        setActiveOverrides((prev) => {
+          if (!(record.uuid in prev)) return prev;
+          const next = { ...prev };
+          delete next[record.uuid];
+          return next;
+        });
+      });
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'));
+    } finally {
+      setTogglingActiveUuid(null);
     }
   };
 
@@ -1585,9 +1619,18 @@ const ApplicationListPage: React.FC = () => {
             <Tooltip title={!canToggleAppLifecycle(application) ? lifecycleDisabledTooltip(application) : undefined}>
               <span style={{ display: 'inline-flex' }}>
                 <Switch
-                  checked={application.is_active}
+                  checked={
+                    activeOverrides[application.uuid] !== undefined
+                      ? activeOverrides[application.uuid]
+                      : application.is_active
+                  }
+                  loading={togglingActiveUuid === application.uuid}
                   onChange={(checked) => handleToggleActive(application, checked)}
-                  disabled={!application.is_installed || !canToggleAppLifecycle(application)}
+                  disabled={
+                    !application.is_installed
+                    || !canToggleAppLifecycle(application)
+                    || (togglingActiveUuid !== null && togglingActiveUuid !== application.uuid)
+                  }
                   checkedChildren={t('common.enabled')}
                   unCheckedChildren={t('common.disabled')}
                 />

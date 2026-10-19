@@ -9,6 +9,337 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-trial-flow-profile-tenant-import-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-profile-tenant-import-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-profile-tenant-import-r01.description',
+  },
+  {
+    id: 'funide-oa-drawings-menu-to-doc-control-r01',
+    date: '2026-10-19',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-drawings-menu-to-doc-control-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-drawings-menu-to-doc-control-r01.description',
+  },
+  {
+    id: 'funide-oa-firmware-release-date-locked-r01',
+    date: '2026-10-18',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-firmware-release-date-locked-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-firmware-release-date-locked-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-drawings-menu-flatten-r01',
+    date: '2026-10-18',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-drawings-menu-flatten-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-drawings-menu-flatten-r01.description',
+  },
+  {
+    id: 'funide-oa-firmware-software-description-r01',
+    date: '2026-10-18',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-firmware-software-description-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-firmware-software-description-r01.description',
+  },
+  {
+    id: 'funide-oa-drawing-distribution-party-r01',
+    date: '2026-10-18',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-drawing-distribution-party-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-drawing-distribution-party-r01.description',
+  },
+  {
+    id: 'haoligo-home-permission-reload-loop-r01',
+    date: '2026-10-18',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-home-permission-reload-loop-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-home-permission-reload-loop-r01.description',
+  },
+  {
+    id: 'funide-oa-eight-d-workbench-route-r01',
+    date: '2026-10-16',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-eight-d-workbench-route-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-eight-d-workbench-route-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-no-preset-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-no-preset-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-no-preset-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-actions-simplify-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-simplify-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-simplify-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-view-linked-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-view-linked-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-view-linked-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-status-composite-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-status-composite-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-status-composite-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-link-status-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-status-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-status-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-link-save-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-save-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-save-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-actions-layout-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-layout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-layout-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-system-archive-delete-r01',
+    date: '2026-10-15',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-system-archive-delete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-system-archive-delete-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-type-column-r02',
+    date: '2026-10-15',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-column-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-column-r02.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-link-document-r01',
+    date: '2026-10-15',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-document-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-document-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-type-system-archive-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-system-archive-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-system-archive-r01.description',
+  },
+  {
+    id: 'funide-oa-proposal-rd-project-link-r01',
+    date: '2026-10-15',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-proposal-rd-project-link-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-proposal-rd-project-link-r01.description',
+  },
+  {
+    id: 'funide-oa-project-proposal-supplier-submit-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-submit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-submit-r01.description',
+  },
+  {
+    id: 'funide-oa-bom-collab-kingdee-import-r01',
+    date: '2026-10-15',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-bom-collab-kingdee-import-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-bom-collab-kingdee-import-r01.description',
+  },
+  {
+    id: 'funide-oa-project-proposal-supplier-optional-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-optional-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-optional-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverable-type-label-r01',
+    date: '2026-10-14',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-label-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-label-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-archive-in-deliverables-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-archive-in-deliverables-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-archive-in-deliverables-r01.description',
+  },
+  {
+    id: 'funide-oa-gate-templates-menu-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-gate-templates-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-gate-templates-menu-r01.description',
+  },
+  {
+    id: 'funide-oa-product-firmware-software-code-no-fixed-len-r01',
+    date: '2026-10-14',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-product-firmware-software-code-no-fixed-len-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-product-firmware-software-code-no-fixed-len-r01.description',
+  },
+  {
+    id: 'funide-oa-sample-flow-material-request-menu-r01',
+    date: '2026-10-14',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-sample-flow-material-request-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-sample-flow-material-request-menu-r01.description',
+  },
+  {
+    id: 'funide-oa-trial-flow-header-material-supplier-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-header-material-supplier-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-header-material-supplier-r01.description',
+  },
+  {
+    id: 'funide-oa-mold-sample-order-material-fields-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-mold-sample-order-material-fields-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-mold-sample-order-material-fields-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-electronics-structure-menu-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-structure-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-structure-menu-r01.description',
+  },
+  {
+    id: 'funide-oa-drawing-detail-files-section-r01',
+    date: '2026-10-14',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-drawing-detail-files-section-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-drawing-detail-files-section-r01.description',
+  },
+  {
     id: 'funide-oa-l06-rework-direct-create-r02',
     date: '2026-10-10',
     type: 'fix',
