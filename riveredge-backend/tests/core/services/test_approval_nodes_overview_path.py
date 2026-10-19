@@ -92,3 +92,18 @@ def test_dead_branch_not_reachable_after_route_chosen():
     # 当边仅为 cond→n4（否支）时 n3 不在 on_path。这里构造已选否支后的有效边等价：从 n4 出发不可达 n3。
     assert "n3" not in reachable
     assert "end" in reachable
+
+
+def test_passed_approval_nodes_lie_behind_current_not_in_forward_reach():
+    """当前停在总经理特批时，直接上级/二级上级已在后方：在 on_path 且不在 reachable_from_current。
+
+    概况态须标已通过而非「待到达」（有执行史/任务时由 _build_nodes_overview 判定）。
+    """
+    graph = _branch_after_n2_graph()
+    on_path = ApprovalInstanceService._graph_node_ids_on_some_path_to_target(graph, "n3")
+    reachable = ApprovalInstanceService._graph_node_ids_reachable_from(graph, "n3")
+    assert {"n1", "n2", "cond", "n3"}.issubset(on_path)
+    assert "n1" not in reachable
+    assert "n2" not in reachable
+    assert "n3" in reachable
+    assert "n4" in reachable

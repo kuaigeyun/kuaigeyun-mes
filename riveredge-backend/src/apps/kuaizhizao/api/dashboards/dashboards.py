@@ -229,9 +229,11 @@ async def get_todos(
     获取待办事项列表
 
     包括：待处理工单、生产异常、库存预警、入库/出库/借还料、收货发货通知、
-    采购申请待审核与采购退货、销售退货、叫料、设备故障待处理、各类检验待检验等。
+    采购退货、销售退货、叫料、设备故障待处理、各类检验待检验等。
 
-    单据类待办按登录用户对各模块的 :read 权限过滤；指派给本人的审批待办始终可见。
+    单据类待办按登录用户对各模块的 :read 权限过滤。
+    采购申请等走审批流的「待审核」仅来自指派给本人的 approval_task（status=pending），
+    处理完成后不再出现；禁止凡有 :read 就列出全租户待审单。
     """
     import asyncio as _asyncio
 
@@ -804,38 +806,8 @@ async def get_todos(
             return []
 
     async def _fetch_purchase_requisitions() -> List[TodoItem]:
-        try:
-            from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
-            from apps.kuaizhizao.constants import DocumentStatus
-            rows = await PurchaseRequisition.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
-                status__in=(
-                    DocumentStatus.PENDING_REVIEW.value,
-                    "待审核", "PENDING_REVIEW", "PENDING",
-                ),
-            ).order_by("-created_at").limit(limit)
-            out: List[TodoItem] = []
-            for row in rows:
-                meta = _todo_meta(
-                    requisition_name=row.requisition_name,
-                    applicant_name=row.applicant_name,
-                )
-                out.append(TodoItem(
-                    id=f"purchase_requisition_{row.id}",
-                    type="purchase",
-                    title=f"采购申请待审核：{row.requisition_code}",
-                    description=_join_parts(row.requisition_name, row.applicant_name),
-                    meta=meta,
-                    priority="medium",
-                    due_date=None,
-                    status="pending",
-                    link=build_dashboard_todo_link(f"purchase_requisition_{row.id}"),
-                    created_at=row.created_at,
-                ))
-            return out
-        except Exception as e:
-            logger.error(f"获取采购申请待办失败: {e}")
-            return []
+        """采购申请待审改由 approval_task_*（本人 pending）承载，避免全租户待审刷屏。"""
+        return []
 
     async def _fetch_purchase_returns() -> List[TodoItem]:
         try:

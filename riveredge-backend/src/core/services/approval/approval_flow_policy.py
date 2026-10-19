@@ -136,7 +136,10 @@ def previous_approval_node_id_on_instance_path(
             return prev_approval
         node = get_node_config(graph, cursor)
         ntype = str((node or {}).get("type") or "")
-        nxt = ApprovalInstanceService._get_next_node(graph, cursor, instance=instance)
+        # 只读路径：缺选边须 stop，禁止 raise 把 get_approval_status 打成 422（弹窗显示未绑定）
+        nxt = ApprovalInstanceService._get_next_node(
+            graph, cursor, instance=instance, on_missing_branch="stop"
+        )
         if not nxt:
             return None
         nxt_id = str(nxt.get("id") or "").strip()
@@ -339,7 +342,10 @@ def next_approval_node_id_on_instance_path(
         if cursor in seen:
             return None
         seen.add(cursor)
-        nxt = ApprovalInstanceService._get_next_node(graph, cursor, instance=instance)
+        # 只读路径：缺选边须 stop，禁止 raise 把概况/门禁接口打挂
+        nxt = ApprovalInstanceService._get_next_node(
+            graph, cursor, instance=instance, on_missing_branch="stop"
+        )
         if not nxt:
             return None
         ntype = str(nxt.get("type") or "")
@@ -360,28 +366,38 @@ async def _subsequent_approval_has_human_pass(
     process_nodes: Any,
     from_node_id: str,
 ) -> bool:
-    """本节点之后、实例路径上是否已有后续审批节点被人工通过。
+    """本节点之后是否已有后续审批节点被人工通过。
 
-    空审批人 auto_pass 只写历史、不建 approved 任务，不视为「下一道已审」，
-    故可继续往后看；任一后续节点存在 approved 任务则阻断撤回本级。
+    用图可达集判定，不依赖条件选边键：缺 ``__branch_index_*`` 时仍能正确阻断
+    （避免 path walk raise，也避免 stop 后误判「后续无人审过」而放行撤回）。
+    空审批人 auto_pass 不建 approved 任务，不视为已审。
     """
-    cursor = str(from_node_id or "").strip()
-    if not cursor:
+    from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+    from_id = str(from_node_id or "").strip()
+    if not from_id:
         return False
-    for _ in range(64):
-        nxt = next_approval_node_id_on_instance_path(process_nodes, cursor, instance)
-        if not nxt:
-            return False
-        has_human = await ApprovalTask.filter(
-            tenant_id=tenant_id,
-            approval_instance_id=instance.id,
-            node_id=nxt,
-            status="approved",
-        ).exists()
-        if has_human:
-            return True
-        cursor = nxt
-    return False
+    graph = ApprovalInstanceService._normalize_process_graph(process_nodes or {})
+    reachable = ApprovalInstanceService._graph_node_ids_reachable_from(graph, from_id)
+    downstream = reachable - {from_id}
+    if not downstream:
+        return False
+    approval_ids = [
+        str(n.get("id") or "")
+        for n in (graph.get("nodes") or [])
+        if isinstance(n, dict)
+        and str(n.get("type") or "") == "approval"
+        and str(n.get("id") or "") in downstream
+    ]
+    approval_ids = [nid for nid in approval_ids if nid]
+    if not approval_ids:
+        return False
+    return await ApprovalTask.filter(
+        tenant_id=tenant_id,
+        approval_instance_id=instance.id,
+        node_id__in=approval_ids,
+        status="approved",
+    ).exists()
 
 
 async def viewer_may_recall_own_on_instance(

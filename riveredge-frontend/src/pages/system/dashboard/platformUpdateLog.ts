@@ -44,6 +44,33 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'approval-recall-gm-branch-disconnect-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.approval-recall-gm-branch-disconnect-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-recall-gm-branch-disconnect-r01.description',
+  },
+  {
+    id: 'approval-nodes-overview-passed-not-waiting-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.approval-nodes-overview-passed-not-waiting-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-nodes-overview-passed-not-waiting-r01.description',
+  },
+  {
+    id: 'dashboard-todo-purchase-requisition-assignee-only-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.dashboard-todo-purchase-requisition-assignee-only-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.dashboard-todo-purchase-requisition-assignee-only-r01.description',
+  },
+  {
     id: 'purchase-requisition-list-audit-enrich-422-r01',
     date: '2026-10-19',
     type: 'fix',

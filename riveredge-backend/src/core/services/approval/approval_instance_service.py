@@ -738,10 +738,24 @@ class ApprovalInstanceService:
                 and instance.status == "pending"
                 and on_path_to_current
                 and node_id in on_path_to_current
+                and node_id not in reachable_from_current
                 and not is_current
                 and node_type in {"condition", "cc"}
             ):
-                # 条件/抄送无任务：已走过当前路径则视为已通过（避免仍显示「待到达」）
+                # 条件/抄送无任务：已在通向当前节点的路径上且已走过，视为已通过
+                node_status = "approved"
+            elif (
+                instance
+                and instance.status == "pending"
+                and on_path_to_current
+                and node_id in on_path_to_current
+                and node_id not in reachable_from_current
+                and not is_current
+                and node_type == "approval"
+                and (node_tasks or node_history)
+            ):
+                # 审批节点已在当前节点之前（有任务或执行史），不得再标「待到达」
+                # （例如仅有提交/撤回史、或待办已推进后被取消，但流程已离开本节点）
                 node_status = "approved"
             elif (
                 instance
@@ -898,6 +912,22 @@ class ApprovalInstanceService:
         tasks: List[ApprovalTask] = []
         history: List[ApprovalHistory] = []
         if entity_instances:
+            if instance and instance.status == "pending" and process:
+                # 旧撤回曾清掉 initiator 选边：先用 condition_route 履历回写，避免概况 422 / 弹窗未绑定
+                try:
+                    graph_for_restore = ApprovalInstanceService._normalize_process_graph(
+                        process.nodes
+                    )
+                    await ApprovalInstanceService._restore_missing_initiator_branches_from_history(
+                        tenant_id, instance, graph_for_restore
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "restore initiator branch skipped for {}:{} — {}",
+                        entity_type,
+                        entity_id,
+                        exc,
+                    )
             if instance and instance.status == "pending" and instance.current_node:
                 # 须在 bootstrap 之前：否则 pending_count 会把上一节点残留算进去
                 await ApprovalTask.filter(
@@ -2702,9 +2732,14 @@ class ApprovalInstanceService:
             except Exception as e:
                 logger.warning("抄送通知发送失败: %s", e)
             next_node = ApprovalInstanceService._get_next_node(
-                instance.process.nodes, node_id, instance=instance
+                instance.process.nodes,
+                node_id,
+                instance=instance,
+                on_missing_branch=on_missing_branch,
             )
             if not next_node:
+                if on_missing_branch == "stop":
+                    return []
                 instance.status = "approved"
                 instance.completed_at = resolve_business_datetime()
                 instance.current_node = None
@@ -3195,6 +3230,83 @@ class ApprovalInstanceService:
             if (not node) or cond_id in downstream:
                 out.pop(key, None)
         return out
+
+    @staticmethod
+    async def _restore_missing_initiator_branches_from_history(
+        tenant_id: int,
+        instance: ApprovalInstance,
+        graph: Dict[str, Any],
+    ) -> bool:
+        """旧撤回清掉 initiator 选边后，用本实例 condition_route 履历回写 __branch_index_*。
+
+        履历 to_node 是写路径真源，不是读侧猜测。
+        """
+        data: Dict[str, Any] = (
+            dict(instance.data) if isinstance(instance.data, dict) else {}
+        )
+        changed = False
+        for node in graph.get("nodes") or []:
+            if not isinstance(node, dict) or str(node.get("type") or "") != "condition":
+                continue
+            cond_id = str(node.get("id") or "").strip()
+            if not cond_id:
+                continue
+            edges = [
+                e
+                for e in (graph.get("edges") or [])
+                if isinstance(e, dict) and str(e.get("source") or "") == cond_id
+            ]
+            if not edges:
+                continue
+            route_mode = ApprovalInstanceService._condition_node_route_mode(
+                node, out_edge_count=len(edges)
+            )
+            if route_mode != "initiator":
+                continue
+            index_key = ApprovalInstanceService._condition_branch_index_key(cond_id)
+            if index_key in data or ApprovalInstanceService._condition_branch_route_key(
+                cond_id
+            ) in data:
+                continue
+            hist = (
+                await ApprovalHistory.filter(
+                    tenant_id=tenant_id,
+                    approval_instance_id=instance.id,
+                    from_node=cond_id,
+                )
+                .order_by("-action_at", "-id")
+                .all()
+            )
+            route_hist = next(
+                (
+                    h
+                    for h in hist
+                    if ApprovalInstanceService._normalize_execution_action(h.action)
+                    == "condition_route"
+                ),
+                None,
+            )
+            if not route_hist:
+                continue
+            to_id = str(route_hist.to_node or "").strip()
+            if not to_id:
+                continue
+            edge_index = next(
+                (
+                    i
+                    for i, e in enumerate(edges)
+                    if str(e.get("target") or "") == to_id
+                ),
+                None,
+            )
+            if edge_index is None:
+                continue
+            data[index_key] = int(edge_index)
+            changed = True
+        if changed:
+            instance.data = data
+            await instance.save()
+        return changed
 
     @staticmethod
     async def _resolve_condition_route_action_by(

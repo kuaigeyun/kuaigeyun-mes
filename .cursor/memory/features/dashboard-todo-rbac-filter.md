@@ -58,6 +58,7 @@ standard: 后端 get_todos 按 TODO_SOURCE_READ_PERMISSION 门控各来源 fetch
 - 权限码须与列表 API / manifest 一致（如缺料用 `production-execution-material-shortage-exceptions`，不是短名）
 - 入库 Hub 多单据共用 `kuaizhizao:inbound:read`；出库 Hub 用 `outbound:read`
 - 缓存 key 已含 `approver_user_id`，按用户隔离；权限变更最多 30s TTL 延迟
+- **采购申请待审**：禁止再用 `purchase_requisition_` 拉全租户 `PENDING_REVIEW`；凡有 `:read` 会看到别人的单。待审只认 `approval_task_*`（`approver_id=本人` 且 `status=pending`）；已审完任务不会再进待办
 
 ## 关联
 

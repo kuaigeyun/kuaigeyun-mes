@@ -44144,6 +44144,18 @@ export default {
     '试流单研发项目支持关联或手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.description':
     '新建试流单时研发项目与产品固件、样品加工一致：可从列表选择项目，也可直接手填项目代号（无需先建项目档案）。',
+  'pages.dashboard.updateLog.entries.approval-recall-gm-branch-disconnect-r01.title':
+    '条件分支节点撤回本级后流程不再断开',
+  'pages.dashboard.updateLog.entries.approval-recall-gm-branch-disconnect-r01.description':
+    '在「总经理(特殊情况)」等条件分支后的节点撤回本级时，保留发起人选边并用履历回写；审核概况缺选边不再报错成未绑定，流程退回本级重审。',
+  'pages.dashboard.updateLog.entries.approval-nodes-overview-passed-not-waiting-r01.title':
+    '审核执行记录已过节点不再显示待到达',
+  'pages.dashboard.updateLog.entries.approval-nodes-overview-passed-not-waiting-r01.description':
+    '流程已离开的审批节点（含仅有提交/撤回等执行史）在节点概况中显示为已通过，不再误标「待到达」。',
+  'pages.dashboard.updateLog.entries.dashboard-todo-purchase-requisition-assignee-only-r01.title':
+    '工作台采购申请待办仅显示本人待审',
+  'pages.dashboard.updateLog.entries.dashboard-todo-purchase-requisition-assignee-only-r01.description':
+    '采购申请待审核改由审批任务指派承载；有查看权限不再看到全租户待审单。已处理完的待办（任务非 pending）不会留在待办事项里。',
   'pages.dashboard.updateLog.entries.purchase-requisition-list-audit-enrich-422-r01.title':
     '采购申请列表不再因审批选边校验空白',
   'pages.dashboard.updateLog.entries.purchase-requisition-list-audit-enrich-422-r01.description':
