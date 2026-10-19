@@ -141,6 +141,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 采购申请到货日带入行、行到货日必填、required_date | `features/purchase-requisition-line-delivery-carry.md` |
 | 确认入库加载确认预览失败、仓库回显、loadConfirmPreviewFailed | `features/inbound-confirm-preview-warehouse-display.md` |
 | 可审人有委托无审核按钮、点审核误报没有权限、列表态未补齐待办、按钮提示待办人仍是上一节点、条件分支未确认就进特批 | `features/audit-hub-approve-button-visible.md` |
+| 审核弹窗流程预览连线偏移、生产偏移本地正常、Modal zoom transform | `features/audit-flow-preview-modal-transform.md` |
 | 多级审核第二级要点两次、列表分不清已审未审、待我审核、您已审核 | `features/audit-multilevel-second-click.md` |
 | 其他费用收支类别接口不存在、finance-misc-categories | `features/finance-other-misc-vouchers.md` |
 | 原路反审、下推下游、销售已出库仍能删报工、出库撤回送货单 | `features/downstream-revoke-delete-original-path.md` |
@@ -281,6 +282,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/inbound-confirm-preview-warehouse-display.md` | 入库确认预览仓库走回显不拦确认 | mes-warehouse | 已交付 |
 | `features/modal-portal-click-isolation.md` | Modal Portal 点击不穿透底层 | modal / portal | 已交付 |
 | `features/audit-hub-approve-button-visible.md` | 审核弹窗可审人须有审核按钮 | approval | 已交付 |
+| `features/audit-flow-preview-modal-transform.md` | 审核弹窗流程预览 Modal transform 连线偏移 | approval | 已交付 |
 | `features/audit-multilevel-second-click.md` | 多级审核一次点击，列表待我审核/您已审核 | approval | 已交付 |
 | `features/downstream-revoke-delete-original-path.md` | 下推下游原路反审/删除门禁 | mes-production | 已交付 |
 | `features/payment-require-voucher.md` | 付款申请要求付款单上传凭证 | finance | 已交付 |

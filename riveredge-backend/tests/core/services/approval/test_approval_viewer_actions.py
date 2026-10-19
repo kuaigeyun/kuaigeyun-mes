@@ -9,13 +9,38 @@ from core.services.approval.approval_viewer_actions import (
 
 
 def test_viewer_has_pending_task_only_on_current_node():
-    instance = SimpleNamespace(current_node="n1", status="pending")
+    instance = SimpleNamespace(id=1, current_node="n1", status="pending")
     tasks = [
-        SimpleNamespace(node_id="n1", approver_id=10, status="pending"),
-        SimpleNamespace(node_id="n0", approver_id=10, status="pending"),
+        SimpleNamespace(approval_instance_id=1, node_id="n1", approver_id=10, status="pending"),
+        SimpleNamespace(approval_instance_id=1, node_id="n0", approver_id=10, status="pending"),
     ]
     assert viewer_has_pending_task_on_instance(viewer_id=10, instance=instance, tasks=tasks)
     assert not viewer_has_pending_task_on_instance(viewer_id=11, instance=instance, tasks=tasks)
+
+
+def test_viewer_pending_ignores_other_instance_tasks():
+    """同单据旧实例残留 pending 不得冒充当前实例可审。"""
+    instance = SimpleNamespace(id=200, current_node="n1", status="pending", submitter_id=1)
+    actions = build_flow_viewer_actions(
+        viewer_id=10,
+        instance=instance,
+        tasks=[
+            SimpleNamespace(
+                approval_instance_id=100,
+                node_id="n1",
+                approver_id=10,
+                status="pending",
+            ),
+        ],
+        nodes_overview=[
+            {
+                "is_current": True,
+                "eligible_approvers": [{"user_id": 10, "name": "审核节点2"}],
+            }
+        ],
+    )
+    assert actions["approve"] is False
+    assert actions["has_my_pending_task"] is False
 
 
 def test_submitter_without_pending_cannot_approve():
@@ -101,13 +126,17 @@ def test_block_reason_ignores_stale_pending_not_in_eligible():
 
 def test_viewer_already_approved_is_my_acted_not_current_assignee():
     """上一级已由当前人通过、流程停在下一级：对当前人标 my_acted，不能再当成待他审。"""
-    instance = SimpleNamespace(current_node="n2", status="pending", submitter_id=99)
+    instance = SimpleNamespace(id=1, current_node="n2", status="pending", submitter_id=99)
     actions = build_flow_viewer_actions(
         viewer_id=1,
         instance=instance,
         tasks=[
-            SimpleNamespace(node_id="n1", approver_id=1, status="approved"),
-            SimpleNamespace(node_id="n2", approver_id=2, status="pending"),
+            SimpleNamespace(
+                approval_instance_id=1, node_id="n1", approver_id=1, status="approved"
+            ),
+            SimpleNamespace(
+                approval_instance_id=1, node_id="n2", approver_id=2, status="pending"
+            ),
         ],
         nodes_overview=[
             {
@@ -122,13 +151,17 @@ def test_viewer_already_approved_is_my_acted_not_current_assignee():
 
 
 def test_same_person_still_pending_on_next_node_is_not_my_acted():
-    instance = SimpleNamespace(current_node="n2", status="pending", submitter_id=99)
+    instance = SimpleNamespace(id=1, current_node="n2", status="pending", submitter_id=99)
     actions = build_flow_viewer_actions(
         viewer_id=1,
         instance=instance,
         tasks=[
-            SimpleNamespace(node_id="n1", approver_id=1, status="approved"),
-            SimpleNamespace(node_id="n2", approver_id=1, status="pending"),
+            SimpleNamespace(
+                approval_instance_id=1, node_id="n1", approver_id=1, status="approved"
+            ),
+            SimpleNamespace(
+                approval_instance_id=1, node_id="n2", approver_id=1, status="pending"
+            ),
         ],
         nodes_overview=[
             {

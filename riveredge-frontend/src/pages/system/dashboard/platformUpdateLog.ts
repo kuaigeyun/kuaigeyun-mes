@@ -44,6 +44,38 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'audit-exec-action-badge-color-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-exec-action-badge-color-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-exec-action-badge-color-r01.description',
+  },
+  {
+    id: 'audit-hub-document-no-r01',
+    date: '2026-10-19',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-hub-document-no-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-hub-document-no-r01.description',
+  },
+  {
+    id: 'audit-recall-own-reapprove-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-recall-own-reapprove-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-recall-own-reapprove-r01.description',
+  },
+  {
+    id: 'audit-flow-preview-modal-transform-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-flow-preview-modal-transform-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-flow-preview-modal-transform-r01.description',
+  },
+  {
     id: 'audit-approve-btn-no-admin-fake-r01',
     date: '2026-10-19',
     type: 'fix',

@@ -61,6 +61,19 @@ def _name_by_user_id(nodes_overview: List[Dict[str, Any]]) -> Dict[int, str]:
     return out
 
 
+def _task_on_instance(task: ApprovalTask, instance: ApprovalInstance) -> bool:
+    """get_approval_status 会混入同单据历史实例任务，门禁只认当前活跃实例。"""
+    inst_id = getattr(instance, "id", None)
+    raw = getattr(task, "approval_instance_id", None)
+    if inst_id is None or raw is None:
+        # 单测或残缺对象无法区分时不误杀
+        return True
+    try:
+        return int(raw) == int(inst_id)
+    except (TypeError, ValueError):
+        return False
+
+
 def current_node_pending_approver_ids(
     *,
     instance: ApprovalInstance,
@@ -71,6 +84,8 @@ def current_node_pending_approver_ids(
     ids: List[int] = []
     seen: set[int] = set()
     for task in tasks:
+        if not _task_on_instance(task, instance):
+            continue
         if task.status != "pending":
             continue
         if task.approver_id is None:
@@ -101,10 +116,13 @@ def _pending_assignee_display_names(
 def viewer_has_approved_task_on_instance(
     *,
     viewer_id: int,
+    instance: ApprovalInstance,
     tasks: List[ApprovalTask],
 ) -> bool:
     """当前查看者是否已在本实例上通过过某一级（与是否仍持有当前待办无关）。"""
     for task in tasks:
+        if not _task_on_instance(task, instance):
+            continue
         if task.status != "approved":
             continue
         if task.approver_id is None:
@@ -122,6 +140,8 @@ def viewer_has_pending_task_on_instance(
 ) -> bool:
     current_node = str(instance.current_node or "")
     for task in tasks:
+        if not _task_on_instance(task, instance):
+            continue
         if task.status != "pending":
             continue
         if task.approver_id is None:
@@ -172,7 +192,11 @@ def build_flow_viewer_actions(
         }
 
     # 本级已通过、流程仍在后续节点：对当前人明示「您已审核」，避免列表仍像待他处理
-    if viewer_has_approved_task_on_instance(viewer_id=int(viewer_id), tasks=tasks):
+    if viewer_has_approved_task_on_instance(
+        viewer_id=int(viewer_id),
+        instance=instance,
+        tasks=tasks,
+    ):
         return {
             "has_my_pending_task": False,
             "approve": False,

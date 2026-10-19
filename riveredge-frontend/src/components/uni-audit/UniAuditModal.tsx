@@ -60,6 +60,7 @@ import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 import ApprovalFlowPreview from './ApprovalFlowPreview';
 import UniAuditAdvancedActionModal, { type AdvancedActionState } from './UniAuditAdvancedActionModal';
 import type { UniAuditAction } from './types';
+import { documentCodeFromInstanceTitle } from './resolveRecordDocumentCode';
 import { getSessionCurrentUser } from '../../utils/sessionCurrentUser';
 import { isAdminBypass, resolveUserForMenuPermission } from '../../utils/permission';
 import { formatDateTimeBySiteSetting } from '../../utils/format';
@@ -108,6 +109,9 @@ interface UniAuditModalProps {
   action?: UniAuditAction;
 
   entityName: string;
+
+  /** 业务单号（采购申请号等）；缺省时可从 flowStatus.instance.title 兜底 */
+  documentCode?: string;
 
   actionTitle?: string;
 
@@ -244,24 +248,47 @@ const EXECUTION_ACTION_LABEL: Record<string, string> = {
 const EXECUTION_ACTION_TAG_COLOR: Record<string, string> = {
   approve: DOCUMENT_STATUS_SEMANTIC_COLOR.success,
   approved: DOCUMENT_STATUS_SEMANTIC_COLOR.success,
+  审核通过: DOCUMENT_STATUS_SEMANTIC_COLOR.success,
   reject: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
   rejected: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
+  驳回: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
   cancel: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
   cancelled: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
   canceled: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
   withdraw: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
   withdrawn: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  撤回: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  撤回提交: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  recall_own: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
+  撤回本级: DOCUMENT_STATUS_SEMANTIC_COLOR.pending,
   revoke: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
   revoked: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
+  撤销审核: DOCUMENT_STATUS_SEMANTIC_COLOR.danger,
   submit: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
   submitted: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  提交: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
   transfer: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
   transferred: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  转交: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
   condition_route: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
   condition: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
+  条件分支: DOCUMENT_STATUS_SEMANTIC_COLOR.active,
   pending: DOCUMENT_STATUS_SEMANTIC_COLOR.muted,
   unknown: DOCUMENT_STATUS_SEMANTIC_COLOR.muted,
 };
+
+/** 结果类动作用 StatusTag（solid），信息类动作用 MarkerTag（filled） */
+const EXECUTION_ACTION_STATUS_SOLID = new Set([
+  'approve',
+  'approved',
+  '审核通过',
+  'reject',
+  'rejected',
+  '驳回',
+  'revoke',
+  'revoked',
+  '撤销审核',
+]);
 
 function formatDateTime(value?: string | null): string {
   return formatDateTimeBySiteSetting(value ?? null);
@@ -273,9 +300,39 @@ function formatExecutionAction(action?: string | null, actionLabel?: string | nu
   return EXECUTION_ACTION_LABEL[key] || '未知操作';
 }
 
-function getExecutionActionTagColor(action?: string | null): string {
-  const key = String(action ?? '').trim().toLowerCase();
-  return EXECUTION_ACTION_TAG_COLOR[key] ?? 'default';
+function resolveExecutionActionColorKey(
+  action?: string | null,
+  actionLabel?: string | null,
+): string {
+  const rawAction = String(action ?? '').trim();
+  const rawLabel = String(actionLabel ?? '').trim();
+  // 英文码用小写查；中文文案保持原样（表内有中文键）
+  const candidates = [
+    rawAction.toLowerCase(),
+    rawAction,
+    rawLabel.toLowerCase(),
+    rawLabel,
+  ].filter(Boolean);
+  for (const key of candidates) {
+    if (key in EXECUTION_ACTION_TAG_COLOR) return key;
+  }
+  return 'unknown';
+}
+
+function getExecutionActionTagColor(
+  action?: string | null,
+  actionLabel?: string | null,
+): string {
+  const key = resolveExecutionActionColorKey(action, actionLabel);
+  return EXECUTION_ACTION_TAG_COLOR[key] ?? DOCUMENT_STATUS_SEMANTIC_COLOR.muted;
+}
+
+function isExecutionActionStatusSolid(
+  action?: string | null,
+  actionLabel?: string | null,
+): boolean {
+  const key = resolveExecutionActionColorKey(action, actionLabel);
+  return EXECUTION_ACTION_STATUS_SOLID.has(key);
 }
 
 function AuditMetaLabel({
@@ -319,17 +376,26 @@ function AuditHubDetailPanel({
 
   entityName,
 
+  documentCode,
+
   flowStatus,
 
   flowLoading,
+
+  /** Modal zoom 动画结束后再挂载 React Flow，避免父级 transform 导致连线偏移 */
+  flowCanvasReady = false,
 
 }: {
 
   entityName: string;
 
+  documentCode?: string;
+
   flowStatus: ApprovalStatusResponse | null;
 
   flowLoading: boolean;
+
+  flowCanvasReady?: boolean;
 
 }) {
 
@@ -340,6 +406,9 @@ function AuditHubDetailPanel({
   const instance = flowStatus?.instance;
 
   const nodesOverview = flowStatus?.nodes_overview ?? [];
+
+  const resolvedDocumentCode =
+    String(documentCode || '').trim() || documentCodeFromInstanceTitle(instance?.title);
 
 
 
@@ -407,13 +476,7 @@ function AuditHubDetailPanel({
 
           <div style={{ flex: '0 0 auto' }}>
 
-            <Text type="secondary" style={{ fontSize: 12 }}>
-
-              审核流程
-
-            </Text>
-
-            <Title level={5} style={{ margin: '4px 0 0' }}>
+            <Title level={5} style={{ margin: 0 }}>
 
               {process?.name || '未绑定审批流程'}
 
@@ -422,11 +485,13 @@ function AuditHubDetailPanel({
           </div>
 
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            <ApprovalFlowPreview
-              graph={process?.nodes}
-              nodesOverview={nodesOverview}
-              height="100%"
-            />
+            {flowCanvasReady ? (
+              <ApprovalFlowPreview
+                graph={process?.nodes}
+                nodesOverview={nodesOverview}
+                height="100%"
+              />
+            ) : null}
           </div>
 
           {!process?.nodes?.nodes?.length && (
@@ -458,15 +523,9 @@ function AuditHubDetailPanel({
 
           <div>
 
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Title level={5} style={{ margin: 0 }}>
 
-              单据
-
-            </Text>
-
-            <Title level={5} style={{ margin: '4px 0 0' }}>
-
-              {entityName}
+              {resolvedDocumentCode ? `${entityName} ${resolvedDocumentCode}` : entityName}
 
             </Title>
 
@@ -475,13 +534,12 @@ function AuditHubDetailPanel({
 
 
           <Descriptions
-            column={1}
+            column={2}
             size="small"
             colon={false}
             styles={{
               label: {
-                width: 108,
-                paddingRight: 16,
+                paddingRight: 8,
                 verticalAlign: 'middle',
                 whiteSpace: 'nowrap',
               },
@@ -645,14 +703,21 @@ function AuditHubDetailPanel({
 
                               </Text>
 
-                              <MarkerTag
-                                color={getExecutionActionTagColor(ex.action)}
-                                style={{ cursor: 'default', pointerEvents: 'none' }}
-                              >
-
-                                {formatExecutionAction(ex.action, ex.action_label)}
-
-                              </MarkerTag>
+                              {isExecutionActionStatusSolid(ex.action, ex.action_label) ? (
+                                <StatusTag
+                                  color={getExecutionActionTagColor(ex.action, ex.action_label)}
+                                  style={{ cursor: 'default', pointerEvents: 'none', marginInlineEnd: 0 }}
+                                >
+                                  {formatExecutionAction(ex.action, ex.action_label)}
+                                </StatusTag>
+                              ) : (
+                                <MarkerTag
+                                  color={getExecutionActionTagColor(ex.action, ex.action_label)}
+                                  style={{ cursor: 'default', pointerEvents: 'none' }}
+                                >
+                                  {formatExecutionAction(ex.action, ex.action_label)}
+                                </MarkerTag>
+                              )}
 
                               <Text type="secondary" style={{ marginLeft: 'auto', flexShrink: 0 }}>
 
@@ -739,6 +804,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
   entityName,
 
+  documentCode,
+
   actionTitle,
 
   actionDescription,
@@ -778,6 +845,12 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
   /** null=未选择；双分支条件必须显式选是/否，禁止默认跳边 */
   const [branchDecision, setBranchDecision] = useState<number | null>(null);
   const [rejectTarget, setRejectTarget] = useState<'previous' | 'submitter'>('previous');
+  /** antd Modal 默认 zoom 动画期间父级有 transform；结束后再挂流程预览 */
+  const [flowCanvasReady, setFlowCanvasReady] = useState(false);
+
+  useEffect(() => {
+    if (!open) setFlowCanvasReady(false);
+  }, [open]);
 
   const sessionUser = resolveUserForMenuPermission(getSessionCurrentUser());
   const adminOpen = isAdminBypass(sessionUser);
@@ -1192,6 +1265,11 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
         destroyOnHidden
 
+        // 禁用 zoom：父级 transform 会破坏 React Flow 手柄坐标系（生产更易复现连线偏移）
+        transitionName=""
+
+        afterOpenChange={setFlowCanvasReady}
+
         maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
 
         wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
@@ -1219,9 +1297,13 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
             entityName={entityName}
 
+            documentCode={documentCode}
+
             flowStatus={flowStatus}
 
             flowLoading={flowLoading}
+
+            flowCanvasReady={flowCanvasReady}
 
           />
 
@@ -1470,6 +1552,10 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
       destroyOnHidden
 
+      transitionName=""
+
+      afterOpenChange={setFlowCanvasReady}
+
       maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
 
       wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
@@ -1533,9 +1619,13 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
           entityName={entityName}
 
+          documentCode={documentCode}
+
           flowStatus={flowStatus}
 
           flowLoading={flowLoading}
+
+          flowCanvasReady={flowCanvasReady}
 
         />
 
