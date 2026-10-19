@@ -1,0 +1,1 @@
+import{Q as r}from"./clientRelease-Dbv4QSr9.js";function s(a){const t=a||{},n=t.items??t.data??[];return{items:Array.isArray(n)?n:[],total:Number(t.total??n.length)}}const o={list:async a=>{const t=await r.get("/apps/kuaiplm/dashboard/pending-inbox",{params:a});return s(t)}};export{o as p};

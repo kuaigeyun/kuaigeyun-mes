@@ -1,1 +1,0 @@
-import{R as t,aC as p,j as i,aD as P}from"./vendor-lGL_jms1.js";import{P as d}from"./index-KOMZKzT5.js";var l=["fieldProps","proFieldProps"],m=function(r,o){var e=r.fieldProps,a=r.proFieldProps,s=p(r,l);return i.jsx(d,P({ref:o,valueType:"textarea",fieldProps:e,proFieldProps:a},s))};const c=t.forwardRef(m);export{c as P};

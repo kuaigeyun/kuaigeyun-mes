@@ -1,1 +1,0 @@
-import{j as d}from"./vendor-lGL_jms1.js";import{aj as s,J as i}from"./main-BsZ0d0la.js";function j({sourceType:e,sourceId:o,sourceCode:t,emptyText:n="-",copyable:r=!0,ellipsis:m=!0,style:u}){const c=s(e);return d.jsx(i,{documentType:c,documentId:o,code:t,emptyText:n,copyable:r,ellipsis:m,style:u})}export{j as S};
