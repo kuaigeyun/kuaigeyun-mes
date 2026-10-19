@@ -1,0 +1,1 @@
+function n(){return new Promise(e=>{const i=globalThis.scheduler;if(i?.yield){i.yield().then(e);return}if(typeof requestAnimationFrame=="function"){requestAnimationFrame(()=>e());return}setTimeout(e,0)})}export{n as y};

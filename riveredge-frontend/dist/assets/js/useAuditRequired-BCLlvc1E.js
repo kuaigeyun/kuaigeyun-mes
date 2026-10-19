@@ -1,0 +1,1 @@
+import{d as i,bl as s}from"./clientRelease-lsKYnhfZ.js";function n(){return i({queryKey:["businessConfigAuditRequiredMap"],queryFn:s,staleTime:5*60*1e3})}function o(e,u=!1){const{data:t}=n();if(!e)return u;const r=t?.[e];return typeof r=="boolean"?r:u}export{o as u};

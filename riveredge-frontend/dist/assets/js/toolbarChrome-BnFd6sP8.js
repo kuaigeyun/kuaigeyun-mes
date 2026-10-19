@@ -1,0 +1,1 @@
+const t=32,_=2;function T(o,e=2){const r=Number.isFinite(e)?e:2,n=Number.isFinite(o)?o:0;return Math.max(0,n-r)}function s(o){return{height:32,boxSizing:"border-box",borderRadius:o.borderRadius,border:`1px solid ${o.colorBorder}`,background:o.colorBgContainer,boxShadow:"none"}}const N="uni-toolbar-segmented";export{t as U,_ as a,N as b,T as c,s as g};

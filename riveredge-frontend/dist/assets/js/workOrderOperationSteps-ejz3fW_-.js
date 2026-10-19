@@ -1,0 +1,1 @@
+function a(e){if(e?.length)return e.map(n=>({name:n.name,sequence:n.sequence,status:"pending"}))}function t(e){return e?.length?e.map((n,r)=>({key:`s-${r}-${n.name}`,step:n,placeholder:!1})):[]}export{a,t as b};
