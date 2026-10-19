@@ -1,0 +1,1 @@
+const n="suspendedMaterialForm";function s(){try{const e=sessionStorage.getItem(n);if(!e)return null;const t=JSON.parse(e);return Date.now()-t.timestamp>2*60*60*1e3?(r(),null):t}catch{return null}}function r(){try{sessionStorage.removeItem(n)}catch{}}export{r as c,s as g};

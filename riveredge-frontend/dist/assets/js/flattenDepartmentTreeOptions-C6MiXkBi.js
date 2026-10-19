@@ -1,0 +1,1 @@
+function e(a){const i=[],n=(c,r)=>{c.forEach(t=>{const u=String(t.name??"").trim();if(!u||t.id==null||!t.uuid)return;const l=r?`${r} / ${u}`:u;i.push({label:l,value:t.id,uuid:t.uuid}),t.children?.length&&n(t.children,l)})};return n(a,""),i}export{e as f};

@@ -1,0 +1,1 @@
+const e=new Set(["已审核","已开票","已作废","已红冲"]),r=new Set(["已作废","已红冲"]);function s(n){const t=String(n.status||"").trim();return t?!e.has(t):!1}function c(n){const t=String(n.status||"").trim();return!r.has(t)}function i(n){const t=String(n??"").trim();return!t||t==="待补全"?"":t}export{c as a,s as c,i as f};
