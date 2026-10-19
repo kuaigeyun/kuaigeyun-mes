@@ -116,6 +116,9 @@ class PositionListItem(BaseModel):
     is_active: bool = Field(..., description="是否启用")
     user_count: int = Field(default=0, description="关联用户数量")
     created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
 
     model_config = ConfigDict(from_attributes=True)
 

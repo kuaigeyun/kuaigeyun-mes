@@ -8,6 +8,7 @@ from typing import List, Optional
 from tortoise.expressions import Q
 
 from core.models.position import Position
+from core.utils.model_audit import load_audit_fields_for_create, load_audit_fields_for_update
 from core.utils.timezone_utils import now_utc
 from core.models.department import Department
 from core.schemas.position import PositionCreate, PositionUpdate
@@ -62,7 +63,7 @@ class PositionService:
             
             department_id = department.id  # 转换为ID用于数据库关联
         
-        # 创建职位
+        audit = await load_audit_fields_for_create(tenant_id, current_user_id)
         position = await Position.create(
             tenant_id=tenant_id,
             name=data.name,
@@ -71,6 +72,7 @@ class PositionService:
             department_id=department_id,
             sort_order=data.sort_order if data.sort_order is not None else 0,
             is_active=data.is_active if data.is_active is not None else True,
+            **audit,
         )
         
         return position
@@ -184,6 +186,8 @@ class PositionService:
                 "user_count": user_count,
                 "created_at": position.created_at,
                 "updated_at": position.updated_at,
+                "created_by_name": position.created_by_name,
+                "updated_by_name": position.updated_by_name,
             })
         
         return {
@@ -278,6 +282,10 @@ class PositionService:
         update_data = data.model_dump(exclude_unset=True, exclude={"department_uuid"})
         for key, value in update_data.items():
             setattr(position, key, value)
+
+        audit = await load_audit_fields_for_update(tenant_id, current_user_id)
+        for key, value in audit.items():
+            setattr(position, key, value)
         
         await position.save()
         
@@ -370,6 +378,8 @@ class PositionService:
             allow = {str(c).strip() for c in codes if str(c).strip()}
             items = [x for x in items if x.get("code") in allow]
         created = 0
+        audit = await load_audit_fields_for_create(tenant_id, current_user_id)
+        now = now_utc()
         for item in items:
             exists = await Position.filter(
                 tenant_id=tenant_id,
@@ -377,7 +387,6 @@ class PositionService:
                 deleted_at__isnull=True,
             ).exists()
             if not exists:
-                now = now_utc()
                 await Position.create(
                     tenant_id=tenant_id,
                     name=item["name"],
@@ -387,6 +396,7 @@ class PositionService:
                     is_active=True,
                     created_at=now,
                     updated_at=now,
+                    **audit,
                 )
                 created += 1
         return created

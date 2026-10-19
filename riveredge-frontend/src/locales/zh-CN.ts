@@ -2904,17 +2904,24 @@ export default {
   'app.kuaiems.menu.group.mold': '模具管理',
   'app.kuaiems.menu.group.tool': '工装管理',
   'app.kuaiems.menu.group.equipment-basic-data': '设备资料',
-  'app.kuaiems.menu.group.equipment-docs': '设备单据',
+  'app.kuaiems.menu.group.equipment-docs-inspection': '点检巡检',
+  'app.kuaiems.menu.group.equipment-docs-maintenance': '保养维护',
+  'app.kuaiems.menu.group.equipment-docs-repair': '报修维修',
+  'app.kuaiems.menu.group.equipment-docs-operations': '设备事务',
   'app.kuaiems.menu.group.equipment-reports': '设备报表',
   'app.kuaiems.menu.group.mold-basic-data': '模具资料',
-  'app.kuaiems.menu.group.mold-docs': '模具单据',
+  'app.kuaiems.menu.group.mold-docs-lending': '借还试模',
+  'app.kuaiems.menu.group.mold-docs-maintenance': '保养维修',
+  'app.kuaiems.menu.group.mold-docs-disposal': '处置检定',
   'app.kuaiems.menu.group.mold-reports': '模具报表',
   'app.kuaiems.menu.group.tool-basic-data': '工装资料',
-  'app.kuaiems.menu.group.tool-docs': '工装单据',
+  'app.kuaiems.menu.group.tool-docs-lending': '工装借还',
+  'app.kuaiems.menu.group.tool-docs-maintenance': '保养维修',
+  'app.kuaiems.menu.group.tool-docs-disposal': '处置检定',
   'app.kuaiems.menu.group.tool-reports': '工装报表',
   'app.kuaiems.menu.group.measuring-instrument': '计量器具',
   'app.kuaiems.menu.group.measuring-instrument-basic-data': '计量资料',
-  'app.kuaiems.menu.group.measuring-instrument-docs': '计量单据',
+  'app.kuaiems.menu.group.measuring-instrument-docs-calibration': '检定业务',
   'app.kuaiems.menu.group.measuring-instrument-reports': '计量报表',
   'app.kuaizhizao.menu.measuring-instruments.ledger': '计量器具台账',
   'app.kuaizhizao.menu.measuring-instruments.calibrations': '校准记录',
@@ -10718,7 +10725,7 @@ export default {
   'app.kuaizhizao.menu.equipment-management.tool-reports': '工装报表',
   'app.kuaizhizao.menu.equipment-management.equipment': '设备台账',
   'app.kuaizhizao.menu.equipment-management.equipment-faults': '报修维修',
-  'app.kuaizhizao.menu.equipment-management.maintenance-plans': '维护保养',
+  'app.kuaizhizao.menu.equipment-management.maintenance-plans': '维护保养计划',
   'app.kuaizhizao.menu.equipment-management.maintenance-reminders': '维护提醒',
   'app.kuaizhizao.menu.equipment-management.molds': '模具台账',
   'app.kuaizhizao.menu.equipment-management.molds-calibration': '模具校准',
@@ -12271,6 +12278,9 @@ export default {
   'app.kuaizhizao.purchaseRequisition.createSubmitPending': '采购申请已创建并提交审核',
   'app.kuaizhizao.purchaseRequisition.saveSubmitFailed':
     '保存成功，但提交失败：{{message}}。您可在列表中点击「提交审核」重试。',
+  'app.kuaizhizao.purchaseRequisition.submitFailedWithReason': '提交失败：{{message}}',
+  'app.kuaizhizao.purchaseRequisition.savedDraftSubmitLater':
+    '已保存为草稿，可在此页或列表中继续提交审核',
   'app.kuaizhizao.purchaseRequisition.loadDetailFailed': '加载详情失败',
   'app.kuaizhizao.purchaseOrder.entityName': '采购订单',
   'app.kuaizhizao.purchaseOrder.col.supplierAndOrder': '供应商 / 订单',
@@ -18297,7 +18307,15 @@ export default {
   'app.kuaizhizao.maintenancePlan.form.maintenanceScheme': '保养方案',
   'app.kuaizhizao.maintenancePlan.form.selectMaintenanceScheme': '请选择保养方案',
   'app.kuaizhizao.maintenancePlan.form.paramsFromScheme': '类型与周期取自方案：{{params}}',
-  'app.kuaizhizao.maintenancePlan.form.paramsFromSchemeHint': '设备、维护类型与周期取自保养方案及其设备绑定',
+  'app.kuaizhizao.maintenancePlan.form.paramsFromSchemeHint': '维护类型与周期取自保养方案；设备从方案绑定预载，可在下方取消勾选',
+  'app.kuaizhizao.maintenancePlan.form.planEquipmentScope': '本计划设备范围',
+  'app.kuaizhizao.maintenancePlan.form.planEquipmentScopeHint':
+    '选择保养方案后自动列出该方案在设备台账已绑定的设备，默认全选；取消勾选仅影响本计划，不会解绑方案。',
+  'app.kuaizhizao.maintenancePlan.form.planEquipmentEmpty':
+    '该方案暂无绑定设备，请先在设备台账详情绑定保养方案后再建计划。',
+  'app.kuaizhizao.maintenancePlan.form.reloadEquipmentFromScheme': '按方案重新载入',
+  'app.kuaizhizao.maintenancePlan.form.planEquipmentSelectedCount': '已选 {{count}} 台',
+  'app.kuaizhizao.maintenancePlan.form.equipmentRequired': '请至少选择一台设备',
   'app.kuaizhizao.maintenancePlan.form.executedItems': '已执行保养项',
   'app.kuaizhizao.maintenancePlan.action.execute': '执行',
   'app.kuaizhizao.maintenancePlan.section.basicInfo': '基本信息',
@@ -18569,7 +18587,11 @@ export default {
   'app.kuaizhizao.sparePart.lifecycle.normal': '正常',
   'app.kuaizhizao.sparePart.lifecycle.suggestionRestock': '补货/领用控制',
   'app.kuaizhizao.equipmentOps.schemeBindings.title': '点检方案绑定',
+  'app.kuaizhizao.equipmentOps.schemeBindings.titleSpotAndMaintenance': '点检与保养方案绑定',
+  'app.kuaizhizao.equipmentOps.schemeBindings.spotCheck': '点检方案',
+  'app.kuaizhizao.equipmentOps.schemeBindings.maintenance': '保养方案',
   'app.kuaizhizao.equipmentOps.schemeBindings.selectSchemes': '选择绑定的点检方案',
+  'app.kuaizhizao.equipmentOps.schemeBindings.selectMaintenanceSchemes': '选择绑定的保养方案',
   'app.kuaizhizao.equipmentOps.schemeBindings.saveSuccess': '方案绑定已保存',
   'app.kuaizhizao.equipmentOps.inspectionItem.title': '点检项',
   'app.kuaizhizao.equipmentOps.inspectionItem.create': '新建点检项',
@@ -44144,6 +44166,42 @@ export default {
     '试流单研发项目支持关联或手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.description':
     '新建试流单时研发项目与产品固件、样品加工一致：可从列表选择项目，也可直接手填项目代号（无需先建项目档案）。',
+  'pages.dashboard.updateLog.entries.approval-pending-wecom-push-r01.title':
+    '审批待办同步推送企业微信',
+  'pages.dashboard.updateLog.entries.approval-pending-wecom-push-r01.description':
+    '单据提交进入审批、驳回、转交等审批类站内信发出后，若已配置启用的企微推送渠道，审批人会额外收到企业微信应用消息（含待办跳转链接）；须绑定企微账号且 Taskiq 正常处理推送任务。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-branch-r01.title':
+    '采购申请保存并提交可选审批分支',
+  'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-branch-r01.description':
+    '新建页点保存并提交时，与列表提交审核一致，先选择「是否总经理特批」等发起人分支再提交，不再出现保存成功但提交失败的黄色提示。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-auto-name-r01.title':
+    '采购申请名称改为自动生成',
+  'pages.dashboard.updateLog.entries.purchase-requisition-auto-name-r01.description':
+    '新建与编辑采购申请不再填写申请名称，保存时按申请编号生成「采购申请-单号」；列表与详情仍展示名称字段。',
+  'pages.dashboard.updateLog.entries.org-master-data-audit-write-backfill-r01.title':
+    '组织主数据列表补全操作人姓名',
+  'pages.dashboard.updateLog.entries.org-master-data-audit-write-backfill-r01.description':
+    '部门/职位/角色/账户在创建、编辑、加载预设、导入与企微同步时写入操作人快照；core_users 历史账户迁移回填创建人姓名，账户列表更新时间列可显示操作人。',
+  'pages.dashboard.updateLog.entries.system-user-mgmt-audit-fields-api-r01.title':
+    '修复用户管理列表审计时间为空',
+  'pages.dashboard.updateLog.entries.system-user-mgmt-audit-fields-api-r01.description':
+    '部门树、职位与账户列表接口补齐审计时间与人名；创建/预设/导入/同步写入操作人快照，历史无主数据行按组织管理员回填姓名。',
+  'pages.dashboard.updateLog.entries.system-user-mgmt-list-audit-column-r01.title':
+    '用户管理列表合并创建与更新时间列',
+  'pages.dashboard.updateLog.entries.system-user-mgmt-list-audit-column-r01.description':
+    '部门、职位、账户管理列表与业务单据一致，将创建时间与更新时间合并为一列，上为人名、下为时间，优先展示最近更新。',
+  'pages.dashboard.updateLog.entries.drawing-balloon-sheet-lines-audit-r01.title':
+    '修复图纸气泡标注加载报错',
+  'pages.dashboard.updateLog.entries.drawing-balloon-sheet-lines-audit-r01.description':
+    '特性行表补齐与模型一致的审计字段，打开或保存气泡标注单时不再出现 updated_by 列不存在的数据库错误。',
+  'pages.dashboard.updateLog.entries.kuaiems-menu-functional-groups-r01.title':
+    '快设备侧栏按资料、业务分组与报表重组',
+  'pages.dashboard.updateLog.entries.kuaiems-menu-functional-groups-r01.description':
+    '设备管理下原「设备单据」拆为点检巡检、保养维护、报修维修、设备事务；模具、工装、计量器具同步按借还、保养维修、处置检定或检定业务分组，与各自资料、报表并列，便于按职能查找菜单。',
+  'pages.dashboard.updateLog.entries.maintenance-plan-equipment-preload-r01.title':
+    '保养计划创建时可预载方案设备并排除',
+  'pages.dashboard.updateLog.entries.maintenance-plan-equipment-preload-r01.description':
+    '新建或编辑保养计划时，选择保养方案后自动列出台账已绑定设备并默认全选，可取消勾选仅影响本计划；设备台账详情增加保养方案绑定；历史计划按方案绑定回填设备范围。',
   'pages.dashboard.updateLog.entries.approval-condition-advance-not-pinned-r01.title':
     '是否总经理特批按提交时决定自动分流',
   'pages.dashboard.updateLog.entries.approval-condition-advance-not-pinned-r01.description':

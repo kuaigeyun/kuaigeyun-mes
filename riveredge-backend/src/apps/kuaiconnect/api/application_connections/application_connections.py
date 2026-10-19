@@ -270,6 +270,7 @@ async def sync_application_connection_contacts(
         result = await WeComContactSyncService.sync_contacts(
             tenant_id=tenant_id,
             integration_uuid=str(uuid),
+            current_user_id=current_user.id,
         )
         dept = result.get("departments") or {}
         users = result.get("users") or {}

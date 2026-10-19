@@ -37,8 +37,9 @@ PC 登录 [`resolveWecomLoginTenantId`](riveredge-frontend/src/pages/login/index
 1. 应用连接器：启用企业微信，复制表单内「部署说明」到企微后台。
 2. 用户绑定：`contact_info.wecom_userid`。
 3. 消息配置：`type=push`，`provider=wecom`；可选 `wecom_use_textcard`。
-4. 业务配置 → 消息提醒：勾选 push 渠道。
-5. Taskiq worker 处理 `message/send`。
+4. 业务配置 → 消息提醒：勾选 push 渠道（业务单据触发）。
+5. **审批待办**：`approval_instance_service._send_internal_to_user`（`message_category=approval`）站内信成功后，`approval_wecom_push_service.schedule_approval_wecom_push` 自动走步骤 3 的企微 push（无需单独业务规则）；采购申请等同所有 uni-audit 审批。
+6. Taskiq worker 处理 `message/send`（push 类型；站内信本身不依赖 worker）。
 
 ## 代码真源
 

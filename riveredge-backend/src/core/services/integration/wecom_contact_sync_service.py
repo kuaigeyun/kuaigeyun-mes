@@ -59,7 +59,12 @@ class WeComContactSyncService:
     """从企业微信通讯录同步部门与成员。"""
 
     @staticmethod
-    async def sync_contacts(*, tenant_id: int, integration_uuid: str) -> dict[str, Any]:
+    async def sync_contacts(
+        *,
+        tenant_id: int,
+        integration_uuid: str,
+        current_user_id: int,
+    ) -> dict[str, Any]:
         integration = await IntegrationConfig.filter(
             tenant_id=tenant_id,
             uuid=str(integration_uuid),
@@ -82,6 +87,7 @@ class WeComContactSyncService:
         dept_stats = await WeComContactSyncService._sync_departments(
             tenant_id=tenant_id,
             departments=departments,
+            current_user_id=current_user_id,
         )
         wecom_dept_to_local = await WeComContactSyncService._load_wecom_dept_map(tenant_id)
 
@@ -91,6 +97,7 @@ class WeComContactSyncService:
             tenant_id=tenant_id,
             members=members,
             wecom_dept_to_local=wecom_dept_to_local,
+            current_user_id=current_user_id,
         )
 
         result = {
@@ -135,7 +142,13 @@ class WeComContactSyncService:
         *,
         tenant_id: int,
         departments: list[dict[str, Any]],
+        current_user_id: int,
     ) -> dict[str, int]:
+        from core.utils.model_audit import load_audit_fields_for_create, load_audit_fields_for_update
+
+        create_audit = await load_audit_fields_for_create(tenant_id, current_user_id)
+        update_audit = await load_audit_fields_for_update(tenant_id, current_user_id)
+
         created = 0
         updated = 0
         skipped = 0
@@ -169,6 +182,8 @@ class WeComContactSyncService:
                 dept.name = item["name"]
                 dept.sort_order = item["sort_order"]
                 dept.is_active = True
+                for key, value in update_audit.items():
+                    setattr(dept, key, value)
                 await dept.save()
                 updated += 1
             else:
@@ -182,6 +197,7 @@ class WeComContactSyncService:
                     manager_id=None,
                     sort_order=item["sort_order"],
                     is_active=True,
+                    **create_audit,
                 )
                 created += 1
 
@@ -247,7 +263,13 @@ class WeComContactSyncService:
         tenant_id: int,
         members: list[dict[str, Any]],
         wecom_dept_to_local: dict[str, int],
+        current_user_id: int,
     ) -> dict[str, int]:
+        from core.utils.model_audit import load_audit_fields_for_create, load_audit_fields_for_update
+
+        create_audit = await load_audit_fields_for_create(tenant_id, current_user_id)
+        update_audit = await load_audit_fields_for_update(tenant_id, current_user_id)
+
         created = 0
         updated = 0
         skipped = 0
@@ -292,6 +314,8 @@ class WeComContactSyncService:
                 if department_id is not None and user.department_id != department_id:
                     user.department_id = department_id
                 user.is_active = is_active
+                for key, value in update_audit.items():
+                    setattr(user, key, value)
                 await user.save()
                 updated += 1
 
@@ -323,6 +347,7 @@ class WeComContactSyncService:
                         is_tenant_admin=False,
                         source=WECOM_SOURCE,
                         contact_info={"wecom_userid": wecom_userid},
+                        **create_audit,
                         using_db=conn,
                     )
                 await PermissionVersionService.bump(tenant_id=tenant_id, user_id=user.id)

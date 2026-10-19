@@ -11,6 +11,7 @@ from tortoise.expressions import Q
 
 from core.models.department import Department
 from core.models.position import Position
+from core.utils.model_audit import load_audit_fields_for_create, load_audit_fields_for_update
 from core.utils.timezone_utils import now_utc
 from core.models.user_role import UserRole
 from core.schemas.department import DepartmentCreate, DepartmentUpdate
@@ -107,6 +108,8 @@ class DepartmentService:
             "tenant_id": department.tenant_id,
             "created_at": department.created_at,
             "updated_at": department.updated_at,
+            "created_by_name": department.created_by_name,
+            "updated_by_name": department.updated_by_name,
         }
         DepartmentService._apply_manager_fields(item, department.manager_id, manager_map)
         return item
@@ -166,7 +169,7 @@ class DepartmentService:
             
             manager_id = manager.id  # 转换为ID用于数据库关联
         
-        # 创建部门
+        audit = await load_audit_fields_for_create(tenant_id, current_user_id)
         department = await Department.create(
             tenant_id=tenant_id,
             name=data.name,
@@ -176,6 +179,7 @@ class DepartmentService:
             manager_id=manager_id,
             sort_order=data.sort_order if data.sort_order is not None else 0,
             is_active=data.is_active if data.is_active is not None else True,
+            **audit,
         )
         
         return department
@@ -283,6 +287,8 @@ class DepartmentService:
                 "position_count": position_count,
                 "created_at": dept.created_at,
                 "updated_at": dept.updated_at,
+                "created_by_name": dept.created_by_name,
+                "updated_by_name": dept.updated_by_name,
                 "children": [],
             }
             DepartmentService._apply_manager_fields(item, dept.manager_id, manager_map)
@@ -362,6 +368,8 @@ class DepartmentService:
                 "position_count": position_count,
                 "created_at": dept.created_at,
                 "updated_at": dept.updated_at,
+                "created_by_name": dept.created_by_name,
+                "updated_by_name": dept.updated_by_name,
                 "children": children,
             }
             DepartmentService._apply_manager_fields(item, dept.manager_id, manager_map)
@@ -474,6 +482,10 @@ class DepartmentService:
         # 更新其他字段
         update_data = data.model_dump(exclude_unset=True, exclude={"parent_uuid", "manager_uuid"})
         for key, value in update_data.items():
+            setattr(department, key, value)
+
+        audit = await load_audit_fields_for_update(tenant_id, current_user_id)
+        for key, value in audit.items():
             setattr(department, key, value)
         
         await department.save()
@@ -637,6 +649,8 @@ class DepartmentService:
         if missing_fields:
             raise ValidationError(f"缺少必填字段：{', '.join(missing_fields)}")
         
+        create_audit = await load_audit_fields_for_create(tenant_id, current_user_id)
+
         # 解析数据行（从第三行开始，索引2，跳过表头和示例数据行）
         rows = data[2:] if len(data) > 2 else []
         
@@ -749,7 +763,6 @@ class DepartmentService:
                     is_active_str = str(dept_data['is_active']).lower()
                     is_active = is_active_str in ('true', '1', '是', '启用', 'enabled')
                 
-                # 创建部门
                 department = await Department.create(
                     tenant_id=tenant_id,
                     name=dept_data['name'],
@@ -759,6 +772,7 @@ class DepartmentService:
                     manager_id=manager_id,
                     sort_order=sort_order,
                     is_active=is_active,
+                    **create_audit,
                 )
                 
                 # 缓存已创建的部门
@@ -810,6 +824,8 @@ class DepartmentService:
             allow = {str(c).strip() for c in codes if str(c).strip()}
             items = [x for x in items if x.get("code") in allow]
         created = 0
+        audit = await load_audit_fields_for_create(tenant_id, current_user_id)
+        now = now_utc()
         for item in items:
             exists = await Department.filter(
                 tenant_id=tenant_id,
@@ -817,7 +833,6 @@ class DepartmentService:
                 deleted_at__isnull=True,
             ).exists()
             if not exists:
-                now = now_utc()
                 await Department.create(
                     tenant_id=tenant_id,
                     name=item["name"],
@@ -826,6 +841,7 @@ class DepartmentService:
                     is_active=True,
                     created_at=now,
                     updated_at=now,
+                    **audit,
                 )
                 created += 1
         return created
@@ -921,6 +937,8 @@ class DepartmentService:
 
         created = 0
         updated = 0
+        create_audit = await load_audit_fields_for_create(tenant_id, current_user_id)
+        update_audit = await load_audit_fields_for_update(tenant_id, current_user_id)
 
         for item in normalized:
             name = item["name"]
@@ -934,6 +952,8 @@ class DepartmentService:
                     dept.code = code_val if code_val else None
                 if desc_c is not None:
                     dept.description = desc
+                for key, value in update_audit.items():
+                    setattr(dept, key, value)
                 await dept.save()
                 updated += 1
             else:
@@ -946,6 +966,7 @@ class DepartmentService:
                     manager_id=None,
                     sort_order=0,
                     is_active=True,
+                    **create_audit,
                 )
                 created += 1
 

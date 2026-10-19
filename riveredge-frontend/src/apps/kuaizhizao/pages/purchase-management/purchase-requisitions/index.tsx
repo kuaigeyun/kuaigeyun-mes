@@ -83,7 +83,6 @@ import {
   createPurchaseRequisition,
   updatePurchaseRequisition,
   deletePurchaseRequisition,
-  submitPurchaseRequisition,
   uniAuditPurchaseRequisition,
   withdrawPurchaseRequisitionSubmit,
   fixPurchaseRequisitionStatus,
@@ -102,6 +101,12 @@ import {
   type DemandComputationPurchasePullLine,
 } from '../../../services/demand-computation';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import UniAuditInitiatorSubmitModal from '../../../../../components/uni-audit/UniAuditInitiatorSubmitModal';
+import {
+  fetchSubmitInitiatorRequirements,
+  type SubmitInitiatorBranchHint,
+  type SubmitInitiatorNodeHint,
+} from '../../../../../services/uniAudit';
 import {
   buildPurchaseRequisitionLifecycleValueEnum,
   getPurchaseRequisitionLifecycle,
@@ -285,6 +290,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const createFormRef = useRef<any>(null);
   const submitAfterSaveRef = useRef(false);
   const [formSubmitting, setFormSubmitting] = useState(false);
+  const [postSaveInitiatorOpen, setPostSaveInitiatorOpen] = useState(false);
+  const [postSaveInitiatorLoading, setPostSaveInitiatorLoading] = useState(false);
+  const [postSaveInitiatorNodes, setPostSaveInitiatorNodes] = useState<SubmitInitiatorNodeHint[]>([]);
+  const [postSaveInitiatorBranches, setPostSaveInitiatorBranches] = useState<SubmitInitiatorBranchHint[]>(
+    [],
+  );
+  const postSaveSubmitContextRef = useRef<{ requisitionId: number; wasEdit: boolean } | null>(null);
   /** 上一次表头要求到货日，用于改表头时同步曾跟随表头的明细行（对齐采购订单/销售订单） */
   const lastHeaderDeliveryRef = useRef<ReturnType<typeof dayjs> | null>(null);
   /** 程序化回填（服务端/草稿）期间禁止 onValuesChange 写草稿，避免空价覆盖手填 */
@@ -492,7 +504,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
         const applicantUuid = await resolveUserUuidById(detail.applicant_id);
         const baseValues = {
           requisition_code: detail.requisition_code ?? '',
-          requisition_name: detail.requisition_name,
           requisition_date: detail.requisition_date ? dayjs(detail.requisition_date) : dayjs(),
           applicant_uuid: applicantUuid,
           applicant_id: detail.applicant_id,
@@ -956,6 +967,65 @@ const PurchaseRequisitionsPage: React.FC = () => {
       };
     });
 
+  const finalizePurchaseRequisitionForm = useCallback(() => {
+    if (prFormDraftKey) clearDocumentFormDraft(prFormDraftKey);
+    setEffectiveRuleCode(null);
+    setEffectiveAutoGen(null);
+    createFormRef.current?.resetFields();
+    invalidateMenuBadgeCounts();
+    if (isFormPage) {
+      leavePurchaseRequisitionFormPage();
+    }
+    actionRef.current?.reload();
+  }, [
+    prFormDraftKey,
+    invalidateMenuBadgeCounts,
+    isFormPage,
+    leavePurchaseRequisitionFormPage,
+  ]);
+
+  const showPurchaseRequisitionSaveSubmitSuccess = useCallback(
+    (afterSubmit: PurchaseRequisition, wasEdit: boolean) => {
+      const st = afterSubmit.status;
+      if (isAuditedStatus(st)) {
+        messageApi.success(
+          wasEdit
+            ? t('app.kuaizhizao.purchaseRequisition.saveSubmitAutoApproved')
+            : t('app.kuaizhizao.purchaseRequisition.createSubmitAutoApproved'),
+        );
+      } else {
+        messageApi.success(
+          wasEdit
+            ? t('app.kuaizhizao.purchaseRequisition.saveSubmitPending')
+            : t('app.kuaizhizao.purchaseRequisition.createSubmitPending'),
+        );
+      }
+    },
+    [messageApi, t],
+  );
+
+  const runPurchaseRequisitionSubmitAfterSave = useCallback(
+    async (requisitionId: number, wasEdit: boolean) => {
+      const { nodes, branch_conditions: branchConditions } = await fetchSubmitInitiatorRequirements(
+        'purchase_request',
+      );
+      if (nodes.length > 0 || branchConditions.length > 0) {
+        postSaveSubmitContextRef.current = { requisitionId, wasEdit };
+        setPostSaveInitiatorNodes(nodes);
+        setPostSaveInitiatorBranches(branchConditions);
+        setPostSaveInitiatorOpen(true);
+        if (!wasEdit) {
+          navigate(purchaseRequisitionEditPath(requisitionId), { replace: true });
+        }
+        return;
+      }
+      const afterSubmit = (await uniAuditPurchaseRequisition(requisitionId, 'submit')) as PurchaseRequisition;
+      showPurchaseRequisitionSaveSubmitSuccess(afterSubmit, wasEdit);
+      finalizePurchaseRequisitionForm();
+    },
+    [finalizePurchaseRequisitionForm, navigate, showPurchaseRequisitionSaveSubmitSuccess],
+  );
+
   const handleModalSubmit = async (values: {
     requisition_code?: string;
     requisition_name?: string;
@@ -1004,7 +1074,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
       if (editingId != null) {
         await updatePurchaseRequisition(editingId, {
-          requisition_name: values.requisition_name,
           requisition_date: requisitionDate,
           required_date: requiredDate,
           applicant_id: values.applicant_id,
@@ -1031,7 +1100,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
         }
         const created = await createPurchaseRequisition({
           requisition_code: requisitionCode || undefined,
-          requisition_name: values.requisition_name,
           requisition_date: requisitionDate,
           required_date: requiredDate,
           applicant_id: values.applicant_id,
@@ -1047,41 +1115,26 @@ const PurchaseRequisitionsPage: React.FC = () => {
       }
 
       if (shouldSubmit && requisitionId) {
-        try {
-          const afterSubmit = await submitPurchaseRequisition(requisitionId);
-          const st = afterSubmit.status;
-          if (isAuditedStatus(st)) {
-            messageApi.success(
-              editingId != null
-                ? t('app.kuaizhizao.purchaseRequisition.saveSubmitAutoApproved')
-                : t('app.kuaizhizao.purchaseRequisition.createSubmitAutoApproved'),
-            );
-          } else {
-            messageApi.success(
-              editingId != null
-                ? t('app.kuaizhizao.purchaseRequisition.saveSubmitPending')
-                : t('app.kuaizhizao.purchaseRequisition.createSubmitPending'),
-            );
-          }
-        } catch (submitErr: any) {
-          messageApi.warning(
-            t('app.kuaizhizao.purchaseRequisition.saveSubmitFailed', {
-              message: submitErr?.message || t('common.operationFailed'),
-            }),
-          );
-        }
         submitAfterSaveRef.current = false;
+        const wasEdit = editingId != null;
+        try {
+          await runPurchaseRequisitionSubmitAfterSave(requisitionId, wasEdit);
+        } catch (submitErr: unknown) {
+          const submitMessage =
+            submitErr instanceof Error ? submitErr.message : t('common.operationFailed');
+          messageApi.error(
+            t('app.kuaizhizao.purchaseRequisition.submitFailedWithReason', { message: submitMessage }),
+          );
+          if (!wasEdit) {
+            navigate(purchaseRequisitionEditPath(requisitionId), { replace: true });
+          }
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+        }
+        return;
       }
 
-      if (prFormDraftKey) clearDocumentFormDraft(prFormDraftKey);
-      setEffectiveRuleCode(null);
-      setEffectiveAutoGen(null);
-      createFormRef.current?.resetFields();
-      invalidateMenuBadgeCounts();
-      if (isFormPage) {
-        leavePurchaseRequisitionFormPage();
-      }
-      actionRef.current?.reload();
+      finalizePurchaseRequisitionForm();
     } catch (e: any) {
       submitAfterSaveRef.current = false;
       const d = e?.response?.data?.detail;
@@ -1899,7 +1952,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
             />
           </Col>
           <Col span={12}>
-            <ProFormText name="requisition_name" label={t('app.kuaizhizao.purchaseRequisition.form.name')} placeholder={t('app.kuaizhizao.purchaseRequisition.form.namePlaceholder')} />
+            <EquipmentPersonSelect
+              uuidFieldName="applicant_uuid"
+              idFieldName="applicant_id"
+              nameFieldName="applicant_name"
+              label={t('app.kuaizhizao.purchaseRequisition.form.applicant')}
+              formRef={createFormRef}
+              required
+            />
           </Col>
         </Row>
           </div>
@@ -1933,21 +1993,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
               })}
             />
           </Col>
-        </Row>
-          </div>
-          <div className="document-form-untitled-group">
-        <Row gutter={16}>
-          <Col span={12}>
-            <EquipmentPersonSelect
-              uuidFieldName="applicant_uuid"
-              idFieldName="applicant_id"
-              nameFieldName="applicant_name"
-              label={t('app.kuaizhizao.purchaseRequisition.form.applicant')}
-              formRef={createFormRef}
-              required
-            />
-          </Col>
-          <Col span={12} />
         </Row>
           </div>
         </div>
@@ -2324,6 +2369,46 @@ const PurchaseRequisitionsPage: React.FC = () => {
             columnOptions={requisitionLineImportColumnOptions}
           />
         </Suspense>
+        {postSaveInitiatorOpen && (
+          <UniAuditInitiatorSubmitModal
+            open
+            entityName={t('app.kuaizhizao.purchaseRequisition.entityName')}
+            submitTitle={t('app.kuaizhizao.purchaseRequisition.submitTitle')}
+            nodes={postSaveInitiatorNodes}
+            branchConditions={postSaveInitiatorBranches}
+            loading={postSaveInitiatorLoading}
+            onCancel={() => {
+              setPostSaveInitiatorOpen(false);
+              postSaveSubmitContextRef.current = null;
+              messageApi.info(t('app.kuaizhizao.purchaseRequisition.savedDraftSubmitLater'));
+              invalidateMenuBadgeCounts();
+              actionRef.current?.reload();
+            }}
+            onConfirm={async (selectedByNode, branchByCondition) => {
+              const ctx = postSaveSubmitContextRef.current;
+              if (!ctx) return;
+              setPostSaveInitiatorLoading(true);
+              try {
+                const afterSubmit = (await uniAuditPurchaseRequisition(ctx.requisitionId, 'submit', {
+                  selected_approver_by_node: selectedByNode,
+                  initiator_branch_by_node: branchByCondition,
+                })) as PurchaseRequisition;
+                setPostSaveInitiatorOpen(false);
+                postSaveSubmitContextRef.current = null;
+                showPurchaseRequisitionSaveSubmitSuccess(afterSubmit, ctx.wasEdit);
+                finalizePurchaseRequisitionForm();
+              } catch (submitErr: unknown) {
+                const submitMessage =
+                  submitErr instanceof Error ? submitErr.message : t('common.operationFailed');
+                messageApi.error(
+                  t('app.kuaizhizao.purchaseRequisition.submitFailedWithReason', { message: submitMessage }),
+                );
+              } finally {
+                setPostSaveInitiatorLoading(false);
+              }
+            }}
+          />
+        )}
       </>
     );
   }

@@ -37,6 +37,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 移动端 S2 门禁、代报 assign、仓储 confirm、tokenRefresh 误登出 | `features/mobile-v2-s2-contract-fixes.md` |
 | 三仓、跨端落点、client/pro 真源、Junction | `principles/three-repo-map.md` |
 | AOCI MCP 三仓、aoci-client、aoci-pro | `features/aoci-mcp-three-repos.md` |
+| AOCI blocked orphan、gitignore pro 应用、maintain 无 candidates | `features/aoci-safe-inventory-orphan.md` |
 | 架构、调用链、D/E 边界、PC/Mobile/Station | `principles/mes-vault-index.md` → Vault `architecture-map.md` |
 | 即时库存同步、batch_no 非空、无批号 | `features/inventory-sync-empty-batch-no.md` |
 | 同步/推送 Hub、外推、DocumentPush、preferIds、`:sync` / `:push` | `features/sync-push-hub-master-data.md` |
@@ -106,6 +107,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 付款申请、采购请款、push_payment_application、可请款占用 | `features/payment-application-procurement.md` |
 | 付款单来源单据、打印导出、FINANCE_PAYMENT_PRINT | `features/finance-payment-source-print.md` |
 | 付款凭证必传、requirePaymentVoucher、付款申请要求上传凭证 | `features/payment-require-voucher.md` |
+| 期初余额、科目余额表有期初期初页没有、应交税费 2221、非末级残留期初、rollup | `features/gl-nonleaf-opening-residual.md` |
 | 其他费用收入、其他费用支出、收支类别、other_income | `features/finance-other-misc-vouchers.md` |
 | 其他费用应收应付、misc_voucher_finance_bridge、确认收款付款 | `features/finance-other-misc-ar-ap-chain.md` |
 | 应付/应收审核要点两遍、流程过了单据仍待审、FinanceService | `features/finance-ar-ap-audit-writeback.md` |
@@ -290,5 +292,6 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/payment-require-voucher.md` | 付款申请要求付款单上传凭证 | finance | 已交付 |
 | `features/kuaioa-expense-reimbursement.md` | 轻办公费用报销单与独立审核流 | kuaioa | 已交付 |
 | `features/leave-attendance-employee-match.md` | 请假回写考勤优先档案员工匹配 | kuaioa | 已交付 |
+| `features/gl-nonleaf-opening-residual.md` | 总账非末级残留期初与科目余额表轧卷 | kuaicaiwu | 已交付 |
 
 Obsidian 镜像可用 wikilink，Agent 检索请用上表路径，不要只依赖 `[[...]]`。

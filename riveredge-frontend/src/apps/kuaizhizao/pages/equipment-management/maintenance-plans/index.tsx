@@ -83,11 +83,15 @@ const PLAN_STATUS_KEYS: Record<string, string> = {
 
 const EXECUTABLE_PLAN_STATUSES = new Set(['草稿', '已发布', '执行中']);
 
-function buildMaintenancePlanSubmitPayload(values: Record<string, unknown>) {
+function buildMaintenancePlanSubmitPayload(
+  values: Record<string, unknown>,
+  equipmentUuids: string[],
+) {
   return {
     plan_name: values.plan_name,
     plan_type: values.plan_type,
     maintenance_scheme_id: values.maintenance_scheme_id,
+    equipment_uuids: equipmentUuids,
     planned_start_date: toApiDateString(values.planned_start_date) ?? null,
     planned_end_date: toApiDateString(values.planned_end_date) ?? null,
     responsible_person_id: values.responsible_person_id,
@@ -97,6 +101,13 @@ function buildMaintenancePlanSubmitPayload(values: Record<string, unknown>) {
     attachments: normalizeDocumentAttachments(values.attachments),
   };
 }
+
+type SchemeEquipmentOption = {
+  id?: number;
+  uuid?: string;
+  code?: string;
+  name?: string;
+};
 
 interface MaintenancePlan {
   id?: number;
@@ -201,6 +212,45 @@ const MaintenancePlansPage: React.FC = () => {
    * 处理新建维护计划
    */
   const [schemeParamPreview, setSchemeParamPreview] = useState<string | undefined>();
+  const [schemeEquipmentPool, setSchemeEquipmentPool] = useState<SchemeEquipmentOption[]>([]);
+  const [selectedEquipmentUuids, setSelectedEquipmentUuids] = useState<string[]>([]);
+  const [schemeEquipmentLoading, setSchemeEquipmentLoading] = useState(false);
+  const [activeSchemeId, setActiveSchemeId] = useState<number | undefined>();
+
+  const loadSchemeEquipment = useCallback(
+    async (
+      schemeId?: number,
+      selection: 'all' | 'keep' | string[] = 'all',
+    ) => {
+      if (!schemeId) {
+        setSchemeEquipmentPool([]);
+        setSelectedEquipmentUuids([]);
+        return;
+      }
+      setSchemeEquipmentLoading(true);
+      try {
+        const res = await maintenancePlanApi.listSchemeBoundEquipment(schemeId);
+        const items = (Array.isArray(res) ? res : []) as SchemeEquipmentOption[];
+        setSchemeEquipmentPool(items);
+        const poolUuids = items.map((i) => i.uuid).filter(Boolean) as string[];
+        if (selection === 'all') {
+          setSelectedEquipmentUuids(poolUuids);
+        } else if (selection === 'keep') {
+          setSelectedEquipmentUuids((prev) => prev.filter((u) => poolUuids.includes(u)));
+        } else {
+          setSelectedEquipmentUuids(selection.filter((u) => poolUuids.includes(u)));
+        }
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        messageApi.error(err?.message || t('common.loadFailed'));
+        setSchemeEquipmentPool([]);
+        setSelectedEquipmentUuids([]);
+      } finally {
+        setSchemeEquipmentLoading(false);
+      }
+    },
+    [messageApi, t],
+  );
 
   const boundLabel = useCallback(
     (n: number) => t(`${P}.col.boundEquipmentCount`, { count: n }),
@@ -211,6 +261,9 @@ const MaintenancePlansPage: React.FC = () => {
     setIsEdit(false);
     setCurrentPlan(null);
     setSchemeParamPreview(undefined);
+    setSchemeEquipmentPool([]);
+    setSelectedEquipmentUuids([]);
+    setActiveSchemeId(undefined);
     setFormInitialValues({
       planned_start_date: dayjs(),
       status: '草稿',
@@ -252,6 +305,14 @@ const MaintenancePlansPage: React.FC = () => {
         status: detail.status,
         attachments: mapAttachmentsToUploadList(detail.attachments),
       });
+      const savedUuids = resolveMaintenancePlanEquipmentUuids(detail);
+      setActiveSchemeId(detail.maintenance_scheme_id);
+      if (detail.maintenance_scheme_id) {
+        await loadSchemeEquipment(detail.maintenance_scheme_id, savedUuids.length ? savedUuids : 'all');
+      } else {
+        setSchemeEquipmentPool([]);
+        setSelectedEquipmentUuids([]);
+      }
       setModalVisible(true);
     } catch (error) {
       messageApi.error(t(`${P}.detailFailed`));
@@ -335,7 +396,11 @@ const MaintenancePlansPage: React.FC = () => {
   const handleSubmit = async (values: any): Promise<void> => {
     setSubmitting(true);
     try {
-      const submitData = buildMaintenancePlanSubmitPayload(values);
+      if (selectedEquipmentUuids.length === 0) {
+        messageApi.error(t(`${P}.form.equipmentRequired`));
+        throw new Error(t(`${P}.form.equipmentRequired`));
+      }
+      const submitData = buildMaintenancePlanSubmitPayload(values, selectedEquipmentUuids);
 
       const editedUuid = isEdit ? currentPlan?.uuid : undefined;
       if (isEdit && editedUuid) {
@@ -348,6 +413,9 @@ const MaintenancePlansPage: React.FC = () => {
       setModalVisible(false);
       setCurrentPlan(null);
       setFormInitialValues(undefined);
+      setSchemeEquipmentPool([]);
+      setSelectedEquipmentUuids([]);
+      setActiveSchemeId(undefined);
       actionRef.current?.reload();
       if (editedUuid && planDetail?.uuid === editedUuid) {
         try {
@@ -889,6 +957,9 @@ const MaintenancePlansPage: React.FC = () => {
           setCurrentPlan(null);
           setFormInitialValues(undefined);
           setSchemeParamPreview(undefined);
+          setSchemeEquipmentPool([]);
+          setSelectedEquipmentUuids([]);
+          setActiveSchemeId(undefined);
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
@@ -955,7 +1026,7 @@ const MaintenancePlansPage: React.FC = () => {
                 }
               }}
               fieldProps={{
-                onChange: (_val: number, option: any) => {
+                onChange: (val: number, option: any) => {
                   const parts = [
                     option?.maintenance_type,
                     option?.cycle_type,
@@ -964,6 +1035,8 @@ const MaintenancePlansPage: React.FC = () => {
                       : undefined,
                   ].filter(Boolean);
                   setSchemeParamPreview(parts.length ? parts.join(' / ') : undefined);
+                  setActiveSchemeId(val);
+                  void loadSchemeEquipment(val, 'all');
                 },
               }}
               extra={
@@ -987,6 +1060,54 @@ const MaintenancePlansPage: React.FC = () => {
               ]}
               rules={[{ required: true, message: t(`${P}.form.selectStatus`) }]}
             />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={24}>
+            <Typography.Text strong>{t(`${P}.form.planEquipmentScope`)}</Typography.Text>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 8, marginTop: 4 }}>
+              {t(`${P}.form.planEquipmentScopeHint`)}
+            </Typography.Paragraph>
+            {schemeEquipmentLoading ? <Spin /> : null}
+            {!schemeEquipmentLoading && schemeEquipmentPool.length === 0 ? (
+              <Typography.Text type="secondary">{t(`${P}.form.planEquipmentEmpty`)}</Typography.Text>
+            ) : null}
+            {!schemeEquipmentLoading && schemeEquipmentPool.length > 0 ? (
+              <Checkbox.Group
+                style={{ width: '100%' }}
+                value={selectedEquipmentUuids}
+                onChange={(vals) => setSelectedEquipmentUuids(vals as string[])}
+              >
+                <Row gutter={[8, 8]}>
+                  {schemeEquipmentPool.map((item) => {
+                    const uuid = item.uuid;
+                    if (!uuid) return null;
+                    const label = item.code ? `${item.code} ${item.name ?? ''}`.trim() : String(item.name ?? uuid);
+                    return (
+                      <Col span={12} key={uuid}>
+                        <Checkbox value={uuid}>{label}</Checkbox>
+                      </Col>
+                    );
+                  })}
+                </Row>
+              </Checkbox.Group>
+            ) : null}
+            <div style={{ marginTop: 8 }}>
+              <Button
+                size="small"
+                disabled={!activeSchemeId}
+                onClick={() => {
+                  if (activeSchemeId) {
+                    void loadSchemeEquipment(activeSchemeId, 'all');
+                  }
+                }}
+              >
+                {t(`${P}.form.reloadEquipmentFromScheme`)}
+              </Button>
+              <Typography.Text type="secondary" style={{ marginLeft: 12 }}>
+                {t(`${P}.form.planEquipmentSelectedCount`, { count: selectedEquipmentUuids.length })}
+              </Typography.Text>
+            </div>
           </Col>
         </Row>
         <Row gutter={16}>
