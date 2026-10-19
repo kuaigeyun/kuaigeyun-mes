@@ -10822,7 +10822,7 @@ export default {
   'app.kuaizhizao.menu.app-management.flow-data-generate': '流程造数',
   'app.kuaizhizao.flowDataGenerate.pageTitle': '运维造数（制造流程 / 设备点检保养）',
   'app.kuaizhizao.flowDataGenerate.pageHint':
-    '先选择目标组织，再选择该组织下已审核且未下推需求计算的销售订单或销售预测；自动串起需求计算→工单→采购/补库→领料→报工→成品检→入库→出库；各单可指定操作用户，或按该单据角色随机取人；业务时间按间隔随机并严格先后，同时写入操作日志。',
+    '先选择目标组织，再选择该组织下已审核且未下推需求计算的销售订单或销售预测；先做数据预检并自选需完工的工单物料，可并行完成生产链；自动串起需求计算→工单→采购/补库→领料→报工→成品检→入库→出库。业务流转任一步失败即整轮失败，不再跳过。',
   'app.kuaizhizao.flowDataGenerate.tenantCard': '① 选择组织',
   'app.kuaizhizao.flowDataGenerate.tenantLabel': '目标组织',
   'app.kuaizhizao.flowDataGenerate.tenantPlaceholder': '请选择要造数的组织',
@@ -10858,7 +10858,71 @@ export default {
   'app.kuaizhizao.flowDataGenerate.min': '最小',
   'app.kuaizhizao.flowDataGenerate.max': '最大',
   'app.kuaizhizao.flowDataGenerate.preview': '预览时间线',
+  'app.kuaizhizao.flowDataGenerate.precheck': '数据预检',
+  'app.kuaizhizao.flowDataGenerate.precheckCard': '预检结果',
+  'app.kuaizhizao.flowDataGenerate.precheckOk': '预检通过，可自选工单后执行',
+  'app.kuaizhizao.flowDataGenerate.precheckOkDetail':
+    '预检通过：自制件候选 {{candidates}} 项，警告 {{warnings}} 条，可勾选后执行',
+  'app.kuaizhizao.flowDataGenerate.precheckHasErrors': '预检未通过，请按错误修改后再执行',
+  'app.kuaizhizao.flowDataGenerate.precheckHasErrorsDetail':
+    '预检未通过：错误 {{errors}} 条，警告 {{warnings}} 条，请修改后再执行',
+  'app.kuaizhizao.flowDataGenerate.precheckFail': '预检失败',
+  'app.kuaizhizao.flowDataGenerate.precheckRequired': '请先点击「数据预检」',
+  'app.kuaizhizao.flowDataGenerate.precheckBlockExecute': '预检未通过，禁止执行',
+  'app.kuaizhizao.flowDataGenerate.precheckFirstHint': '请先做数据预检，再勾选需完工的自制件工单。',
+  'app.kuaizhizao.flowDataGenerate.blockingCodes': '拦截编码',
+  'app.kuaizhizao.flowDataGenerate.allowSkipIqc': '来料检失败允许直入库',
+  'app.kuaizhizao.flowDataGenerate.allowSkipIqcHint':
+    '默认关闭：来料检建单失败整轮中断。开启后才允许旁路为采购直入库。',
+  'app.kuaizhizao.flowDataGenerate.repairMaterialIds': '修复物料ID',
+  'app.kuaizhizao.flowDataGenerate.repairMaterialIdsTitle': '按编码+名称修复物料 ID？',
+  'app.kuaizhizao.flowDataGenerate.repairMaterialIdsConfirm':
+    '将按单据行上的物料编码与名称匹配当前主数据，回写失效的物料 ID，并同步更新行上编码/名称快照。名称不一致时不会自动修复。',
+  'app.kuaizhizao.flowDataGenerate.repairMaterialIdsHint':
+    '发现 {{count}} 行物料 ID 失效，可按「编码+名称」一键修复后重新预检',
+  'app.kuaizhizao.flowDataGenerate.repairMaterialIdsOk':
+    '已修复 {{repaired}} 行物料 ID，未能匹配 {{failed}} 行',
+  'app.kuaizhizao.flowDataGenerate.repairMaterialIdsFail': '未能修复，{{failed}} 行匹配失败',
+  'app.kuaizhizao.flowDataGenerate.repairMaterialIdsNone': '没有需要修复的物料 ID',
+  'app.kuaizhizao.flowDataGenerate.repairMaterialIdsError': '修复物料 ID 失败',
+  'app.kuaizhizao.flowDataGenerate.workOrderSelectCard': '工单自选与并行完成',
+  'app.kuaizhizao.flowDataGenerate.workOrderSelectHint':
+    '预检后勾选需走生产链完工的自制件；未勾选的工单仍会下推，但不自动领料/报工/入库。多张勾选时可并行推进业务时刻。',
+  'app.kuaizhizao.flowDataGenerate.workOrderSelectRequired': '请至少勾选一张需完工的工单物料',
+  'app.kuaizhizao.flowDataGenerate.parallelWorkOrders': '工单并行完成',
+  'app.kuaizhizao.flowDataGenerate.parallelWorkOrdersHint': '多工单生产链并行，共用时间锚点后各自推进',
+  'app.kuaizhizao.flowDataGenerate.parallelGroupCard': '数量并行组（报工）',
+  'app.kuaizhizao.flowDataGenerate.parallelGroupHint':
+    '填写每组件数范围（如 1–3）：订单数量会拆成多组，同工序各组按报工间隔错开；不填则走下方报工分批。',
+  'app.kuaizhizao.flowDataGenerate.parallelGroupMin': '每组最少',
+  'app.kuaizhizao.flowDataGenerate.parallelGroupMax': '每组最多',
+  'app.kuaizhizao.flowDataGenerate.flowEndAt': '流程结束时间（可选）',
+  'app.kuaizhizao.flowDataGenerate.flowEndAtHint':
+    '与时间锚点组成时间窗：点「预览」会推算并回填各步骤间隔；改分批/工作时段后再预览可看新的完成时刻。',
+  'app.kuaizhizao.flowDataGenerate.estimatedFinish': '预估完成时刻：{{time}}',
+  'app.kuaizhizao.flowDataGenerate.intervalsFilled': '已按起止时间回填步骤间隔，可微调后再次预览',
+  'app.kuaizhizao.flowDataGenerate.candidateNotReady': '未就绪',
+  'app.kuaizhizao.flowDataGenerate.noWorkOrderCandidates': '源单无自制件候选，将只走采购/发货等步骤',
   'app.kuaizhizao.flowDataGenerate.execute': '确认执行',
+  'app.kuaizhizao.flowDataGenerate.resume': '继续未完成',
+  'app.kuaizhizao.flowDataGenerate.resumeHint':
+    '上一轮在业务流转中失败（run {{runId}}…），单据已保留。修好问题后点「继续未完成」从检查点接着跑。',
+  'app.kuaizhizao.flowDataGenerate.resumeConfirmTitle': '继续未完成的造数？',
+  'app.kuaizhizao.flowDataGenerate.resumeConfirmContent':
+    '将在组织「{{tenant}}」下续跑 run {{runId}}…：跳过已完成的需求计算/下推/入库/工单/出库，只补剩余步骤。',
+  'app.kuaizhizao.flowDataGenerate.resumeOk': '续跑完成',
+  'app.kuaizhizao.flowDataGenerate.resumeMissing': '没有可续跑的 run_id',
+  'app.kuaizhizao.flowDataGenerate.revert': '撤回本轮数据',
+  'app.kuaizhizao.flowDataGenerate.revertHint':
+    '将软删 run {{runId}}… 已写入的单据并尝试撤回需求计算。库存已过账的下游可能清理失败，请人工核对。',
+  'app.kuaizhizao.flowDataGenerate.revertConfirmTitle': '撤回本轮造数数据？',
+  'app.kuaizhizao.flowDataGenerate.revertConfirmContent':
+    '确认撤回 run {{runId}}… 已写入的全部单据？此操作不可恢复（软删）。',
+  'app.kuaizhizao.flowDataGenerate.revertOk': '已撤回 {{count}} 条记录',
+  'app.kuaizhizao.flowDataGenerate.revertFail': '撤回失败',
+  'app.kuaizhizao.flowDataGenerate.revertMissing': '没有可撤回的 run_id（请先执行或续跑产生 run）',
+  'app.kuaizhizao.flowDataGenerate.executeFailResumable':
+    '造数未通过，单据已保留，可点「继续未完成」续跑',
   'app.kuaizhizao.flowDataGenerate.previewOk': '预览成功',
   'app.kuaizhizao.flowDataGenerate.previewFail': '预览失败',
   'app.kuaizhizao.flowDataGenerate.executeOk': '全流程造数完成',
@@ -10870,9 +10934,9 @@ export default {
   'app.kuaizhizao.flowDataGenerate.executeProgressWaiting': '任务已提交，正在排队…',
   'app.kuaizhizao.flowDataGenerate.confirmTitle': '确认生成全流程数据？',
   'app.kuaizhizao.flowDataGenerate.confirmContent':
-    '将按真实业务服务创建/审核/过账单据。单张工单或采购单失败将跳过该条并继续其余写入；仅需求计算/下推失败时撤销本轮。请确认销售订单、BOM、工艺与仓库配置正确。',
+    '将按真实业务服务创建/审核/过账单据。业务流转任一步失败即整轮失败（不再跳过）；需求计算/下推失败时撤销本轮。请先预检并确认 BOM、工艺与仓库配置正确。',
   'app.kuaizhizao.flowDataGenerate.confirmContentWithTenant':
-    '将在组织「{{tenant}}」下按真实业务服务创建/审核/过账单据。单张工单或采购单失败将跳过该条并继续其余写入；仅需求计算/下推失败时撤销本轮。执行时间可能较长，页面会显示进度条，请勿关闭。',
+    '将在组织「{{tenant}}」下按真实业务服务创建/审核/过账单据。业务流转任一步失败即整轮失败（不再跳过）；需求计算/下推失败时撤销本轮。失败后可「继续未完成」。执行时间可能较长，页面会显示进度条，请勿关闭。',
   'app.kuaizhizao.flowDataGenerate.previewCard': '预览时间线',
   'app.kuaizhizao.flowDataGenerate.previewSummary': '订单 {{order}} 仓库 {{warehouse}}',
   'app.kuaizhizao.flowDataGenerate.previewMaterial': '工艺物料 {{code}}',
@@ -10890,6 +10954,7 @@ export default {
   'app.kuaizhizao.flowDataGenerate.step.demand_computation': '需求计算/工单',
   'app.kuaizhizao.flowDataGenerate.step.purchase': '采购订单',
   'app.kuaizhizao.flowDataGenerate.step.incoming_inspection': '来料检验',
+  'app.kuaizhizao.flowDataGenerate.step.outsource': '委外发料/收货',
   'app.kuaizhizao.flowDataGenerate.step.inventory_topup': '缺料补库',
   'app.kuaizhizao.flowDataGenerate.step.production_picking': '生产领料',
   'app.kuaizhizao.flowDataGenerate.step.reporting': '工序报工',
@@ -10899,7 +10964,7 @@ export default {
   'app.kuaizhizao.flowDataGenerate.step.shipment_delivery': '发货/出库',
   'app.kuaizhizao.flowDataGenerate.operatorCard': '各步骤操作用户',
   'app.kuaizhizao.flowDataGenerate.operatorHint':
-    '默认按该步骤预设角色随机取激活用户；也可指定人员、按部门随机、按工作小组随机、按工序派工/默认人员，或统一用当前登录用户。池内无人时回退当前用户。工序报工在随机类模式下会按批次轮换操作人池；「按工序指定人员」则按各工单工序派工解析。',
+    '默认按该步骤预设角色随机取激活用户；也可指定人员、按部门随机、按工作小组随机、按工序派工/默认人员，或统一用当前登录用户。随机类池空时预检与执行硬失败（不再回退当前用户）。工序报工在随机类模式下会按批次轮换操作人池；「按工序指定人员」则按各工单工序派工解析。',
   'app.kuaizhizao.flowDataGenerate.reportingBatchCard': '工序报工分批',
   'app.kuaizhizao.flowDataGenerate.reportingBatchHint':
     '每道工序将数量拆成多批报工：同工序批次用步骤间隔；跨工序按「须完上道/可跳转」与标准工时推进时刻。操作人从报工角色池轮换。批次数在最小～最大之间随机，且不超过工单数量。',
@@ -10939,7 +11004,7 @@ export default {
   'app.kuaizhizao.equipmentOpsGenerate.equipmentPlaceholder': '从所选点检单/保养计划设备中多选',
   'app.kuaizhizao.equipmentOpsGenerate.equipmentRequired': '请选择设备',
   'app.kuaizhizao.equipmentOpsGenerate.equipmentFromPlansHint':
-    '候选项随上方点检单与保养计划变化；点检侧取模板单设备，保养侧取计划绑定设备。',
+    '候选项与后端一致：点检仅模板单设备（不按方案扩设备）；保养取计划设备，无明细时并入方案绑定设备。',
   'app.kuaizhizao.equipmentOpsGenerate.selectAllEquipment': '全选',
   'app.kuaizhizao.equipmentOpsGenerate.clearEquipment': '清空',
   'app.kuaizhizao.equipmentOpsGenerate.equipmentBoundCount': '可选 {{count}} 台',
@@ -10975,10 +11040,19 @@ export default {
   'app.kuaizhizao.equipmentOpsGenerate.operatorTeamPlaceholder': '选择工作小组',
   'app.kuaizhizao.equipmentOpsGenerate.operatorTeamRequired': '请选择工作小组',
   'app.kuaizhizao.equipmentOpsGenerate.operatorRolePlaceholder': '可选：指定角色码（空则用步骤默认角色）',
-  'app.kuaizhizao.equipmentOpsGenerate.useWorkSchedule': '钳到工作时段',
+  'app.kuaizhizao.equipmentOpsGenerate.useWorkSchedule': '按工作日与时段生成',
+  'app.kuaizhizao.equipmentOpsGenerate.useWorkScheduleHint':
+    '开启后仅在勾选工作日生成；发生时刻钳在上班～下班之间，非工作日不生成。',
   'app.kuaizhizao.equipmentOpsGenerate.weekdays': '工作日',
   'app.kuaizhizao.equipmentOpsGenerate.startTime': '上班时间',
   'app.kuaizhizao.equipmentOpsGenerate.endTime': '下班时间',
+  'app.kuaizhizao.equipmentOpsGenerate.precheckHasErrors': '预检未通过，禁止执行',
+  'app.kuaizhizao.equipmentOpsGenerate.precheckBlockExecute':
+    '预检未通过（无可生成单据或全为 B/C 跳过），请修改后重试',
+  'app.kuaizhizao.equipmentOpsGenerate.runtimeApproxHint':
+    '以下保养计划为运行类周期，造数将按每天近似展开',
+  'app.kuaizhizao.equipmentOpsGenerate.operatorFallbackHint':
+    '以下步骤主数据未指定人员，执行将回退当前用户',
   'app.kuaizhizao.equipmentOpsGenerate.weekday.monday': '周一',
   'app.kuaizhizao.equipmentOpsGenerate.weekday.tuesday': '周二',
   'app.kuaizhizao.equipmentOpsGenerate.weekday.wednesday': '周三',
@@ -31443,6 +31517,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.data-backup-restore-id-align-r01.title':
+    '修复数据备份恢复后关联 ID 对不上',
+  'pages.dashboard.updateLog.entries.data-backup-restore-id-align-r01.description':
+    '同租户恢复时不再把即将覆盖的旧 UUID 误判为冲突并整批重排；主键避让时同步改写无正式外键、但列名无歧义的整型/UUID 引用列，避免单据与主数据对不上号。',
   'pages.dashboard.updateLog.entries.trace-report-pdf-error-tail-r01.title':
     '导出追溯报告失败时显示可操作原因',
   'pages.dashboard.updateLog.entries.trace-report-pdf-error-tail-r01.description':

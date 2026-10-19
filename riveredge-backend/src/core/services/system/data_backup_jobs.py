@@ -1313,9 +1313,15 @@ def _fk_columns_to_serial_parents(
 ) -> dict[str, dict[str, str]]:
     """
     child_table -> { child_column -> parent_table }
-    仅当父表在 serial_tables 且子列会出现在导入 CSV 中。
+
+    含两类：
+    1. 正式 FK（parent_column=id）
+    2. 软引用：同名整型列在库内其它表已有唯一 FK→某 serial 父表，
+       但本表未建 FK（常见于历史表 / 多态旁路）。列名对父表必须无歧义，
+       否则不猜（如多表各自 parent_id 自引用）。
     """
     mapping: dict[str, dict[str, str]] = defaultdict(dict)
+    col_to_parents: dict[str, set[str]] = defaultdict(set)
     for row in fk_rows:
         child = row.get("child_table")
         parent = row.get("parent_table")
@@ -1323,12 +1329,29 @@ def _fk_columns_to_serial_parents(
         parent_col = row.get("parent_column")
         if not child or not parent or not child_col or parent_col != "id":
             continue
-        if parent not in serial_tables or child not in import_plan:
+        if parent not in serial_tables:
+            continue
+        col_to_parents[str(child_col)].add(str(parent))
+        if child not in import_plan:
             continue
         columns = import_plan[child][0]
         if child_col not in columns:
             continue
         mapping[child][str(child_col)] = str(parent)
+
+    unambiguous = {
+        col: next(iter(parents))
+        for col, parents in col_to_parents.items()
+        if len(parents) == 1 and col not in {"id", "tenant_id"}
+    }
+    if unambiguous:
+        for table, (columns, _csv) in import_plan.items():
+            for col in columns:
+                if col in mapping.get(table, {}):
+                    continue
+                parent = unambiguous.get(col)
+                if parent:
+                    mapping[table][col] = parent
     return dict(mapping)
 
 
@@ -1614,7 +1637,8 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
     背景：serial id 避让只处理了主键 id，但 apps_* 表的 uuid 上有全局唯一索引
     （如 idx_apps_kuaicaiwu_gl_book_settings_uuid）。同一份备份恢复到第二个租户时，
     DELETE 只清目标租户，其它租户残留的相同 uuid 会让 COPY 直接报 duplicate key。
-    - uuid 类列：冲突值生成新 uuid，并同步改写指向这些值的外键引用；
+    - uuid 类列：仅与其它租户（或无 tenant_id 表）冲突时生成新 uuid，并同步改写
+      正式 FK 与同名无歧义软引用；目标租户旧行会 DELETE，不得误重排；
     - `KG000001` 类前缀+数字业务编码：按前缀取库内最大序号后整体重排，FK 同步跟随；
     - 无规律值（手机号/证件号等）：无法安全重写，提前抛人话错误。
     注意跨租户恢复后源 UUID/业务编码不保留（已重排）。
@@ -1770,13 +1794,23 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
             values = [v for v in _extract_csv_column_values(csv_text, col) if v]
             if not values:
                 continue
-            # 仅重写真正冲突的值：未冲突行保持原 UUID，减少无谓重排
+            # 仅重写真正冲突的值：未冲突行保持原 UUID，减少无谓重排。
+            # 目标租户旧行会在事务内 DELETE，探测时排除，避免同租户恢复误重排。
             lowers = [value.lower() for value in values]
-            hits = await conn.execute_query_dict(
-                f'SELECT "{col}" AS v FROM "{table}" '
-                f'WHERE LOWER("{col}"::text) = ANY($1::text[])',
-                [lowers],
-            )
+            has_tenant_col = "tenant_id" in (table_column_map.get(table) or [])
+            if has_tenant_col:
+                hits = await conn.execute_query_dict(
+                    f'SELECT "{col}" AS v FROM "{table}" '
+                    f'WHERE LOWER("{col}"::text) = ANY($1::text[]) '
+                    f"AND tenant_id IS DISTINCT FROM $2",
+                    [lowers, int(target_tenant_id)],
+                )
+            else:
+                hits = await conn.execute_query_dict(
+                    f'SELECT "{col}" AS v FROM "{table}" '
+                    f'WHERE LOWER("{col}"::text) = ANY($1::text[])',
+                    [lowers],
+                )
             colliding = {str(r.get("v", "")).lower() for r in (hits or []) if r.get("v") is not None}
             if not colliding:
                 continue
@@ -1787,8 +1821,9 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
         if not value_maps:
             break
 
-        # 子表外键引用父表 uuid 列时同步改写
+        # 子表引用父表 uuid 时同步改写（正式 FK + 同名列无歧义软引用）
         fk_uuid_refs: dict[str, dict[str, tuple[str, str]]] = {}
+        uuid_col_to_parents: dict[str, set[tuple[str, str]]] = defaultdict(set)
         for row in fk_rows or []:
             child = row.get("child_table")
             parent = row.get("parent_table")
@@ -1801,12 +1836,21 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
             parent_uuid_col = uuid_candidate.get(parent)
             if parent_col != parent_uuid_col:
                 continue
+            uuid_col_to_parents[str(child_col)].add((str(parent), str(parent_uuid_col)))
             if child not in remapped or child_col not in remapped[child][0]:
                 continue
             fk_uuid_refs.setdefault(child, {})[str(child_col)] = (parent, parent_uuid_col)
+        for col, parents in uuid_col_to_parents.items():
+            if len(parents) != 1:
+                continue
+            parent, parent_uuid_col = next(iter(parents))
+            for table, (columns, _csv) in remapped.items():
+                if col not in columns or col in fk_uuid_refs.get(table, {}):
+                    continue
+                if col == uuid_candidate.get(table):
+                    continue
+                fk_uuid_refs.setdefault(table, {})[col] = (parent, parent_uuid_col)
 
-        # 仅改写 DB 外键元数据确认的引用；无 FK 约束的字符串列不猜测，避免误改业务文本
-        # （duplicate 自检 + 明确报错已覆盖无法自动处理的最坏情况）。
         next_plan: dict[str, tuple[list[str], str]] = {}
         for table, (columns, csv_text) in remapped.items():
             if table in value_maps:

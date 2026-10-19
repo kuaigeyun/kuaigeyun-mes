@@ -41,7 +41,19 @@ export interface EquipmentOpsGeneratePayload {
   approver_operator: EquipmentOpsOperatorPayload;
 }
 
+export interface EquipmentOpsBoundEquipmentItem {
+  id: number;
+  code?: string | null;
+  name?: string | null;
+}
+
+export interface EquipmentOpsBoundEquipmentResult {
+  equipment: EquipmentOpsBoundEquipmentItem[];
+  notes?: string[];
+}
+
 export interface EquipmentOpsPreviewResult {
+  ok?: boolean;
   equipment_count: number;
   spot_check_seed_count?: number;
   maintenance_plan_count?: number;
@@ -52,6 +64,10 @@ export interface EquipmentOpsPreviewResult {
   anchor_start?: string;
   anchor_end?: string;
   notes?: string[];
+  errors?: string[];
+  runtime_approx_plans?: string[];
+  operator_fallback_steps?: string[];
+  skipped_bc_count?: number;
 }
 
 export interface EquipmentOpsCreatedDoc {
@@ -80,6 +96,28 @@ export interface EquipmentOpsExecuteResult {
 }
 
 const BASE = '/apps/kuaizhizao/management/equipment-ops-generate';
+
+export async function listEquipmentOpsBoundEquipment(
+  body: Pick<
+    EquipmentOpsGeneratePayload,
+    'spot_check_ids' | 'maintenance_plan_ids'
+  >,
+): Promise<EquipmentOpsBoundEquipmentResult> {
+  return apiRequest(BASE + '/bound-equipment', {
+    method: 'POST',
+    data: {
+      ...body,
+      equipment_ids: [],
+      anchor_start: new Date().toISOString(),
+      anchor_end: new Date().toISOString(),
+      use_work_schedule: false,
+      auto_approve_spot_check: false,
+      inspector_operator: { mode: 'current' },
+      approver_operator: { mode: 'current' },
+    },
+    timeoutMs: 60_000,
+  });
+}
 
 export async function previewEquipmentOpsGenerate(
   body: EquipmentOpsGeneratePayload,

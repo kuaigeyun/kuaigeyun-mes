@@ -40,13 +40,15 @@ standard: 造数走 management/equipment-ops-generate；点检选 spot_check_ids
 ## 造数契约
 
 - **选模板**：`spot_check_ids`（已有点检单作模板）与/或 `maintenance_plan_ids`（至少一类）
-- **选设备**：`equipment_ids`；点检侧须落在模板设备/方案绑定可执行范围内；保养侧仍须是所选计划设备并集子集
-- **周期展开**：点检按模板关联方案 `cycle_type`（每班/每天/每周/每月/每季度）；保养按计划/方案时间周期；日期范围内每周期一张，单目标上限 90
+- **选设备**：`equipment_ids`；FE 经 `POST .../bound-equipment` 与 BE `_collect_bound_equipment` 对齐——点检仅模板单设备；保养计划无 `equipment_items` 时并入方案绑定设备
+- **预检**：`preview`=`precheck`：返回 `ok`/`errors`/`runtime_approx_plans`/`operator_fallback_steps`/`skipped_bc_count`；过滤后 0 单 → `ok=false`（执行仍 ValidationError，禁止 silent 空跑）
+- **工作时段**：`use_work_schedule` 时按 `weekdays` 过滤日期，时刻钳在 `start_time`～`end_time`；非工作日不生成
+- **周期展开**：点检按模板关联方案 `cycle_type`；保养时间周期按 `cycle_value/unit`；运行时长/次数预检 warning「按天近似」，不硬失败；单目标上限 90
 - **写单**：`EquipmentSpotCheckService.create` + 填行/可选审核；`MaintenanceExecutionService.create_maintenance_execution`
 - **操作日志**：每张落库单据 `_attach_ops_log`（`operation_type=equipment_ops_generate`）；成功后改写业务时刻并对齐日志 `created_at`
 - **全有或全无**：任一条硬失败 → 软删本轮时间线单据、删除对应操作日志 → 400「请修改后重试」
-- **操作人**：复用 `StepOperatorConfig`；执行人优先设备点检人；审批人默认方案审核人
-- 采集方式 B 跳过；Windows 改 BE 后须重启 API；造数页不进平台更新日志
+- **操作人**：复用 `StepOperatorConfig`；执行人优先设备点检人；审批人默认方案审核人；无人回退当前用户但须在预检 `operator_fallback_steps` 可见
+- 采集方式 B/C 跳过且全跳过时预检/执行明确失败；Windows 改 BE 后须重启 API；造数页不进平台更新日志
 
 ## 关键文件
 

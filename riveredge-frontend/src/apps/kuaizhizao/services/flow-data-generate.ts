@@ -77,6 +77,85 @@ export interface FlowGeneratePayload {
   reporting_batches?: ReportingBatchConfig;
   work_schedule?: FlowWorkSchedule | null;
   use_work_schedule?: boolean;
+  /** 自选完工物料；不传/空=全部下推工单走生产链 */
+  selected_material_ids?: number[] | null;
+  /** 多工单生产链并行推进 */
+  parallel_work_orders?: boolean;
+  /** 数量并行组每组最小件数（如 1） */
+  parallel_group_size_min?: number | null;
+  /** 数量并行组每组最大件数（如 3） */
+  parallel_group_size_max?: number | null;
+  /** 流程结束锚点；与 anchor_at 组成时间窗推算步骤间隔 */
+  flow_end_at?: string | null;
+  /** 来料检建单失败时允许直推入库（默认关） */
+  allow_skip_iqc?: boolean;
+  /** 续跑：失败轮次 run_id，按检查点跳过已完成阶段 */
+  resume_run_id?: string | null;
+}
+
+export interface FlowWorkOrderCandidate {
+  material_id: number;
+  material_code: string;
+  material_name?: string;
+  source_type?: string;
+  quantity?: number;
+  has_process?: boolean;
+  process_operation_count?: number;
+  has_bom?: boolean;
+  ready?: boolean;
+  blockers?: string[];
+}
+
+export interface FlowMaterialIdIssue {
+  line_id: number;
+  stale_material_id?: number | null;
+  material_code?: string | null;
+  material_name?: string | null;
+  issue?: string;
+  message?: string;
+}
+
+export interface FlowPrecheckResult {
+  ok: boolean;
+  source_type?: FlowSourceType;
+  sales_order_id?: number | null;
+  sales_forecast_id?: number | null;
+  order_code: string;
+  warehouse_id: number;
+  warehouse_name: string;
+  errors: string[];
+  warnings: string[];
+  blocking_codes?: string[];
+  work_order_candidates: FlowWorkOrderCandidate[];
+  material_id_issues?: FlowMaterialIdIssue[];
+  can_repair_material_ids?: boolean;
+  parallel_work_orders_default?: boolean;
+}
+
+export interface FlowRepairMaterialIdsResult {
+  success: boolean;
+  source_type?: FlowSourceType;
+  sales_order_id?: number | null;
+  sales_forecast_id?: number | null;
+  order_code: string;
+  repaired_count: number;
+  failed_count: number;
+  skipped_count: number;
+  repaired: Array<{
+    line_id: number;
+    stale_material_id?: number | null;
+    material_id: number;
+    material_code?: string;
+    material_name?: string;
+    message?: string;
+  }>;
+  failed: Array<{
+    line_id: number;
+    stale_material_id?: number | null;
+    material_code?: string | null;
+    material_name?: string | null;
+    message?: string;
+  }>;
 }
 
 export interface FlowOperatorDefaultStep {
@@ -107,6 +186,10 @@ export interface FlowPreviewResult {
   warehouse_id: number;
   warehouse_name: string;
   anchor_at: string;
+  /** 预估整流程完成时刻（末步 issued_at） */
+  estimated_finish_at?: string | null;
+  /** 按起止时间窗推算的步骤间隔（秒）；前端可回填表单 */
+  suggested_intervals?: Record<string, FlowInterval> | null;
   steps: FlowPreviewStep[];
   process_operations?: Array<{
     code?: string | null;
@@ -118,6 +201,14 @@ export interface FlowPreviewResult {
   }>;
   process_material_code?: string | null;
   warnings?: string[];
+}
+
+export interface FlowRevertResult {
+  success: boolean;
+  run_id: string;
+  reverted_count: number;
+  demand_id?: number | null;
+  notes?: string[];
 }
 
 export interface FlowStepResult {
@@ -136,6 +227,8 @@ export interface FlowStepResult {
 export interface FlowExecuteResult {
   success: boolean;
   run_id: string;
+  resumed?: boolean;
+  resumable?: boolean;
   source_type?: FlowSourceType;
   sales_order_id?: number | null;
   sales_forecast_id?: number | null;
@@ -148,6 +241,20 @@ export interface FlowExecuteResult {
   operators?: Record<string, number>;
   errors?: string[];
   skipped_count?: number;
+  completed_work_order_count?: number;
+  error?: string;
+}
+
+export class FlowGenerateExecuteError extends Error {
+  run_id?: string;
+  resumable?: boolean;
+
+  constructor(message: string, opts?: { run_id?: string; resumable?: boolean }) {
+    super(message);
+    this.name = 'FlowGenerateExecuteError';
+    this.run_id = opts?.run_id;
+    this.resumable = opts?.resumable;
+  }
 }
 
 export type FlowJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
@@ -181,6 +288,27 @@ export async function previewFlowGenerate(
   });
 }
 
+export async function precheckFlowGenerate(
+  body: FlowGeneratePayload,
+): Promise<FlowPrecheckResult> {
+  return apiRequest(BASE + '/precheck', {
+    method: 'POST',
+    data: body,
+    timeoutMs: 60_000,
+  });
+}
+
+/** 按行物料编码+名称回写失效 material_id */
+export async function repairFlowMaterialIds(
+  body: FlowGeneratePayload,
+): Promise<FlowRepairMaterialIdsResult> {
+  return apiRequest(BASE + '/repair-material-ids', {
+    method: 'POST',
+    data: body,
+    timeoutMs: 60_000,
+  });
+}
+
 /** 启动异步造数任务（立即返回 job_id，避免网关 504） */
 export async function startFlowGenerate(
   body: FlowGeneratePayload,
@@ -196,6 +324,15 @@ export async function getFlowGenerateJob(jobId: string): Promise<FlowGenerateJob
   return apiRequest(`${BASE}/jobs/${encodeURIComponent(jobId)}`, {
     method: 'GET',
     timeoutMs: 30_000,
+  });
+}
+
+/** 按 run_id 撤回本轮已写入单据 */
+export async function revertFlowGenerate(runId: string): Promise<FlowRevertResult> {
+  return apiRequest(BASE + '/revert', {
+    method: 'POST',
+    data: { run_id: runId },
+    timeoutMs: 120_000,
   });
 }
 
@@ -219,7 +356,14 @@ export async function executeFlowGenerate(
     onProgress?.(job);
   }
   if (job.status === 'failed') {
-    throw new Error(job.error || job.message || '造数未通过，请修改后重试');
+    const partial = job.result;
+    throw new FlowGenerateExecuteError(
+      job.error || job.message || '造数未通过，请修改后重试',
+      {
+        run_id: partial?.run_id || undefined,
+        resumable: Boolean(partial?.resumable && partial?.run_id),
+      },
+    );
   }
   if (!job.result) {
     throw new Error('造数任务已完成但未返回结果');

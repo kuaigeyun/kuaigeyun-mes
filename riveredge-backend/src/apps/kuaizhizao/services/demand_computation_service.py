@@ -46,6 +46,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
     expand_bom_with_source_control,
     explode_bom_one_level_for_mrp,
     resolve_computation_item_source_config,
+    resolve_default_supplier_id_from_source_config,
     SOURCE_TYPE_MAKE,
     SOURCE_TYPE_BUY,
     SOURCE_TYPE_PHANTOM,
@@ -4055,13 +4056,47 @@ class DemandComputationService(AppBaseService):
         work_order_groups = []
         purchase_orders = []
         
-        # 按供应商分组采购件（物料来源控制增强）
+        # 按默认供应商分组采购件：不同默认供应商 → 不同采购订单
         purchase_items_by_supplier: Dict[int, List[DemandComputationItem]] = {}
         # 正式下推时跳过的无默认供应商采购件（不阻断其余物料下推）
         skipped_purchase_no_supplier: List[str] = []
         filled_random_supplier_labels: List[str] = []
         fill_supplier_mode = str(fill_missing_supplier or "").strip().lower()
         random_supplier_id: Optional[int] = None
+
+        buy_material_ids = sorted(
+            {
+                int(i.material_id or 0)
+                for i in items
+                if getattr(i, "material_source_type", None) == SOURCE_TYPE_BUY
+                and int(i.material_id or 0) > 0
+            }
+        )
+        live_supplier_by_material: Dict[int, int] = {}
+        if buy_material_ids:
+            from apps.master_data.models.material import Material
+
+            mats = await Material.filter(
+                tenant_id=tenant_id,
+                id__in=buy_material_ids,
+                deleted_at__isnull=True,
+            ).all()
+            for m in mats:
+                live_sid = resolve_default_supplier_id_from_source_config(
+                    build_material_source_config(m)
+                )
+                if live_sid:
+                    live_supplier_by_material[int(m.id)] = live_sid
+
+        def _item_default_supplier_id(item: Any) -> Optional[int]:
+            """计算快照优先，缺则回读物料主数据默认供应商。"""
+            sid = resolve_default_supplier_id_from_source_config(
+                getattr(item, "material_source_config", None)
+            )
+            if sid:
+                return sid
+            mid = int(getattr(item, "material_id", 0) or 0)
+            return live_supplier_by_material.get(mid)
 
         async def _resolve_purchase_group_key(
             item: Any, supplier_id: Optional[int]
@@ -4185,10 +4220,7 @@ class DemandComputationService(AppBaseService):
                 if remaining_qty <= 0:
                     continue
                 if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                    supplier_id = None
-                    if item.material_source_config:
-                        sc = resolve_computation_item_source_config(item.material_source_config)
-                        supplier_id = sc.get("default_supplier_id")
+                    supplier_id = _item_default_supplier_id(item)
                     group_key = await _resolve_purchase_group_key(item, supplier_id)
                     if group_key is not None:
                         push_lines = self._resolve_purchase_push_lines(item, remaining_qty)
@@ -4276,10 +4308,7 @@ class DemandComputationService(AppBaseService):
                 if item.material_id not in created_po_material_ids:
                     remaining_qty = purchase_remaining_by_material.get(int(item.material_id or 0), 0.0)
                     if remaining_qty > 0 and item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                        supplier_id = None
-                        if item.material_source_config:
-                            sc = resolve_computation_item_source_config(item.material_source_config)
-                            supplier_id = sc.get("default_supplier_id")
+                        supplier_id = _item_default_supplier_id(item)
                         group_key = await _resolve_purchase_group_key(item, supplier_id)
                         if group_key is not None:
                             push_lines = self._resolve_purchase_push_lines(item, remaining_qty)
