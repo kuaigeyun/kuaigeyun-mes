@@ -88,6 +88,10 @@ class DepartmentInfo(BaseModel):
     children_count: int = Field(..., description="子部门数量")
     user_count: int = Field(..., description="用户数量")
     position_count: int = Field(default=0, description="关联职位数量")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -104,9 +108,7 @@ class DepartmentResponse(DepartmentInfo):
         updated_at: 更新时间
     """
     tenant_id: int = Field(..., description="组织ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 

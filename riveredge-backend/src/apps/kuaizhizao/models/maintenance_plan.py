@@ -71,7 +71,7 @@ class MaintenancePlan(BaseModel):
     equipment_id = fields.IntField(null=True, description="设备ID（首台快照，可空）")
     equipment_uuid = fields.CharField(max_length=36, null=True, description="设备UUID（首台快照，可空）")
     equipment_name = fields.CharField(max_length=200, null=True, description="设备名称（首台或汇总展示，可空）")
-    equipment_items = fields.JSONField(null=True, description="历史关联设备列表（新计划不再写入）")
+    equipment_items = fields.JSONField(null=True, description="本计划设备范围 [{id,uuid,code,name}]")
 
     # 绑定保养方案（维护类型/周期从方案快照；设备从方案绑定展开）
     maintenance_scheme_id = fields.IntField(null=True, description="保养方案ID")

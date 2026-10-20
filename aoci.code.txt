@@ -2,7 +2,11 @@
 
 ===D:/kuaigeyun-pro/kuaigeyun/===
 .gitattributes[XV1T]: F:git LF lock | R:- | A:eol=lf | S:no autocrlf; bytes-stable; 5L
+<<<<<<< HEAD
 .gitignore[XV3M]: F:repo ignore与Cursor/AOCI正式资产白名单 | R:- | A:py+node+env+build | S:.cursor放行memory/**与rules/**;勿整夹忽略.aoci/
+=======
+.gitignore[XV3S]: F:repo ignore与Cursor/AOCI正式资产白名单 | R:- | A:pro应用目录gitignore | S:.cursor放行memory与rules;专业app源码组装不入主仓索引
+>>>>>>> 551bfabe487f8ead78f057cfd68c5e630ca8bb8a
 AGENTS.md[SV2S]: F:agent+AOCI contract | R:- | A:aoci managed block | S:cognition loop rules; 103L
 LICENSE[SV1S]: F:Apache 2.0 | R:- | A:Apache-2.0 | S:211L
 README.md[SG6M]: F:产品总览与体验接入入口 | R:- | A:MES platform | S:在线演示建议 Gitee 快捷登录；勿写免注册；仅供预览勿生产
@@ -1127,6 +1131,11 @@ manifest.json[FG2T]: F:行业包索引清单 | R:code:riveredge-backend/src/apps
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/===
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/api/===
+<<<<<<< HEAD
+=======
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/api/cost/===
+>>>>>>> 551bfabe487f8ead78f057cfd68c5e630ca8bb8a
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/api/finance/===
 
@@ -2076,9 +2085,16 @@ types.py[SB6L]: F:单据capabilities类型与CAPABILITY_REASON_MESSAGES | R:- | 
 warehouse_inbound_hub.py[SB5S]: F:入库 Hub 聚合行业务态 capabilities（与 inboundHubTypes / inboundBatchConfirm 门禁一致）。 | R:- | A:_cap,_norm,_is_posted,derive_inbound_hub_capabilities,assert_inbound_hub_capa... | S:141L
 warehouse_outbound_hub.py[SB5S]: F:出库 Hub 聚合行业务态 capabilities（与 outboundHubTypes / outboundBatchConfirm 门禁一致）。 | R:- | A:_cap,_norm,_is_review_approved,_derive_delete_capability,derive_outbound_hub_... | S:188L
 work_order.py[SB5M]: F:工单业务态 capabilities（唯一真源，与 work_order_service 门禁一致）。 | R:- | A:_cap,_norm,_has_work,_is_list_work_order_row,_revoke_status_allowed,_is_manua... | S:296L
+<<<<<<< HEAD
 other_expense.py[AB6S]: F:其他费用支出 capabilities | R:- | A:_cap,_status,_status_key,is_other_expense_draft_status | S:Business service; check call sites before changing signatures
 other_income.py[AB6S]: F:其他费用收入 capabilities | R:- | A:_cap,_status,_status_key,is_other_income_draft_status | S:Business service; check call sites before changing signatures
 payment_application.py[AB6T]: F:付款申请单 capabilities | R:- | A:_cap,_norm,_is_approved,derive_payment_application_capabilities | S:-
+=======
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_relay/workflows/===
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_relay/workflows/functions/===
+>>>>>>> 551bfabe487f8ead78f057cfd68c5e630ca8bb8a
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/services/order_change/===
 helpers.py[SB5M]: F:订单变更单共享工具 | R:- | A:is_source_order_locked_for_direct_edit,infer_change_category,line_amount,norm... | S:294L; 订单变更单共享工具
@@ -3306,9 +3322,13 @@ search_utils.py[DB5M]: F:搜索工具函数  提供通用的搜索功能，支�
 site_setting_response.py[DB5T]: F:站点设置 API 响应脱敏（公司印章等敏感配置）。 | R:- | A:mask_company_seal_for_response,mask_private_vault_for_response | S:36L; 站点设置 API 响应脱敏（公司印章等敏感配置）。
 timezone_utils.py[DB5S]: F:全站时区唯一工具（写入 / 比较 / API 展示口径）。  契约见 ``.cursor/rules/timezone-contract.mdc``。 业... | R:- | A:site_timezone_name,now_utc,now,today_str,today_site_str,make_aware | S:183L
 workflow_tenant_isolation.py[DB5S]: F:工作流函数租户隔离装饰器。 | R:- | A:_extract_event,with_tenant_isolation,with_tenant_isolation_optional | S:121L; 工作流函数租户隔离装饰器。
+<<<<<<< HEAD
 amount_precision.py[AB5T]: F:业务金额小数位量化/展示（与配置中心 common.amount_decimal_places 对齐）。 | R:- | A:quantize_business_amount,format_business_amount | S:-
 db_transaction.py[AB5T]: F:跨层事务复用：避免 Tortoise NestedTransactionPooledContext 死锁。 Tortoise 0.21 在已有事务上再 ``in_transacti | R:- | A:reuse_or_begin_transaction | S:-
 workbuddy_mcp_public_url.py[AB5T]: F:WorkBuddy MCP 公网地址：仅接受域名（或 host:port），落库固定为 https://{host}/mcp。 | R:- | A:_strip_to_host,normalize_workbuddy_mcp_public_url,parse_workbuddy_mcp_public_host | S:-
+=======
+model_audit.py[XC7S]: F:组织与账户审计字段写入真源 | R:code:riveredge-backend/src/core/services/user/user_service.py | A:load_audit_fields_for_create,load_audit_fields_for_update | S:写路径合并created_by_name;禁止读侧补操作人
+>>>>>>> 551bfabe487f8ead78f057cfd68c5e630ca8bb8a
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/core/workflows/===
 __init__.py[DB5T]: F:Implements __init__.py | R:- | A:- | S:6L
@@ -7526,6 +7546,7 @@ wechat.svg[DU5T]: F:<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-
 
 ===D:/kuaigeyun-pro/kuaigeyun/.cursor/rules/===
 aoci-git-commit.mdc[XV5T]: F:约定提交须含正式AOCI且改托管对象先maintain | R:code:.cursor/rules/build-push-aoci.mdc | A:- | S:勿gitignore整夹.aoci/;memory进git但scope exclude勿为笔记写Entry;推送≠build.web
+<<<<<<< HEAD
 build-push-aoci.mdc[XV6T]: F:按改动类型分流推送并仅产物相关变更才构建 | R:code:.cursor/rules/aoci-git-commit.mdc | A:- | S:仅backend/fast-deploy/memory则push不跑build.web;改托管对象序=maintain→commit→再构建;用户说构建推送先看diff分流
 ai-memory.mdc[XC5S]: F:约定Agent开任务先读Vault与本仓memory路由 | R:code:.cursor/rules/dev-memory-library.mdc | A:- | S:MES必读architecture-map+ai-change-protocol;禁扫全Vault;秘密不入库
 api-write-protection.mdc[XS6S]: F:固化/api写防护渠道限流幂等与开放账套约定 | R:code:riveredge-backend/docs/api-write-protection-ops.md | A:- | S:新公开写接口须进interactive_client_guard豁免;关键路径须匹配_CRITICAL_PATH_RE;integration写须open Token
@@ -7554,6 +7575,37 @@ timezone-contract.mdc[XV6T]: F:系统时区契约（唯一真源） | R:- | A:- 
 unitable-list-contract.mdc[XV6T]: F:UniTable 列表布局契约 | R:- | A:- | S:Hard contract; do not bypass with patches/compat/fallback
 unitable-list-stabilize.mdc[XV6T]: F:UniTable 列表跨页改造（流程锁） | R:- | A:- | S:Agent must follow; zero-tolerance rules apply when named
 unitable-row-cache.mdc[XV6T]: F:UniTable 列表行缓存契约 | R:- | A:- | S:Agent must follow; zero-tolerance rules apply when named
+=======
+build-push-aoci.mdc[XS6S]: F:按改动类型分流推送;仅产物相关才构建 | R:code:.cursor/rules/aoci-git-commit.mdc,code:.cursor/memory/principles/code-push-routing.md | A:alwaysApply | S:改托管对象须maintain先于build; memory-only跳过AOCI
+ai-memory.mdc[XC5S]: F:约定Agent开任务先读Vault与本仓memory路由 | R:code:.cursor/rules/dev-memory-library.mdc | A:- | S:MES必读architecture-map+ai-change-protocol;禁扫全Vault;秘密不入库
+api-write-protection.mdc[XS6S]: F:固化/api写防护渠道限流幂等与开放账套约定 | R:code:riveredge-backend/docs/api-write-protection-ops.md | A:- | S:新公开写接口须进interactive_client_guard豁免;关键路径须匹配_CRITICAL_PATH_RE;integration写须open Token
+dev-memory-library.mdc[XC5S]: F:约定.cursor/memory开发前检索与交付后写笔记 | R:code:.cursor/rules/ai-memory.mdc | A:- | S:先读README关键词路由再开1-3篇;交付须features笔记并更新README索引;与rules行为分工不重复
+feature-delivery-checklist.mdc[XS6S]: F:新功能交付迁移菜单同步与更新日志 | R:code:.cursor/rules/dev-memory-library.mdc | A:manifest sync aerich updateLog | S:Windows aerich须PYTHONUTF8;勿留给用户点菜单同步
+reuse-existing-patterns.mdc[XC9M]: F:同类功能唯一标准实现；新建 PC 页须先跟 Skill/组件契约 | R:code:.cursor/rules/dev-memory-library.mdc,code:.cursor/skills/new-document-page/SKILL.md,code:riveredge-frontend/src/components/uni-dropdown/index.tsx | A:alwaysApply；动手前搜 memory+代码；有规范禁止平行第二套 | S:新建页最基础=列表壳(新建/多选/批量/操作列)+UniDropdown 快速新建+ThemedSegmented beforeSearch；缺口先修标准再复用
+model-audit-write.mdc[XC7M]: F:BaseModel审计字段写入硬契约 | R:code:riveredge-backend/src/core/utils/model_audit.py | A:load_audit_fields | S:禁止读侧补操作人;须写created_by_name
+antd6-api.mdc[XS6S]: F:antd6 v6 API 禁止 v5 写法 | R:code:riveredge-frontend/scripts/scan_antd6_legacy.py | A:scan_antd6_legacy | S:message改title;destroyOnHidden;禁止popupClassName
+detail-drawer-contract.mdc[XS6S]: F:业务单据详情抽屉壳与插槽契约 | R:code:riveredge-frontend/src/components/detail-drawer-template | A:HALF_WIDTH extra slots | S:禁止双树loading;关联单openLinkedDocumentDetail
+form-modal-detail-table-contract.mdc[XS6S]: F:FormModal整单竖序与grid=false明细 | R:code:.cursor/skills/form-modal/SKILL.md | A:表头明细备注启用序 | S:有明细须grid false;Alert用FormModalGridBlock
+generic-product-no-customer-brand.mdc[XS6S]: F:通用产品禁止客户公司名进真源 | R:- | A:industry_plugin | S:manifest/updateLog禁写客户商标
+git-push-sop.mdc[XS6S]: F:develop推送SOP与build.web顺序 | R:code:fast-deploy/build.web.sh | A:develop分支 | S:前端改动须build.web;禁止force push main
+i18n-zh-cn-only.mdc[XS6S]: F:i18n zh cn only Cursor alwaysApply rule | R:- | A:alwaysApply | S:27L agent contract
+kuaizhizao-report-contract.mdc[XS6S]: F:kuaizhizao report contract Cursor alwaysApply rule | R:- | A:alwaysApply | S:24L agent contract
+master-data-detail-drawer-contract.mdc[XS6S]: F:master data detail drawer contract Cursor alwaysApply rule | R:- | A:alwaysApply | S:22L agent contract
+mobile-bottom-action-bar.mdc[XS6S]: F:mobile bottom action bar Cursor alwaysApply rule | R:- | A:alwaysApply | S:41L agent contract
+mobile-cjk-text-clip.mdc[XS6S]: F:mobile cjk text clip Cursor alwaysApply rule | R:- | A:alwaysApply | S:27L agent contract
+multi-tab-list-template.mdc[XS6S]: F:multi tab list template Cursor alwaysApply rule | R:- | A:alwaysApply | S:23L agent contract
+no-batch-codemod.mdc[XS6S]: F:no batch codemod Cursor alwaysApply rule | R:- | A:alwaysApply | S:45L agent contract
+no-fallback-patches.mdc[XS6S]: F:no fallback patches Cursor alwaysApply rule | R:- | A:alwaysApply | S:52L agent contract
+no-left-accent-bars.mdc[XS6S]: F:禁止左侧装饰色条 | R:- | A:alwaysApply | S:用均匀描边表达层次;禁止border-left accent
+no-middle-dot-separator.mdc[XS6S]: F:禁止间隔号分隔符 | R:- | A:alwaysApply | S:用户可见文案禁U+00B7;用空格或顿号
+no-speculative-shortcuts.mdc[XS6S]: F:no speculative shortcuts Cursor alwaysApply rule | R:- | A:alwaysApply | S:40L agent contract
+permission-contract.mdc[XC7M]: F:全站RBAC与manifest权限契约 | R:code:riveredge-backend/docs/core/permission-contract.md | A:require_permission_codes | S:禁止actionFallback与旁路RBAC
+platform-update-log.mdc[XS6S]: F:platform update log Cursor alwaysApply rule | R:- | A:alwaysApply | S:34L agent contract
+timezone-contract.mdc[XS6S]: F:timezone contract Cursor alwaysApply rule | R:- | A:alwaysApply | S:32L agent contract
+unitable-list-contract.mdc[XS6S]: F:unitable list contract Cursor alwaysApply rule | R:- | A:alwaysApply | S:48L agent contract
+unitable-list-stabilize.mdc[XS6S]: F:unitable list stabilize Cursor alwaysApply rule | R:- | A:alwaysApply | S:20L agent contract
+unitable-row-cache.mdc[XS6S]: F:unitable row cache Cursor alwaysApply rule | R:- | A:alwaysApply | S:49L agent contract
+>>>>>>> 551bfabe487f8ead78f057cfd68c5e630ca8bb8a
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaioa/utils/===
 

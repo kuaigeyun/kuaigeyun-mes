@@ -140,6 +140,9 @@ class UserListItem(BaseModel):
     roles: Optional[List[dict]] = Field(None, description="角色列表（如果关联）")
     last_login: Optional[datetime] = Field(None, description="最后登录时间")
     created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -89,25 +89,11 @@ class MaintenanceReminderService:
                 if existing_reminder and existing_reminder.reminder_type == reminder_type:
                     continue
 
-                # 设备取自保养方案绑定（计划不再挂设备）
                 from apps.kuaizhizao.services.maintenance_plan_service import (
                     MaintenancePlanService,
                 )
 
-                bound: list = []
-                if plan.maintenance_scheme_id:
-                    bound = await MaintenancePlanService._list_bound_equipment(
-                        tenant_id, int(plan.maintenance_scheme_id)
-                    )
-                if not bound and plan.equipment_id:
-                    bound = [
-                        {
-                            "id": plan.equipment_id,
-                            "uuid": plan.equipment_uuid,
-                            "code": None,
-                            "name": plan.equipment_name,
-                        }
-                    ]
+                bound: list = MaintenancePlanService.stored_plan_equipment_items(plan)
                 if not bound:
                     logger.warning(
                         f"维护计划无绑定设备，跳过提醒: {plan.plan_no}"

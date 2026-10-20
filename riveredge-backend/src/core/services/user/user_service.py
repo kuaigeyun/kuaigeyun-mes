@@ -145,6 +145,9 @@ class UserService:
             },
         )
         password_changed_at = resolve_business_datetime()
+        from core.utils.model_audit import load_audit_fields_for_create
+
+        create_audit = await load_audit_fields_for_create(tenant_id, current_user_id)
 
         # 创建用户与角色分配放在同一事务中，并显式使用同一连接
         async with in_transaction() as conn:
@@ -168,6 +171,7 @@ class UserService:
                 remark=getattr(data, 'remark', None),
                 password_changed_at=password_changed_at,
                 must_change_password=False,
+                **create_audit,
                 using_db=conn,
             )
             if role_ids:
@@ -287,6 +291,8 @@ class UserService:
                     "last_login": user.last_login,
                     "created_at": user.created_at,
                     "updated_at": user.updated_at,
+                    "created_by_name": user.created_by_name,
+                    "updated_by_name": user.updated_by_name,
                 }
 
                 # 部门信息（已通过 prefetch_related 加载）
@@ -485,6 +491,12 @@ class UserService:
                 policy,
                 must_change_password=False,
             )
+
+        from core.utils.model_audit import load_audit_fields_for_update
+
+        update_audit = await load_audit_fields_for_update(tenant_id, current_user_id)
+        for key, value in update_audit.items():
+            setattr(user, key, value)
 
         # 用户保存与角色更新放在同一事务中，并显式使用同一连接
         async with in_transaction() as conn:
@@ -970,6 +982,9 @@ class UserService:
         department_cache: Dict[str, Department] = {}
         position_cache: Dict[str, Position] = {}
         role_cache: Dict[str, Role] = {}
+        from core.utils.model_audit import load_audit_fields_for_create
+
+        create_audit = await load_audit_fields_for_create(tenant_id, current_user_id)
         
         for row, row_idx in non_empty_rows:
             try:
@@ -1137,6 +1152,7 @@ class UserService:
                     is_active=True,
                     password_changed_at=password_changed_at,
                     must_change_password=False,
+                    **create_audit,
                 )
                 
                 # 分配角色

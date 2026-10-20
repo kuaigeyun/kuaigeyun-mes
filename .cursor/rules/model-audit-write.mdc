@@ -1,0 +1,20 @@
+# BaseModel 审计字段写入（硬契约）
+
+凡继承 `infra.models.base.BaseModel` / `core.models.base.BaseModel` 的业务表，**创建与更新必须写入** `created_by` / `created_by_name` / `updated_by` / `updated_by_name`（与 `created_at` / `updated_at` 同级，不是列表展示层补数据）。
+
+## 唯一写路径
+
+| 场景 | 真源 |
+|---|---|
+| 核心平台 CRUD / 导入 / 预设 / 外联同步 | `core.utils.model_audit.load_audit_fields_for_create` / `load_audit_fields_for_update` |
+| 快制造等业务单据 | 既有 `user_info["name"]` 或同等快照写法，语义一致 |
+
+## 禁止
+
+- 方法签名有 `current_user_id` 但 `Model.create(...)` 不传审计字段
+- 只写 `created_at` / `updated_at` 不写操作人（预设、导入、同步同理）
+- 列表/Schema 层用 join 或 `-` 兜底冒充已落库的 `created_by_name`
+
+## 自检
+
+新增或改 `*.create(` / 批量导入 / 连接器同步时：确认已合并 `load_audit_fields_*` 返回值；账户表为 `core_users`，与部门/职位同等要求。

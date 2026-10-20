@@ -13,10 +13,8 @@ import { App, Button, List, Modal, Popconfirm, Select, Space, Tag, Typography } 
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemYesNoTag, SystemUserAvatar } from '../../utils/systemListPresentation';
 import { renderInlineMarkerTagGroupPreview } from '../../../../components/inline-marker-tag-preview';
-import {
-  UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
-  UNI_TABLE_SITE_DATETIME_COLUMN_DEFAULTS,
-} from '../../../../utils/uniTableLayoutColumns';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
+import { buildDocumentAuditColumns } from '../../../../apps/kuaizhizao/pages/shared/documentAuditColumns';
 import { QrcodeOutlined, CheckCircleOutlined, StopOutlined, ApartmentOutlined, IdcardOutlined, TeamOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
@@ -716,28 +714,7 @@ const UserListPage: React.FC = () => {
       render: (_, record) =>
         renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 180,
-      minWidth: 180,
-      uniTableKeepWidth: true,
-      resizable: false,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 180,
-      minWidth: 180,
-      uniTableKeepWidth: true,
-      resizable: false,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
+    ...buildDocumentAuditColumns<User>(t),
     {
       title: t('field.user.lastLogin'),
       dataIndex: 'last_login',
@@ -844,7 +821,7 @@ const UserListPage: React.FC = () => {
         <UniTable<User>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.users')}
-        columnPersistenceId="pages.system.users.list-v7"
+        columnPersistenceId="pages.system.users.list-v8"
         actionRef={actionRef}
         columns={columns}
         request={async (params, _, __, searchFormValues) => {

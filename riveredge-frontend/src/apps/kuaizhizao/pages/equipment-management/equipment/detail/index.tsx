@@ -30,7 +30,11 @@ import { ArrowLeftOutlined, EditOutlined, QrcodeOutlined, UploadOutlined } from 
 import dayjs from 'dayjs';
 import { MarkerTag } from '../../../../../../constants/statusBadges';
 import { equipmentApi } from '../../../../services/equipment';
-import { inspectionSchemesApi, schemeBindingsApi } from '../../../../services/equipmentOps';
+import {
+  inspectionSchemesApi,
+  maintenanceSchemesApi,
+  schemeBindingsApi,
+} from '../../../../services/equipmentOps';
 import {
   DOCUMENT_DETAIL_PAGE_HEADER_STYLE,
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
@@ -143,8 +147,14 @@ const EquipmentDetailPage: React.FC = () => {
   const [traceData, setTraceData] = useState<EquipmentTraceData | null>(null);
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
 
-  const [boundSchemeIds, setBoundSchemeIds] = useState<number[]>([]);
-  const [schemeSelectOptions, setSchemeSelectOptions] = useState<{ label: string; value: number }[]>([]);
+  const [boundSpotSchemeIds, setBoundSpotSchemeIds] = useState<number[]>([]);
+  const [boundMaintenanceSchemeIds, setBoundMaintenanceSchemeIds] = useState<number[]>([]);
+  const [spotSchemeSelectOptions, setSpotSchemeSelectOptions] = useState<{ label: string; value: number }[]>(
+    [],
+  );
+  const [maintenanceSchemeSelectOptions, setMaintenanceSchemeSelectOptions] = useState<
+    { label: string; value: number }[]
+  >([]);
   const [schemeBindingsSaving, setSchemeBindingsSaving] = useState(false);
 
   const [calibModalVisible, setCalibModalVisible] = useState(false);
@@ -175,20 +185,33 @@ const EquipmentDetailPage: React.FC = () => {
       setTrackingRefreshKey((k) => k + 1);
       if (detail.id != null) {
         await loadEquipmentFieldValuesForDetail(detail.id);
-        const [bindings, schemesRes] = await Promise.all([
+        const [spotBindings, maintBindings, spotSchemesRes, maintSchemesRes] = await Promise.all([
           schemeBindingsApi.list({ equipment_id: detail.id, scheme_type: 'spot_check' }),
+          schemeBindingsApi.list({ equipment_id: detail.id, scheme_type: 'maintenance' }),
           inspectionSchemesApi.list({ limit: 1000, is_active: true }),
+          maintenanceSchemesApi.list({ limit: 1000, is_active: true }),
         ]);
-        setBoundSchemeIds((bindings ?? []).map((b: { scheme_id: number }) => b.scheme_id));
-        setSchemeSelectOptions(
-          (schemesRes.items ?? []).map((s: { id: number; code: string; name: string }) => ({
+        setBoundSpotSchemeIds((spotBindings ?? []).map((b: { scheme_id: number }) => b.scheme_id));
+        setBoundMaintenanceSchemeIds(
+          (maintBindings ?? []).map((b: { scheme_id: number }) => b.scheme_id),
+        );
+        setSpotSchemeSelectOptions(
+          (spotSchemesRes.items ?? []).map((s: { id: number; code: string; name: string }) => ({
+            label: `${s.code} - ${s.name}`,
+            value: s.id,
+          })),
+        );
+        setMaintenanceSchemeSelectOptions(
+          (maintSchemesRes.items ?? []).map((s: { id: number; code: string; name: string }) => ({
             label: `${s.code} - ${s.name}`,
             value: s.id,
           })),
         );
       } else {
-        setBoundSchemeIds([]);
-        setSchemeSelectOptions([]);
+        setBoundSpotSchemeIds([]);
+        setBoundMaintenanceSchemeIds([]);
+        setSpotSchemeSelectOptions([]);
+        setMaintenanceSchemeSelectOptions([]);
       }
     } catch (error: any) {
       messageApi.error(error?.message || t('app.kuaizhizao.equipment.getDetailFailed'));
@@ -441,15 +464,33 @@ const EquipmentDetailPage: React.FC = () => {
               />
             </Card>
           ) : null}
-          <Card size="small" title={t('app.kuaizhizao.equipmentOps.schemeBindings.title')}>
-            <Select
-              mode="multiple"
-              style={{ width: '100%' }}
-              placeholder={t('app.kuaizhizao.equipmentOps.schemeBindings.selectSchemes')}
-              options={schemeSelectOptions}
-              value={boundSchemeIds}
-              onChange={setBoundSchemeIds}
-            />
+          <Card size="small" title={t('app.kuaizhizao.equipmentOps.schemeBindings.titleSpotAndMaintenance')}>
+            <div style={{ marginBottom: 12 }}>
+              <Typography.Text type="secondary">
+                {t('app.kuaizhizao.equipmentOps.schemeBindings.spotCheck')}
+              </Typography.Text>
+              <Select
+                mode="multiple"
+                style={{ width: '100%', marginTop: 4 }}
+                placeholder={t('app.kuaizhizao.equipmentOps.schemeBindings.selectSchemes')}
+                options={spotSchemeSelectOptions}
+                value={boundSpotSchemeIds}
+                onChange={setBoundSpotSchemeIds}
+              />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <Typography.Text type="secondary">
+                {t('app.kuaizhizao.equipmentOps.schemeBindings.maintenance')}
+              </Typography.Text>
+              <Select
+                mode="multiple"
+                style={{ width: '100%', marginTop: 4 }}
+                placeholder={t('app.kuaizhizao.equipmentOps.schemeBindings.selectMaintenanceSchemes')}
+                options={maintenanceSchemeSelectOptions}
+                value={boundMaintenanceSchemeIds}
+                onChange={setBoundMaintenanceSchemeIds}
+              />
+            </div>
             <div style={{ marginTop: 12 }}>
               <Button
                 type="primary"
@@ -462,7 +503,12 @@ const EquipmentDetailPage: React.FC = () => {
                     await schemeBindingsApi.bulkReplace({
                       equipment_id: equipment.id,
                       scheme_type: 'spot_check',
-                      scheme_ids: boundSchemeIds,
+                      scheme_ids: boundSpotSchemeIds,
+                    });
+                    await schemeBindingsApi.bulkReplace({
+                      equipment_id: equipment.id,
+                      scheme_type: 'maintenance',
+                      scheme_ids: boundMaintenanceSchemeIds,
                     });
                     messageApi.success(t('app.kuaizhizao.equipmentOps.schemeBindings.saveSuccess'));
                   } catch (error: any) {
@@ -498,8 +544,10 @@ const EquipmentDetailPage: React.FC = () => {
     detailColumns,
     equipmentListCustomFields,
     equipmentDetailCustomFieldValues,
-    schemeSelectOptions,
-    boundSchemeIds,
+    spotSchemeSelectOptions,
+    maintenanceSchemeSelectOptions,
+    boundSpotSchemeIds,
+    boundMaintenanceSchemeIds,
     schemeBindingsSaving,
     equipmentTracking,
     opsTabItems,

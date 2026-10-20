@@ -4138,6 +4138,18 @@ class ApprovalInstanceService:
                 request=SendMessageRequest(**req_kwargs),
             )
 
+        if str(variables.get("message_category") or "") == "approval":
+            from core.services.messaging.approval_wecom_push_service import schedule_approval_wecom_push
+
+            schedule_approval_wecom_push(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                subject=subject,
+                content=content,
+                variables=variables,
+                trigger_action=trigger_action,
+            )
+
     @staticmethod
     async def _send_cc_notification(
         tenant_id: int,

@@ -168,6 +168,10 @@ async def get_department_tree(
             children_count=item.get("children_count", 0),
             user_count=item.get("user_count", 0),
             position_count=item.get("position_count", 0),
+            created_at=item["created_at"],
+            updated_at=item["updated_at"],
+            created_by_name=item.get("created_by_name"),
+            updated_by_name=item.get("updated_by_name"),
             children=children,
         )
     

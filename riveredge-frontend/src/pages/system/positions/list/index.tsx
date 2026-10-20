@@ -13,10 +13,8 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { App, Popconfirm, Button, Space, message, Modal, Table } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag } from '../../utils/systemListPresentation';
-import {
-  UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
-  UNI_TABLE_SITE_DATETIME_COLUMN_DEFAULTS,
-} from '../../../../utils/uniTableLayoutColumns';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
+import { buildDocumentAuditColumns } from '../../../../apps/kuaizhizao/pages/shared/documentAuditColumns';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
@@ -285,28 +283,7 @@ const PositionListPage: React.FC = () => {
       render: (_, record) =>
         renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 180,
-      minWidth: 180,
-      uniTableKeepWidth: true,
-      resizable: false,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 180,
-      minWidth: 180,
-      uniTableKeepWidth: true,
-      resizable: false,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
+    ...buildDocumentAuditColumns<Position>(t),
     {
       title: t('common.actions'),
       key: 'action',
@@ -326,7 +303,7 @@ const PositionListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Position>
-          columnPersistenceId="pages.system.positions.list-v3"
+          columnPersistenceId="pages.system.positions.list-v4"
           viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.positions')}
           actionRef={actionRef}

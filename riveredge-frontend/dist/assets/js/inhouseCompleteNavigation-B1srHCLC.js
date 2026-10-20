@@ -1,0 +1,1 @@
+const n="/apps/haoligo/molds/documents/upkeep-complete",t="/apps/haoligo/molds/documents/repair-complete",s="source_maintenance_sheet_id";function E(e){return e==="保养"?n:t}function a(e,o){return`${E(o)}?${s}=${e}`}export{s as I,a as b};

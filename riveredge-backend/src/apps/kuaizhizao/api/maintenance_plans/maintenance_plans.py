@@ -7,7 +7,7 @@ Author: Luigi Lu
 Date: 2026-01-05
 """
 
-from typing import Optional
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
@@ -49,12 +49,27 @@ async def create_maintenance_plan(
             data=data,
             created_by=current_user.id
         )
-        return MaintenancePlanResponse.model_validate(plan)
+        return await MaintenancePlanService.build_maintenance_plan_response(plan)
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
         )
+
+
+@router.get("/scheme-bound-equipment", response_model=List[dict[str, Any]])
+async def list_scheme_bound_equipment(
+    maintenance_scheme_id: int = Query(..., ge=1, description="保养方案ID"),
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(soil_get_current_user),
+):
+    """保养方案已绑定设备（供计划表单预载）。"""
+    await MaintenancePlanService._resolve_maintenance_scheme(
+        tenant_id, maintenance_scheme_id
+    )
+    return await MaintenancePlanService._list_bound_equipment(
+        tenant_id, maintenance_scheme_id
+    )
 
 
 @router.get("", response_model=MaintenancePlanListResponse)

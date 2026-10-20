@@ -205,6 +205,13 @@ export const maintenancePlanApi = {
     return apiRequest(`/apps/kuaizhizao/maintenance-plans/${uuid}`, { method: 'GET' });
   },
 
+  listSchemeBoundEquipment: async (maintenanceSchemeId: number) => {
+    return apiRequest('/apps/kuaizhizao/maintenance-plans/scheme-bound-equipment', {
+      method: 'GET',
+      params: { maintenance_scheme_id: maintenanceSchemeId },
+    });
+  },
+
   // 执行维护保养
   execute: async (data: any) => {
     return apiRequest('/apps/kuaizhizao/maintenance-plans/executions', { method: 'POST', data });

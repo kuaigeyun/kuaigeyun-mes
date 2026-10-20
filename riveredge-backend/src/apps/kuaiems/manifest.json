@@ -111,7 +111,7 @@
             ]
           },
           {
-            "title": "app.kuaiems.menu.group.equipment-docs",
+            "title": "app.kuaiems.menu.group.equipment-docs-inspection",
             "sort_order": 2,
             "children": [
               {
@@ -128,37 +128,23 @@
                 "title": "app.kuaizhizao.menu.equipment-management.route-patrols",
                 "path": "/apps/kuaizhizao/equipment-management/route-patrols",
                 "permission": "kuaizhizao:equipment-route-patrol:read",
-                "sort_order": 4,
+                "sort_order": 2,
                 "meta": {
                   "node": "equipment_route_patrol",
                   "module": "equipment"
                 }
-              },
-              {
-                "title": "app.kuaizhizao.menu.equipment-management.equipment-faults",
-                "path": "/apps/kuaizhizao/equipment-management/equipment-faults",
-                "permission": "kuaizhizao:equipment-fault:read",
-                "sort_order": 5,
-                "meta": {
-                  "node": "equipment_fault",
-                  "module": "equipment"
-                }
-              },
-              {
-                "title": "app.kuaizhizao.menu.equipment-management.equipment-repairs",
-                "path": "/apps/kuaizhizao/equipment-management/equipment-repairs",
-                "permission": "kuaizhizao:equipment-fault:read",
-                "sort_order": 6,
-                "meta": {
-                  "node": "equipment_repair",
-                  "module": "equipment"
-                }
-              },
+              }
+            ]
+          },
+          {
+            "title": "app.kuaiems.menu.group.equipment-docs-maintenance",
+            "sort_order": 3,
+            "children": [
               {
                 "title": "app.kuaizhizao.menu.equipment-management.maintenance-plans",
                 "path": "/apps/kuaizhizao/equipment-management/maintenance-plans",
                 "permission": "kuaizhizao:maintenance-plan:read",
-                "sort_order": 7,
+                "sort_order": 1,
                 "meta": {
                   "node": "maintenance_plan",
                   "module": "equipment"
@@ -168,7 +154,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.maintenance-plan-calendar",
                 "path": "/apps/kuaizhizao/equipment-management/maintenance-plan-calendar",
                 "permission": "kuaizhizao:maintenance-plan:read",
-                "sort_order": 8,
+                "sort_order": 2,
                 "meta": {
                   "node": "maintenance_plan_calendar",
                   "module": "equipment"
@@ -178,7 +164,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.maintenance-executions",
                 "path": "/apps/kuaizhizao/equipment-management/maintenance-executions",
                 "permission": "kuaizhizao:maintenance-plan:read",
-                "sort_order": 9,
+                "sort_order": 3,
                 "meta": {
                   "node": "maintenance_execution",
                   "module": "equipment"
@@ -188,17 +174,49 @@
                 "title": "app.kuaizhizao.menu.equipment-management.maintenance-reminders",
                 "path": "/apps/kuaizhizao/equipment-management/maintenance-reminders",
                 "permission": "kuaizhizao:maintenance-reminder:read",
-                "sort_order": 10,
+                "sort_order": 4,
                 "meta": {
                   "node": "maintenance_reminder",
                   "module": "equipment"
                 }
+              }
+            ]
+          },
+          {
+            "title": "app.kuaiems.menu.group.equipment-docs-repair",
+            "sort_order": 4,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.equipment-faults",
+                "path": "/apps/kuaizhizao/equipment-management/equipment-faults",
+                "permission": "kuaizhizao:equipment-fault:read",
+                "sort_order": 1,
+                "meta": {
+                  "node": "equipment_fault",
+                  "module": "equipment"
+                }
               },
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.equipment-repairs",
+                "path": "/apps/kuaizhizao/equipment-management/equipment-repairs",
+                "permission": "kuaizhizao:equipment-fault:read",
+                "sort_order": 2,
+                "meta": {
+                  "node": "equipment_repair",
+                  "module": "equipment"
+                }
+              }
+            ]
+          },
+          {
+            "title": "app.kuaiems.menu.group.equipment-docs-operations",
+            "sort_order": 5,
+            "children": [
               {
                 "title": "app.kuaizhizao.menu.equipment-management.spare-part-requisitions",
                 "path": "/apps/kuaizhizao/equipment-management/spare-part-requisitions",
                 "permission": "kuaizhizao:spare-part-requisition:read",
-                "sort_order": 11,
+                "sort_order": 1,
                 "meta": {
                   "node": "spare_part_requisition",
                   "module": "equipment"
@@ -208,7 +226,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-transfers",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-transfers",
                 "permission": "kuaizhizao:equipment-transfer:read",
-                "sort_order": 12,
+                "sort_order": 2,
                 "meta": {
                   "node": "equipment_transfer",
                   "module": "equipment"
@@ -218,7 +236,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-scrap",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-scrap",
                 "permission": "kuaizhizao:equipment-scrap:read",
-                "sort_order": 13,
+                "sort_order": 3,
                 "meta": {
                   "node": "equipment_scrap",
                   "module": "equipment"
@@ -228,7 +246,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-calibrations",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-calibrations",
                 "permission": "kuaizhizao:equipment-calibration:read",
-                "sort_order": 14,
+                "sort_order": 4,
                 "meta": {
                   "node": "equipment_calibration",
                   "module": "equipment"
@@ -238,7 +256,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-acceptances",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-acceptances",
                 "permission": "kuaizhizao:equipment-acceptance:read",
-                "sort_order": 15,
+                "sort_order": 5,
                 "meta": {
                   "node": "equipment_acceptance",
                   "module": "equipment"
@@ -248,7 +266,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-line-rebinds",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-line-rebinds",
                 "permission": "kuaizhizao:equipment-line-rebind:read",
-                "sort_order": 16,
+                "sort_order": 6,
                 "meta": {
                   "node": "equipment_line_rebind",
                   "module": "equipment"
@@ -258,7 +276,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-status",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-status",
                 "permission": "kuaizhizao:equipment-status:read",
-                "sort_order": 17,
+                "sort_order": 7,
                 "meta": {
                   "node": "equipment_status",
                   "module": "equipment"
@@ -268,7 +286,7 @@
           },
           {
             "title": "app.kuaiems.menu.group.equipment-reports",
-            "sort_order": 3,
+            "sort_order": 6,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.equipment-maintenance-detail",
@@ -373,7 +391,7 @@
             ]
           },
           {
-            "title": "app.kuaiems.menu.group.mold-docs",
+            "title": "app.kuaiems.menu.group.mold-docs-lending",
             "sort_order": 2,
             "children": [
               {
@@ -405,12 +423,18 @@
                   "node": "mold_return",
                   "module": "equipment"
                 }
-              },
+              }
+            ]
+          },
+          {
+            "title": "app.kuaiems.menu.group.mold-docs-maintenance",
+            "sort_order": 3,
+            "children": [
               {
                 "title": "app.kuaizhizao.menu.equipment-management.mold-maintenances",
                 "path": "/apps/kuaizhizao/equipment-management/mold-maintenances",
                 "permission": "kuaizhizao:mold-maintenance:read",
-                "sort_order": 4,
+                "sort_order": 1,
                 "meta": {
                   "node": "mold_maintenance",
                   "module": "equipment"
@@ -420,19 +444,9 @@
                 "title": "app.kuaizhizao.menu.equipment-management.mold-repairs",
                 "path": "/apps/kuaizhizao/equipment-management/mold-repairs",
                 "permission": "kuaizhizao:mold-repair:read",
-                "sort_order": 5,
+                "sort_order": 2,
                 "meta": {
                   "node": "mold_repair",
-                  "module": "equipment"
-                }
-              },
-              {
-                "title": "app.kuaizhizao.menu.equipment-management.mold-calibrations",
-                "path": "/apps/kuaizhizao/equipment-management/mold-calibrations",
-                "permission": "kuaizhizao:mold-calibration:read",
-                "sort_order": 6,
-                "meta": {
-                  "node": "mold_calibration",
                   "module": "equipment"
                 }
               },
@@ -440,9 +454,25 @@
                 "title": "app.kuaizhizao.menu.equipment-management.mold-maintenance-reminders",
                 "path": "/apps/kuaizhizao/equipment-management/mold-maintenance-reminders",
                 "permission": "kuaizhizao:mold-maintenance-reminder:read",
-                "sort_order": 7,
+                "sort_order": 3,
                 "meta": {
                   "node": "mold_maintenance_reminder",
+                  "module": "equipment"
+                }
+              }
+            ]
+          },
+          {
+            "title": "app.kuaiems.menu.group.mold-docs-disposal",
+            "sort_order": 4,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.mold-calibrations",
+                "path": "/apps/kuaizhizao/equipment-management/mold-calibrations",
+                "permission": "kuaizhizao:mold-calibration:read",
+                "sort_order": 1,
+                "meta": {
+                  "node": "mold_calibration",
                   "module": "equipment"
                 }
               },
@@ -450,7 +480,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.mold-scrap-applications",
                 "path": "/apps/kuaizhizao/equipment-management/mold-scrap-applications",
                 "permission": "kuaizhizao:mold-scrap:read",
-                "sort_order": 8,
+                "sort_order": 2,
                 "meta": {
                   "node": "mold_scrap",
                   "module": "equipment"
@@ -460,7 +490,7 @@
           },
           {
             "title": "app.kuaiems.menu.group.mold-reports",
-            "sort_order": 3,
+            "sort_order": 5,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.mold-trial-records",
@@ -559,7 +589,7 @@
             ]
           },
           {
-            "title": "app.kuaiems.menu.group.tool-docs",
+            "title": "app.kuaiems.menu.group.tool-docs-lending",
             "sort_order": 2,
             "children": [
               {
@@ -581,12 +611,18 @@
                   "node": "tool_return",
                   "module": "equipment"
                 }
-              },
+              }
+            ]
+          },
+          {
+            "title": "app.kuaiems.menu.group.tool-docs-maintenance",
+            "sort_order": 3,
+            "children": [
               {
                 "title": "app.kuaizhizao.menu.equipment-management.tool-maintenances",
                 "path": "/apps/kuaizhizao/equipment-management/tool-maintenances",
                 "permission": "kuaizhizao:tool-maintenance:read",
-                "sort_order": 3,
+                "sort_order": 1,
                 "meta": {
                   "node": "tool_maintenance",
                   "module": "equipment"
@@ -596,19 +632,9 @@
                 "title": "app.kuaizhizao.menu.equipment-management.tool-repairs",
                 "path": "/apps/kuaizhizao/equipment-management/tool-repairs",
                 "permission": "kuaizhizao:tool-repair:read",
-                "sort_order": 4,
+                "sort_order": 2,
                 "meta": {
                   "node": "tool_repair",
-                  "module": "equipment"
-                }
-              },
-              {
-                "title": "app.kuaizhizao.menu.equipment-management.tool-calibrations",
-                "path": "/apps/kuaizhizao/equipment-management/tool-calibrations",
-                "permission": "kuaizhizao:tool-calibration:read",
-                "sort_order": 5,
-                "meta": {
-                  "node": "tool_calibration",
                   "module": "equipment"
                 }
               },
@@ -616,9 +642,25 @@
                 "title": "app.kuaizhizao.menu.equipment-management.tool-maintenance-reminders",
                 "path": "/apps/kuaizhizao/equipment-management/tool-maintenance-reminders",
                 "permission": "kuaizhizao:tool-maintenance-reminder:read",
-                "sort_order": 6,
+                "sort_order": 3,
                 "meta": {
                   "node": "tool_maintenance_reminder",
+                  "module": "equipment"
+                }
+              }
+            ]
+          },
+          {
+            "title": "app.kuaiems.menu.group.tool-docs-disposal",
+            "sort_order": 4,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.equipment-management.tool-calibrations",
+                "path": "/apps/kuaizhizao/equipment-management/tool-calibrations",
+                "permission": "kuaizhizao:tool-calibration:read",
+                "sort_order": 1,
+                "meta": {
+                  "node": "tool_calibration",
                   "module": "equipment"
                 }
               },
@@ -626,7 +668,7 @@
                 "title": "app.kuaizhizao.menu.equipment-management.tool-scrap-applications",
                 "path": "/apps/kuaizhizao/equipment-management/tool-scrap-applications",
                 "permission": "kuaizhizao:tool-scrap:read",
-                "sort_order": 7,
+                "sort_order": 2,
                 "meta": {
                   "node": "tool_scrap",
                   "module": "equipment"
@@ -636,7 +678,7 @@
           },
           {
             "title": "app.kuaiems.menu.group.tool-reports",
-            "sort_order": 3,
+            "sort_order": 5,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.tool-calibration-alerts",
@@ -699,7 +741,7 @@
             ]
           },
           {
-            "title": "app.kuaiems.menu.group.measuring-instrument-docs",
+            "title": "app.kuaiems.menu.group.measuring-instrument-docs-calibration",
             "sort_order": 2,
             "children": [
               {

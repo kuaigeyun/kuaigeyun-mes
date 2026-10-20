@@ -156,6 +156,10 @@ class RoleService:
             if existing_position:
                 create_position = False
 
+        from core.utils.model_audit import load_audit_fields_for_create, load_audit_fields_for_update
+
+        create_audit = await load_audit_fields_for_create(tenant_id, current_user_id)
+
         async with in_transaction():
             role = await Role.create(
                 tenant_id=tenant_id,
@@ -168,6 +172,7 @@ class RoleService:
                 home_path=home_path,
                 is_active=data.is_active if data.is_active is not None else True,
                 is_system=False,  # 系统角色只能由系统创建
+                **create_audit,
             )
             if create_position:
                 await PositionService.create_position(
@@ -588,6 +593,12 @@ class RoleService:
                 raw_domain,
             )
         for key, value in update_data.items():
+            setattr(role, key, value)
+
+        from core.utils.model_audit import load_audit_fields_for_update
+
+        audit = await load_audit_fields_for_update(tenant_id, current_user_id)
+        for key, value in audit.items():
             setattr(role, key, value)
         
         await role.save()

@@ -52,6 +52,86 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.antd-charts-vite-prebundle-504-r01.description',
   },
   {
+    id: 'approval-pending-wecom-push-r01',
+    date: '2026-10-19',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-pending-wecom-push-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-pending-wecom-push-r01.description',
+  },
+  {
+    id: 'purchase-requisition-save-submit-branch-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-branch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-branch-r01.description',
+  },
+  {
+    id: 'purchase-requisition-auto-name-r01',
+    date: '2026-10-19',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-auto-name-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-auto-name-r01.description',
+  },
+  {
+    id: 'org-master-data-audit-write-backfill-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.org-master-data-audit-write-backfill-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.org-master-data-audit-write-backfill-r01.description',
+  },
+  {
+    id: 'system-user-mgmt-audit-fields-api-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.system-user-mgmt-audit-fields-api-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.system-user-mgmt-audit-fields-api-r01.description',
+  },
+  {
+    id: 'system-user-mgmt-list-audit-column-r01',
+    date: '2026-10-19',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.system-user-mgmt-list-audit-column-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.system-user-mgmt-list-audit-column-r01.description',
+  },
+  {
+    id: 'drawing-balloon-sheet-lines-audit-r01',
+    date: '2026-10-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.drawing-balloon-sheet-lines-audit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-balloon-sheet-lines-audit-r01.description',
+  },
+  {
+    id: 'kuaiems-menu-functional-groups-r01',
+    date: '2026-10-19',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiems-menu-functional-groups-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiems-menu-functional-groups-r01.description',
+  },
+  {
+    id: 'maintenance-plan-equipment-preload-r01',
+    date: '2026-10-19',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.maintenance-plan-equipment-preload-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.maintenance-plan-equipment-preload-r01.description',
+  },
+  {
     id: 'data-backup-restore-id-align-r01',
     date: '2026-10-19',
     type: 'fix',

@@ -37,7 +37,9 @@ class MaintenancePlanService:
     """
     维护保养计划服务类
 
-    设备 / 维护类型 / 周期真源：保养方案 + EquipmentSchemeBinding(scheme_type=maintenance)。
+    维护类型 / 周期真源：保养方案。
+    本计划设备范围真源：MaintenancePlan.equipment_items（创建/编辑时勾选写入）。
+    方案绑定 EquipmentSchemeBinding 仅作表单预载池。
     """
 
     @staticmethod
@@ -101,6 +103,91 @@ class MaintenancePlanService:
         return items
 
     @staticmethod
+    def stored_plan_equipment_items(plan: MaintenancePlan) -> List[dict[str, Any]]:
+        raw = plan.equipment_items
+        if not isinstance(raw, list) or not raw:
+            return []
+        items: list[dict[str, Any]] = []
+        seen: set[int] = set()
+        for row in raw:
+            if not isinstance(row, dict):
+                continue
+            eid = int(row.get("id") or 0)
+            eu = str(row.get("uuid") or "").strip()
+            if eid <= 0 and not eu:
+                continue
+            if eid > 0 and eid in seen:
+                continue
+            if eid > 0:
+                seen.add(eid)
+            items.append(
+                {
+                    "id": eid if eid > 0 else None,
+                    "uuid": eu or None,
+                    "code": row.get("code"),
+                    "name": row.get("name"),
+                }
+            )
+        return items
+
+    @staticmethod
+    def _apply_equipment_snapshots(
+        plan: MaintenancePlan, items: List[dict[str, Any]]
+    ) -> None:
+        plan.equipment_items = items
+        if items:
+            first = items[0]
+            plan.equipment_id = int(first.get("id") or 0) or None
+            plan.equipment_uuid = str(first.get("uuid") or "") or None
+            name = str(first.get("name") or "")
+            plan.equipment_name = (
+                name if len(items) == 1 else f"{name} 等{len(items)}台"
+            )
+        else:
+            plan.equipment_id = None
+            plan.equipment_uuid = None
+            plan.equipment_name = None
+
+    @staticmethod
+    async def _resolve_equipment_scope(
+        tenant_id: int,
+        scheme_id: int,
+        equipment_uuids: List[str],
+    ) -> List[dict[str, Any]]:
+        uuids = list(dict.fromkeys(str(u).strip() for u in equipment_uuids if str(u).strip()))
+        if not uuids:
+            raise ValidationError("请至少选择一台设备")
+
+        pool = await MaintenancePlanService._list_bound_equipment(tenant_id, scheme_id)
+        pool_uuids = {str(item.get("uuid")) for item in pool if item.get("uuid")}
+        rows = await Equipment.filter(
+            tenant_id=tenant_id,
+            uuid__in=uuids,
+            deleted_at__isnull=True,
+        ).all()
+        by_uuid = {str(r.uuid): r for r in rows}
+        if len(by_uuid) != len(uuids):
+            raise ValidationError("所选设备不存在或已停用")
+
+        items: list[dict[str, Any]] = []
+        for eu in uuids:
+            if eu not in pool_uuids:
+                equip = by_uuid[eu]
+                raise ValidationError(
+                    f"设备未绑定所选保养方案: {equip.code or equip.name or eu}"
+                )
+            equip = by_uuid[eu]
+            items.append(
+                {
+                    "id": equip.id,
+                    "uuid": equip.uuid,
+                    "code": equip.code,
+                    "name": equip.name,
+                }
+            )
+        return items
+
+    @staticmethod
     def _apply_scheme_snapshots(
         plan: MaintenancePlan, scheme: EquipmentMaintenanceScheme
     ) -> None:
@@ -117,27 +204,21 @@ class MaintenancePlanService:
         from apps.kuaizhizao.schemas.maintenance_plan import MaintenancePlanResponse
 
         resp = MaintenancePlanResponse.model_validate(plan)
-        scheme_id = plan.maintenance_scheme_id
-        bound: List[dict[str, Any]] = []
-        if scheme_id:
-            bound = await MaintenancePlanService._list_bound_equipment(
-                plan.tenant_id, int(scheme_id)
-            )
+        bound = MaintenancePlanService.stored_plan_equipment_items(plan)
         resp.bound_equipment_count = len(bound)
         resp.equipment_items = bound
         resp.equipment_uuids = [str(item["uuid"]) for item in bound if item.get("uuid")]
         if bound:
-            resp.equipment_id = bound[0]["id"]
-            resp.equipment_uuid = bound[0]["uuid"]
+            resp.equipment_id = bound[0].get("id")
+            resp.equipment_uuid = bound[0].get("uuid")
+            first_name = str(bound[0].get("name") or "")
             resp.equipment_name = (
-                bound[0]["name"]
-                if len(bound) == 1
-                else f"{bound[0]['name']} 等{len(bound)}台"
+                first_name if len(bound) == 1 else f"{first_name} 等{len(bound)}台"
             )
         else:
-            resp.equipment_id = None
-            resp.equipment_uuid = None
-            resp.equipment_name = None
+            resp.equipment_id = plan.equipment_id
+            resp.equipment_uuid = plan.equipment_uuid
+            resp.equipment_name = plan.equipment_name
         return resp
 
     @staticmethod
@@ -147,15 +228,21 @@ class MaintenancePlanService:
         created_by: Optional[int] = None
     ) -> MaintenancePlan:
         """
-        创建维护计划（必绑保养方案；设备/类型/周期取自方案与绑定）。
+        创建维护计划（必绑保养方案；设备范围写入 equipment_items）。
         """
         try:
             payload = data.model_dump(exclude_none=True)
+            equipment_uuids = payload.pop("equipment_uuids", None)
             scheme_id = payload.get("maintenance_scheme_id")
             if scheme_id is None:
                 raise ValidationError("请绑定保养方案")
             scheme = await MaintenancePlanService._resolve_maintenance_scheme(
                 tenant_id, int(scheme_id)
+            )
+            if not equipment_uuids:
+                raise ValidationError("请至少选择一台设备")
+            equipment_items = await MaintenancePlanService._resolve_equipment_scope(
+                tenant_id, int(scheme_id), list(equipment_uuids)
             )
 
             plan_no = str(payload.get("plan_no") or "").strip()
@@ -179,10 +266,7 @@ class MaintenancePlanService:
                 **payload,
             )
             MaintenancePlanService._apply_scheme_snapshots(plan, scheme)
-            plan.equipment_id = None
-            plan.equipment_uuid = None
-            plan.equipment_name = None
-            plan.equipment_items = None
+            MaintenancePlanService._apply_equipment_snapshots(plan, equipment_items)
             actor = None
             if created_by is not None:
                 actor = await User.filter(id=created_by, tenant_id=tenant_id).first()
@@ -265,24 +349,12 @@ class MaintenancePlanService:
             deleted_at__isnull=True
         )
         
-        # 按设备筛：走保养方案绑定（与点检计划一致）
+        # 按设备筛：本计划 equipment_items 须包含该设备
         if equipment_uuid:
-            equipment = await Equipment.filter(
-                tenant_id=tenant_id,
-                uuid=equipment_uuid,
-                deleted_at__isnull=True,
-            ).first()
-            if not equipment:
+            eu = str(equipment_uuid).strip()
+            if not eu:
                 return [], 0
-            scheme_ids = await EquipmentSchemeBinding.filter(
-                tenant_id=tenant_id,
-                equipment_id=equipment.id,
-                scheme_type="maintenance",
-                deleted_at__isnull=True,
-            ).values_list("scheme_id", flat=True)
-            if not scheme_ids:
-                return [], 0
-            query = query.filter(maintenance_scheme_id__in=list(scheme_ids))
+            query = query.filter(equipment_items__contains=[{"uuid": eu}])
         if status:
             query = query.filter(status=status)
         if plan_type:
@@ -357,20 +429,42 @@ class MaintenancePlanService:
         plan = await MaintenancePlanService.get_maintenance_plan_by_uuid(tenant_id, uuid)
 
         update_data = data.model_dump(exclude_unset=True, exclude_none=True)
-        # 设备/类型/周期不再接受计划侧写入
-        update_data.pop("equipment_uuids", None)
+        equipment_uuids = update_data.pop("equipment_uuids", None)
         update_data.pop("equipment_uuid", None)
         update_data.pop("maintenance_type", None)
         update_data.pop("cycle_type", None)
         update_data.pop("cycle_value", None)
         update_data.pop("cycle_unit", None)
 
+        scheme_changed = False
         if "maintenance_scheme_id" in update_data:
             scheme = await MaintenancePlanService._resolve_maintenance_scheme(
                 tenant_id, int(update_data["maintenance_scheme_id"])
             )
             MaintenancePlanService._apply_scheme_snapshots(plan, scheme)
             update_data.pop("maintenance_scheme_id")
+            scheme_changed = True
+
+        if equipment_uuids is not None:
+            scheme_id = plan.maintenance_scheme_id
+            if not scheme_id:
+                raise ValidationError("请绑定保养方案")
+            items = await MaintenancePlanService._resolve_equipment_scope(
+                tenant_id, int(scheme_id), list(equipment_uuids)
+            )
+            MaintenancePlanService._apply_equipment_snapshots(plan, items)
+        elif scheme_changed:
+            scheme_id = plan.maintenance_scheme_id
+            if not scheme_id:
+                raise ValidationError("请绑定保养方案")
+            bound = await MaintenancePlanService._list_bound_equipment(
+                tenant_id, int(scheme_id)
+            )
+            if not bound:
+                raise ValidationError(
+                    "该保养方案暂无绑定设备，请先在设备台账绑定保养方案"
+                )
+            MaintenancePlanService._apply_equipment_snapshots(plan, bound)
 
         for key, value in update_data.items():
             setattr(plan, key, value)

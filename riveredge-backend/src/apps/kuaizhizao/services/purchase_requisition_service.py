@@ -50,6 +50,11 @@ from apps.kuaizhizao.services.document_action_policy.purchase_requisition import
     _can_push_downstream,
 )
 
+def _default_requisition_name(requisition_code: str) -> str:
+    code = (requisition_code or "").strip()
+    return f"采购申请-{code}" if code else "采购申请"
+
+
 PURCHASE_REQUISITION_SORTABLE_FIELDS = frozenset({
     "requisition_code",
     "requisition_name",
@@ -106,7 +111,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             req = await PurchaseRequisition.create(
                 tenant_id=tenant_id,
                 requisition_code=data.requisition_code,
-                requisition_name=data.requisition_name or f"采购申请-{data.requisition_code}",
+                requisition_name=_default_requisition_name(data.requisition_code),
                 status="草稿",
                 requisition_date=req_date,
                 applicant_id=applicant_id,
@@ -790,6 +795,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         if update_data:
             from core.services.document_code_service import pop_and_apply_code_change_from_update_dict
 
+            update_data.pop("requisition_name", None)
             await pop_and_apply_code_change_from_update_dict(
                 tenant_id,
                 "kuaizhizao-purchase-requisition",
@@ -797,6 +803,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 update_data,
                 "requisition_code",
             )
+            final_code = (update_data.get("requisition_code") or req.requisition_code or "").strip()
+            update_data["requisition_name"] = _default_requisition_name(final_code)
             user_info = await self.get_user_info(updated_by)
             if update_data:
                 await req.update_from_dict({
