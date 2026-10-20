@@ -1,0 +1,1 @@
+import{n as s,U as t}from"./notificationRuleRecipientFields-CgPZoO2C.js";function c(i,r,e){return s(i).find(n=>n?.enabled!==!1&&String(n?.trigger_document||"").trim()===r&&String(n?.trigger_action||"").trim()===e)}function f(i){return i?(Array.isArray(i.recipient_scopes)?i.recipient_scopes.map(e=>String(e)):[]).includes(t):!1}export{c as f,f as n};
