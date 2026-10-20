@@ -1,1 +1,0 @@
-import{N as a}from"./vendor-DI7aG5Ju.js";import{av as o,aw as t,ax as s}from"./main-CwNudr4p.js";function O(e){const{token:r}=a.useToken(),n=o();return e??(n?.zIndex!=null?n.zIndex+t:r.zIndexPopupBase+s)}export{O as u};

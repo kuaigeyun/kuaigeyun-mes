@@ -1,0 +1,1 @@
+import{j as d}from"./vendor-BLytCsNx.js";import{al as s,O as i}from"./main-kBTCsdLe.js";function x({sourceType:e,sourceId:o,sourceCode:t,emptyText:n="-",copyable:r=!0,ellipsis:m=!0,style:u}){const c=s(e);return d.jsx(i,{documentType:c,documentId:o,code:t,emptyText:n,copyable:r,ellipsis:m,style:u})}export{x as S};

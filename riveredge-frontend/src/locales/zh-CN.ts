@@ -31518,6 +31518,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.antd-charts-vite-prebundle-504-r01.title':
+    '修复平台看板图表加载失败',
+  'pages.dashboard.updateLog.entries.antd-charts-vite-prebundle-504-r01.description':
+    '开发态将图表库纳入 Vite 预构建，避免冷启动按需打包超时导致看板白屏；图表懒加载失败时只降级图表区，不再拖垮整页。',
   'pages.dashboard.updateLog.entries.data-backup-restore-id-align-r01.title':
     '修复数据备份恢复后关联 ID 对不上',
   'pages.dashboard.updateLog.entries.data-backup-restore-id-align-r01.description':

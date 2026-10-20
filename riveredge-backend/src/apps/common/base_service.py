@@ -10,7 +10,6 @@ Date: 2025-01-01
 from typing import Type, TypeVar, Generic, Optional, List, Any, Dict
 from datetime import datetime
 from tortoise.models import Model
-from tortoise.transactions import in_transaction
 from loguru import logger
 
 from core.services.base import BaseService
@@ -29,7 +28,6 @@ class AppBaseService(BaseService[T]):
     提供应用级服务的通用功能：
     - 统一的代码生成
     - 统一的用户信息获取
-    - 统一的事务管理
     - 统一的CRUD操作（带租户隔离）
     """
 
@@ -321,22 +319,3 @@ class AppBaseService(BaseService[T]):
             await record.delete()
 
         return True
-
-    # ==================== 事务管理装饰器 ====================
-
-    @staticmethod
-    def with_transaction(func):
-        """
-        事务管理装饰器
-
-        自动为方法添加事务管理
-
-        Usage:
-            @AppBaseService.with_transaction
-            async def my_method(self, ...):
-                ...
-        """
-        async def wrapper(*args, **kwargs):
-            async with in_transaction():
-                return await func(*args, **kwargs)
-        return wrapper

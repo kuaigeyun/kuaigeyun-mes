@@ -67,6 +67,14 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.mrp-work-order-bom-snapshot-r01.description',
   },
   {
+    id: 'antd-charts-vite-prebundle-504-r01',
+    date: '2026-10-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.antd-charts-vite-prebundle-504-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.antd-charts-vite-prebundle-504-r01.description',
+  },
+  {
     id: 'approval-pending-wecom-push-r01',
     date: '2026-10-19',
     type: 'feature',

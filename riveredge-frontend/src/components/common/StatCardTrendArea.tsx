@@ -5,7 +5,8 @@
  * P5-4/12：Area 动态加载，避免壳层/列表父 chunk 静态绑 @ant-design/charts；
  * useMemo 依赖用 data 引用（调用方保证不可变），去掉 JSON.stringify。
  */
-import React, { Suspense, useMemo } from 'react';
+import React, { useMemo } from 'react';
+import { ChartSuspense, LazyArea } from './lazyAntCharts';
 
 export type StatCardTrendPoint = { date: string; value: number };
 export type StatCardTrendData = number[] | StatCardTrendPoint[];
@@ -44,10 +45,6 @@ function normalizeTrendData(data: StatCardTrendData): StatCardTrendPoint[] {
   }));
 }
 
-const LazyArea = React.lazy(() =>
-  import('@ant-design/charts').then((m) => ({ default: m.Area })),
-);
-
 export interface StatCardTrendAreaProps {
   data: StatCardTrendData;
   color?: string;
@@ -69,7 +66,7 @@ export const StatCardTrendArea: React.FC<StatCardTrendAreaProps> = ({
         minHeight: 56,
       }}
     >
-      <Suspense fallback={null}>
+      <ChartSuspense fallback={null}>
         <LazyArea
           data={chartData}
           xField="date"
@@ -86,7 +83,7 @@ export const StatCardTrendArea: React.FC<StatCardTrendAreaProps> = ({
           }}
           autoFit
         />
-      </Suspense>
+      </ChartSuspense>
     </div>
   );
 };

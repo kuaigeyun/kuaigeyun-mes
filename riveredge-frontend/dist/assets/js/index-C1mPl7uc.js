@@ -1,1 +1,0 @@
-import{j as t}from"./vendor-DI7aG5Ju.js";function i(r){return r==null?"":typeof r=="string"||typeof r=="number"||typeof r=="boolean"?String(r).trim():""}const s=({value:r,emptyText:e="-"})=>{const n=i(r);return n?t.jsx(t.Fragment,{children:n}):t.jsx(t.Fragment,{children:e})};export{s as M};
