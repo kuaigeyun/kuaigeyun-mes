@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'antd-charts-vite-prebundle-504-r01',
+    date: '2026-10-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.antd-charts-vite-prebundle-504-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.antd-charts-vite-prebundle-504-r01.description',
+  },
+  {
     id: 'data-backup-restore-id-align-r01',
     date: '2026-10-19',
     type: 'fix',

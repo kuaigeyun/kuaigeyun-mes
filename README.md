@@ -167,7 +167,7 @@
 
 ## ✨ 快速开始
 
-环境要求：Node.js 22+、Python 3.12+（运行时由 uv 锁定 3.11）、PostgreSQL 15+、Caddy（生产）；默认无需 Redis。
+环境要求：Node.js 22+、Python 3.11（由 uv.lock 锁定）、PostgreSQL 15+、Caddy（生产）；默认无需 Redis。
 
 ```bash
 # Gitee（国内推荐）
@@ -217,7 +217,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 | **推荐配置** | 中小团队生产、日常业务与报表       | 4 核+ | 8 GB+ | 50 GB+ SSD（含数据库、附件与日志余量） |
 
 
-**软件环境（与快速开始一致）**：Node.js 22+、Python 3.12+（运行时由 uv 锁定 3.11）、PostgreSQL 15+；生产模式需 Caddy。**不需要 Redis。**
+**软件环境（与快速开始一致）**：Node.js 22+、Python 3.11（由 uv.lock 锁定）、PostgreSQL 15+；生产模式需 Caddy。**不需要 Redis。**
 
 > 内存 ≤2 GB 的云主机易在 Taskiq 启动阶段因 swap 变慢，部署脚本可自动创建 swap；更稳妥请按**推荐配置**或启用 [低配模式](fast-deploy/README.md) 说明。
 

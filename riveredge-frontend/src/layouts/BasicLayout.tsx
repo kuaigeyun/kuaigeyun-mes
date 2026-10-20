@@ -119,13 +119,15 @@ import { UniImHeaderButton } from '../components/uni-im/UniImHeaderButton';
 import { LinkedDocumentDetailProvider } from '../components/linked-document-detail';
 import MenuSyncPrompt from '../components/menu-sync-prompt';
 import { RouteTransition } from '../components/route-transition';
-const TenantBootstrapModal = React.lazy(() => import('../components/tenant-bootstrap-modal'));
+import { lazyWithRetry } from '../utils/lazyWithRetry';
+import ErrorBoundary from '../components/error-boundary';
+const TenantBootstrapModal = lazyWithRetry(() => import('../components/tenant-bootstrap-modal'));
 /** AI 助手按需加载，避免动画/AntX 栈进入启动主图 */
-const AiAssistant = React.lazy(() => import('../components/ai-assistant'));
+const AiAssistant = lazyWithRetry(() => import('../components/ai-assistant'));
 /** 主题编辑只在第一次打开时加载，关闭态不进首屏 */
-const ThemeEditor = React.lazy(() => import('../components/theme-editor'));
-/** 消息窗口只在第一次打开时加载；顶栏按钮仍立即可用 */
-const UniImPanel = React.lazy(() => import('../components/uni-im/UniImDock'));
+const ThemeEditor = lazyWithRetry(() => import('../components/theme-editor'));
+/** 消息窗口只在第一次打开时加载；顶栏按钮仍立即可用。失败可重建 lazy 实例重试。 */
+const loadUniImPanel = () => lazyWithRetry(() => import('../components/uni-im/UniImDock'));
 import { getTenantById, getPackageConfigs } from '../services/tenant';
 import { getToken, clearAuth, getTenantId } from '../utils/auth';
 import { resolveIsInfraSuperAdminSession } from '../utils/infraSuperAdminSession';
@@ -1090,6 +1092,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [uniImOpen, setUniImOpen] = useState(false);
   const [uniImMinimized, setUniImMinimized] = useState(false);
   const [uniImEverOpened, setUniImEverOpened] = useState(false);
+  const [UniImPanel, setUniImPanel] = useState(loadUniImPanel);
+  const [uniImPanelKey, setUniImPanelKey] = useState(0);
   const openUniIm = useCallback(() => {
     setUniImEverOpened(true);
     setUniImMinimized(false);
@@ -1098,6 +1102,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const closeUniIm = useCallback(() => {
     setUniImOpen(false);
     setUniImMinimized(false);
+  }, []);
+  const retryUniImPanel = useCallback(() => {
+    setUniImPanel(loadUniImPanel());
+    setUniImPanelKey((key) => key + 1);
+    setUniImEverOpened(true);
+    setUniImMinimized(false);
+    setUniImOpen(true);
   }, []);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
 
@@ -3593,18 +3604,43 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       {/* 组织管理员：菜单结构变更时征求同意后再同步 */}
       <MenuSyncPrompt />
 
-      {/* UNI-IM：顶栏入口 + 右下角弹窗（非独立路由） */}
+      {/* UNI-IM：顶栏入口 + 右下角弹窗（非独立路由）；局部错误边界避免拖垮整页 */}
       {uniImEverOpened ? (
         <LinkedDocumentDetailProvider>
-          <React.Suspense fallback={null}>
-            <UniImPanel
-              open={uniImOpen}
-              minimized={uniImMinimized}
-              onMinimizedChange={setUniImMinimized}
-              onClose={closeUniIm}
-              hasKuAiEntry={hasAiAssistantEntry}
-            />
-          </React.Suspense>
+          <ErrorBoundary
+            key={uniImPanelKey}
+            fallback={
+              <div
+                style={{
+                  position: 'fixed',
+                  right: 24,
+                  bottom: 24,
+                  zIndex: 1200,
+                  padding: '12px 14px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  background: '#fff',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                  maxWidth: 320,
+                }}
+              >
+                <div style={{ marginBottom: 8 }}>消息窗口加载失败</div>
+                <Button type="primary" size="small" onClick={retryUniImPanel}>
+                  重试
+                </Button>
+              </div>
+            }
+          >
+            <React.Suspense fallback={null}>
+              <UniImPanel
+                open={uniImOpen}
+                minimized={uniImMinimized}
+                onMinimizedChange={setUniImMinimized}
+                onClose={closeUniIm}
+                hasKuAiEntry={hasAiAssistantEntry}
+              />
+            </React.Suspense>
+          </ErrorBoundary>
         </LinkedDocumentDetailProvider>
       ) : null}
 
