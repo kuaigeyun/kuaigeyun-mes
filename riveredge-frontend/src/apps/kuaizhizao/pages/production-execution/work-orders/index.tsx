@@ -199,6 +199,16 @@ import {
   generateOrdersFromComputation,
   type PushPreview,
 } from '../../../services/demand-computation'
+import {
+  DirectPushBomVersionFields,
+  type DirectPushBomMaterialRow,
+  type DirectPushBomParams,
+} from '../../../components/direct-push-bom-version/DirectPushBomVersionFields'
+import {
+  buildDirectPushBomPayload,
+  defaultMaterialBomVersionsFromRows,
+  loadDirectPushBomMaterials,
+} from '../../../components/direct-push-bom-version/loadDirectPushBomMaterials'
 import { operationApi, processRouteApi, unwrapProcessPagedList } from '../../../../master-data/services/process'
 import { productProcessApi } from '../../../../master-data/services/productProcess'
 import {
@@ -1673,6 +1683,9 @@ const WorkOrdersPage: React.FC = () => {
   const [soPullWorkCenterLoading, setSoPullWorkCenterLoading] = useState(false)
   const [soPullMode, setSoPullMode] = useState<'draft' | 'confirm'>('draft')
   const [soPullGranularity, setSoPullGranularity] = useState<'grouped' | 'peer_group'>('grouped')
+  const [soPullBomParams, setSoPullBomParams] = useState<DirectPushBomParams>({})
+  const [soPullBomMaterials, setSoPullBomMaterials] = useState<DirectPushBomMaterialRow[]>([])
+  const [soPullBomMaterialsLoading, setSoPullBomMaterialsLoading] = useState(false)
 
   const [notifyInboundPreviewOpen, setNotifyInboundPreviewOpen] = useState(false)
   const [notifyInboundPreviewLoading, setNotifyInboundPreviewLoading] = useState(false)
@@ -3072,6 +3085,9 @@ const WorkOrdersPage: React.FC = () => {
     setSoPullWorkCenters({})
     setSoPullMode('draft')
     setSoPullGranularity('grouped')
+    setSoPullBomParams({})
+    setSoPullBomMaterials([])
+    setSoPullBomMaterialsLoading(false)
   }, [])
 
   const ensureSoPullWorkCenters = useCallback(async () => {
@@ -3099,6 +3115,8 @@ const WorkOrdersPage: React.FC = () => {
       setSoPullWorkCenters({})
       setSoPullMode('draft')
       setSoPullGranularity('grouped')
+      setSoPullBomParams({})
+      setSoPullBomMaterials([])
       try {
         const [res] = await Promise.all([
           previewPushSalesOrderToWorkOrder(salesOrderId),
@@ -3117,6 +3135,18 @@ const WorkOrdersPage: React.FC = () => {
         setSoPullSelectedItemIds(ids)
         setSoPullQuantities(qtyMap)
         if (res.push_mode_default === 'confirm') setSoPullMode('confirm')
+        if (res.bom_multi_version_allowed) {
+          setSoPullBomMaterialsLoading(true)
+          void loadDirectPushBomMaterials(res.items || [])
+            .then((loaded) => {
+              setSoPullBomMaterials(loaded)
+              const defaults = defaultMaterialBomVersionsFromRows(loaded)
+              if (Object.keys(defaults).length > 0) {
+                setSoPullBomParams({ material_bom_versions: defaults })
+              }
+            })
+            .finally(() => setSoPullBomMaterialsLoading(false))
+        }
       } catch (e: any) {
         messageApi.error(e?.message || e?.response?.data?.detail || t('app.kuaizhizao.workOrder.soPullPreviewFailed'))
         resetSoPullPreview()
@@ -3172,12 +3202,14 @@ const WorkOrdersPage: React.FC = () => {
     }
     setSoPullPreviewConfirming(true)
     try {
+      const bomPayload = buildDirectPushBomPayload(soPullBomParams)
       const res = await pushSalesOrderToWorkOrder(soPullSourceId, {
         push_mode: soPullMode,
         work_order_granularity: soPullGranularity,
         selected_item_ids: selectedIds,
         selected_quantities: selectedQuantities,
         selected_work_centers: selectedWorkCenters,
+        ...bomPayload,
       })
       const count = Number(res?.target_documents?.length ?? 0)
       messageApi.success(
@@ -8986,6 +9018,20 @@ const WorkOrdersPage: React.FC = () => {
                 />
               </Space>
             </div>
+            {soPullPreviewData.bom_multi_version_allowed ? (
+              soPullBomMaterialsLoading ? (
+                <div style={{ marginBottom: 12 }}>
+                  <Spin size="small" /> {t('app.kuaizhizao.salesOrder.directPushBomLoading')}
+                </div>
+              ) : (
+                <DirectPushBomVersionFields
+                  enabled
+                  materials={soPullBomMaterials}
+                  value={soPullBomParams}
+                  onChange={setSoPullBomParams}
+                />
+              )
+            ) : null}
             {soPullPreviewData.items?.length > 0 ? (
               <Table
                 size="small"

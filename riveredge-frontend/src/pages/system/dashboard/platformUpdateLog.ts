@@ -44,6 +44,29 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'approval-previous-approver-bridge-r01',
+    date: '2026-10-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-previous-approver-bridge-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-previous-approver-bridge-r01.description',
+  },
+  {
+    id: 'sales-direct-push-bom-r01',
+    date: '2026-10-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-direct-push-bom-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-direct-push-bom-r01.description',
+  },
+  {
+    id: 'mrp-work-order-bom-snapshot-r01',
+    date: '2026-10-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mrp-work-order-bom-snapshot-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mrp-work-order-bom-snapshot-r01.description',
+  },
+  {
     id: 'approval-pending-wecom-push-r01',
     date: '2026-10-19',
     type: 'feature',

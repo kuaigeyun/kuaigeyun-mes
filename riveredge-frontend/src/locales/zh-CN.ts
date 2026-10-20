@@ -13849,6 +13849,7 @@ export default {
   'app.kuaizhizao.workOrder.colProduct': '产品',
   'app.kuaizhizao.workOrder.colProductCode': '产品编号',
   'app.kuaizhizao.workOrder.colProductName': '产品名称',
+  'app.kuaizhizao.workOrder.colProductBomVersion': 'BOM版本',
   'app.kuaizhizao.workOrder.colProductWorkOrder': '产品/工单',
   'app.kuaizhizao.workOrder.colProductWorkOrderCode': '产品 / 工单编号',
   'app.kuaizhizao.workOrder.colProductionMode': '生产模式',
@@ -42381,6 +42382,10 @@ export default {
   'app.kuaizhizao.salesOrder.returnWarehouseIdPlaceholder': '退货仓库ID',
   'app.kuaizhizao.salesOrder.returnWarehouseNamePlaceholder': '退货仓库名称（可选）',
   'app.kuaizhizao.salesOrder.returnQty': '退货数量',
+  'app.kuaizhizao.salesOrder.directPushBomSectionTitle': 'BOM 版本（可选）',
+  'app.kuaizhizao.salesOrder.directPushBomSectionHint':
+    '与需求计算一致：可为本单产品指定 BOM 版本；留空则各物料使用默认版本。下推后将锁定到工单。',
+  'app.kuaizhizao.salesOrder.directPushBomLoading': '正在加载 BOM 版本…',
   'app.kuaizhizao.salesOrder.pushModeLabel': '下推模式：',
   'app.kuaizhizao.salesOrder.pushModeDraft': '草稿下推',
   'app.kuaizhizao.salesOrder.pushModeConfirm': '正式下推',
@@ -44244,6 +44249,18 @@ export default {
     '试流单研发项目支持关联或手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.description':
     '新建试流单时研发项目与产品固件、样品加工一致：可从列表选择项目，也可直接手填项目代号（无需先建项目档案）。',
+  'pages.dashboard.updateLog.entries.mrp-work-order-bom-snapshot-r01.title':
+    '需求计算下推工单锁定 BOM 版本',
+  'pages.dashboard.updateLog.entries.mrp-work-order-bom-snapshot-r01.description':
+    '从需求计算下推生产工单时，将计算所用的全局/按物料 BOM 版本写入工单并在齐套、缺料与领料上限展开中沿用；工单详情展示成品 BOM 版本。已下推的历史工单不受影响，需重新下推或手工对齐。',
+  'pages.dashboard.updateLog.entries.approval-previous-approver-bridge-r01.title':
+    '修复「上一节点人员」分支在首审即报错',
+  'pages.dashboard.updateLog.entries.approval-previous-approver-bridge-r01.description':
+    '条件分支设为上一节点人员选择时，若中间还有空审批人自动跳过的节点，现由当前有人的审批节点先选分支再审核通过，不再在首审推进时提示禁止默认跳转。',
+  'pages.dashboard.updateLog.entries.sales-direct-push-bom-r01.title':
+    '销售订单直推工单可选 BOM 版本',
+  'pages.dashboard.updateLog.entries.sales-direct-push-bom-r01.description':
+    '销售订单直推工单预览在启用多版本 BOM 时可按订单行产品指定 BOM 版本，下推后写入工单快照，与需求计算下推一致用于齐套与领料展开。',
   'pages.dashboard.updateLog.entries.approval-pending-wecom-push-r01.title':
     '审批待办同步推送企业微信',
   'pages.dashboard.updateLog.entries.approval-pending-wecom-push-r01.description':

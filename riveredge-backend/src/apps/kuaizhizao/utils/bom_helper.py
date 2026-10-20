@@ -281,6 +281,9 @@ async def calculate_material_requirements_from_bom(
     variant_attributes: Optional[Dict[str, Any]] = None,
     configurable_selections: Optional[Dict[str, int]] = None,
     for_kitting_analysis: bool = False,
+    bom_version: Optional[str] = None,
+    use_default_bom: bool = False,
+    material_bom_versions: Optional[Dict[int, str]] = None,
 ) -> List[Any]:
     """
     根据BOM计算物料需求（从master_data）
@@ -314,6 +317,9 @@ async def calculate_material_requirements_from_bom(
         configurable_selections=configurable_selections,
         as_of_date=as_of_date,
         flatten_intermediate_subassemblies=for_kitting_analysis,
+        bom_version=bom_version,
+        use_default_bom=use_default_bom,
+        material_bom_versions=material_bom_versions,
     )
 
     if expanded:

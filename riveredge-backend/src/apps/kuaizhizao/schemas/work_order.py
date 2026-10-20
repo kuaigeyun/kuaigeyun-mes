@@ -90,6 +90,12 @@ class WorkOrderBase(BaseSchema):
     qualified_quantity: Decimal = Field(Decimal("0"), description="合格数量")
     unqualified_quantity: Decimal = Field(Decimal("0"), description="不合格数量")
 
+    # MRP 下推 BOM 快照
+    bom_id: Optional[int] = Field(None, description="下推时锁定的成品 BOM 头 ID")
+    bom_version: Optional[str] = Field(None, max_length=20, description="需求计算全局 BOM 版本")
+    material_bom_versions: Optional[dict] = Field(None, description="按物料 BOM 版本快照")
+    product_bom_version: Optional[str] = Field(None, max_length=20, description="本工单成品实际 BOM 版本")
+
     # 配置件属性
     variant_attributes: Optional[dict] = Field(None, description="属性（配置件专用）")
     configurable_selections: Optional[dict] = Field(None, description="配置位选择（BOM配置位，格式 {\"parentMaterialId_configurableGroupId\": componentId}）")

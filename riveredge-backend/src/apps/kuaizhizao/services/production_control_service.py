@@ -430,10 +430,13 @@ class ProductionControlService:
                 # 模拟逻辑：如果新订单拿走了物料，victim 本来不缺的现在缺了，即为受影响
                 # 此处由于是模拟，我们只标识“物料冲突”类型
                 # (实际生产环境需要更精细的库存分配预演)
+                from apps.kuaizhizao.utils.mrp_bom_snapshot import bom_expand_kwargs_from_work_order
+
                 v_requirements = await calculate_material_requirements_from_bom(
                     tenant_id=tenant_id,
                     material_id=victim.product_id,
-                    required_quantity=float(victim.quantity)
+                    required_quantity=float(victim.quantity),
+                    **bom_expand_kwargs_from_work_order(victim),
                 )
                 
                 conflicts = [r["material_code"] for r in v_requirements if r["material_id"] in used_material_ids]

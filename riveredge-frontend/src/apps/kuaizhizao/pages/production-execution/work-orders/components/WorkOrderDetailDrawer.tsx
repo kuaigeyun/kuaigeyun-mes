@@ -247,6 +247,14 @@ export const WorkOrderDetailDrawer: React.FC<WorkOrderDetailDrawerProps> = ({
         { title: t('app.kuaizhizao.workOrder.colName'), dataIndex: 'name', key: 'work_order_name' },
         { title: t('app.kuaizhizao.workOrder.colProductCode'), dataIndex: 'product_code' },
         { title: t('app.kuaizhizao.workOrder.colProductName'), dataIndex: 'product_name' },
+        {
+          title: t('app.kuaizhizao.workOrder.colProductBomVersion'),
+          dataIndex: 'product_bom_version',
+          render: (_, record) => {
+            const v = String(record.product_bom_version ?? '').trim();
+            return v || '—';
+          },
+        },
         { title: t('app.kuaizhizao.workOrder.colPlannedQty'), dataIndex: 'quantity', key: 'total_quantity' },
         {
           title: t('app.kuaizhizao.workOrder.colBatchNo'),

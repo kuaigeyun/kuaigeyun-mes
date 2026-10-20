@@ -1185,7 +1185,9 @@ class ApprovalInstanceService:
             graph = normalize_flow_graph(process.nodes or {})
             cur = get_node_config(graph, instance.current_node)
             if cur and cur.get("type") == "approval":
-                spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, cur)
+                spec = await ApprovalInstanceService._resolve_decision_on_approve_spec_for_instance(
+                    tenant_id, graph, cur, instance
+                )
                 if spec and spec.get("field"):
                     current_node_decision = {
                         "field": str(spec.get("field")),
@@ -2533,6 +2535,7 @@ class ApprovalInstanceService:
         process = instance.process if instance else None
         if process and action_data.action == "approve":
             await ApprovalInstanceService._apply_decision_on_approve(
+                tenant_id,
                 instance,
                 task.node_id,
                 process.nodes,
@@ -2907,6 +2910,32 @@ class ApprovalInstanceService:
     ) -> List[ApprovalTask]:
         """空审批人且策略为 auto_pass：记历史并推进到下一节点（或直接通过）。"""
         node_id = node.get("id")
+        nodes_config = (instance.process.nodes or {}) if instance.process else {}
+        next_structural = ApprovalInstanceService._get_next_node(
+            nodes_config, node_id, instance=None
+        )
+        if next_structural and next_structural.get("type") == "condition":
+            edges = [
+                e
+                for e in (nodes_config.get("edges") or [])
+                if isinstance(e, dict) and str(e.get("source") or "") == str(next_structural.get("id"))
+            ]
+            route_mode = ApprovalInstanceService._condition_node_route_mode(
+                next_structural, out_edge_count=len(edges)
+            )
+            if route_mode == "previous_approver":
+                inst_data = instance.data if isinstance(instance.data, dict) else {}
+                if ApprovalInstanceService._read_branch_edge_index(
+                    inst_data,
+                    str(next_structural.get("id") or ""),
+                    len(edges) or 2,
+                ) is None:
+                    node_label = ApprovalInstanceService._node_display_label(node) or str(node_id)
+                    cond_label = ApprovalInstanceService._node_display_label(next_structural) or "后续分支"
+                    raise ValidationError(
+                        f"节点「{node_label}」无审批人，无法自动跳过："
+                        f"须由上一节点审批人在审核时选择「{cond_label}」，禁止默认跳转"
+                    )
         await ApprovalInstanceService._create_approval_history(
             tenant_id=tenant_id,
             approval_instance_id=instance.id,
@@ -3504,7 +3533,122 @@ class ApprovalInstanceService:
         return inferred
 
     @staticmethod
+    def _condition_out_edge_count(graph: Dict[str, Any], condition_node_id: str) -> int:
+        return len(
+            [
+                e
+                for e in (graph.get("edges") or [])
+                if isinstance(e, dict) and str(e.get("source") or "") == str(condition_node_id)
+            ]
+        )
+
+    @staticmethod
+    def _branch_already_chosen_for_condition(
+        inst_data: Optional[Dict[str, Any]],
+        condition_node_id: str,
+        branch_count: int,
+    ) -> bool:
+        return (
+            ApprovalInstanceService._read_branch_edge_index(
+                inst_data if isinstance(inst_data, dict) else {},
+                str(condition_node_id),
+                branch_count,
+            )
+            is not None
+        )
+
+    @staticmethod
+    async def _node_would_auto_pass_when_empty(
+        tenant_id: int,
+        node: dict,
+        instance: ApprovalInstance,
+    ) -> bool:
+        node_data = node.get("data") if isinstance(node.get("data"), dict) else {}
+        approver_type = str(
+            (node_data or {}).get("approverType")
+            or (node_data or {}).get("approver_type")
+            or "user"
+        ).strip().lower()
+        empty_policy = str(
+            (node_data or {}).get("emptyApproverPolicy")
+            or (node_data or {}).get("empty_approver_policy")
+            or "block"
+        ).strip().lower()
+        if approver_type == "multi_level_manager" and empty_policy == "block":
+            empty_policy = "auto_pass"
+        try:
+            approvers = await ApprovalInstanceService._resolve_node_approvers(node, instance)
+        except ValidationError as resolve_err:
+            err_text = str(resolve_err)
+            is_empty_approver = any(
+                token in err_text
+                for token in (
+                    "无可用",
+                    "未配置",
+                    "缺少",
+                    "直属部门",
+                    "部门未配置",
+                    "向上第",
+                )
+            )
+            return bool(is_empty_approver and empty_policy == "auto_pass")
+        if not approvers:
+            return empty_policy == "auto_pass"
+        return False
+
+    @staticmethod
+    async def _resolve_decision_on_approve_spec_for_instance(
+        tenant_id: int,
+        graph: Dict[str, Any],
+        approval_node: dict,
+        instance: ApprovalInstance,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        当前审批节点是否须选 previous_approver 分支。
+        若紧接下一审批节点会空审批人自动跳过且再后为条件节点，则分支由本节点审批人选择。
+        """
+        inst_data = instance.data if isinstance(instance.data, dict) else {}
+        spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, approval_node)
+        if spec:
+            cond_id = str(spec.get("conditionNodeId") or "")
+            if cond_id and ApprovalInstanceService._branch_already_chosen_for_condition(
+                inst_data,
+                cond_id,
+                ApprovalInstanceService._condition_out_edge_count(graph, cond_id) or 2,
+            ):
+                return None
+            return spec
+
+        node_id = str(approval_node.get("id") or "")
+        if not node_id:
+            return None
+        bridge = ApprovalInstanceService._get_next_node(graph, node_id, instance=None)
+        if not bridge or bridge.get("type") != "approval":
+            return None
+        if not await ApprovalInstanceService._node_would_auto_pass_when_empty(
+            tenant_id, bridge, instance
+        ):
+            return None
+        cond = ApprovalInstanceService._get_next_node(
+            graph, str(bridge.get("id") or ""), instance=None
+        )
+        if not cond or cond.get("type") != "condition":
+            return None
+        inferred = ApprovalInstanceService._infer_decision_spec_from_condition_node(graph, cond)
+        if not inferred:
+            return None
+        cond_id = str(cond.get("id") or "")
+        if cond_id and ApprovalInstanceService._branch_already_chosen_for_condition(
+            inst_data,
+            cond_id,
+            ApprovalInstanceService._condition_out_edge_count(graph, cond_id) or 2,
+        ):
+            return None
+        return inferred
+
+    @staticmethod
     async def _apply_decision_on_approve(
+        tenant_id: int,
         instance: ApprovalInstance,
         node_id: Optional[str],
         process_nodes: Any,
@@ -3521,7 +3665,9 @@ class ApprovalInstanceService:
         node = get_node_config(graph, str(node_id))
         if not node or node.get("type") != "approval":
             return
-        spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, node)
+        spec = await ApprovalInstanceService._resolve_decision_on_approve_spec_for_instance(
+            tenant_id, graph, node, instance
+        )
         if not spec:
             return
         field = str(spec.get("field") or "").strip()

@@ -78,6 +78,16 @@ import {
   ratioToPushProgressPercent,
 } from '../shared/DocumentPushProgressBar';
 import { collectSalesOrderPushDocuments } from '../shared/pushProgress';
+import {
+  DirectPushBomVersionFields,
+  type DirectPushBomMaterialRow,
+  type DirectPushBomParams,
+} from '../../../components/direct-push-bom-version/DirectPushBomVersionFields';
+import {
+  buildDirectPushBomPayload,
+  defaultMaterialBomVersionsFromRows,
+  loadDirectPushBomMaterials,
+} from '../../../components/direct-push-bom-version/loadDirectPushBomMaterials';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
 import {
   SalesOrderPaymentMilestonesFields,
@@ -1948,6 +1958,9 @@ const SalesOrdersPage: React.FC = () => {
   const [workCenterListLoading, setWorkCenterListLoading] = useState(false);
   const [workOrderPushMode, setWorkOrderPushMode] = useState<'draft' | 'confirm'>('draft');
   const [workOrderGranularity, setWorkOrderGranularity] = useState<'grouped' | 'peer_group'>('grouped');
+  const [workOrderBomParams, setWorkOrderBomParams] = useState<DirectPushBomParams>({});
+  const [workOrderBomMaterials, setWorkOrderBomMaterials] = useState<DirectPushBomMaterialRow[]>([]);
+  const [workOrderBomMaterialsLoading, setWorkOrderBomMaterialsLoading] = useState(false);
   const [pushShipmentNoticeWarehouseOptions, setPushShipmentNoticeWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
   const [pushShipmentNoticeLineWh, setPushShipmentNoticeLineWh] = useState<Record<number, number>>({});
   const [pushReturnLineBatch, setPushReturnLineBatch] = useState<Record<number, string>>({});
@@ -1990,6 +2003,9 @@ const SalesOrdersPage: React.FC = () => {
     setWorkOrderSelectedWorkCenters({});
     setWorkOrderPushMode('draft');
     setWorkOrderGranularity('grouped');
+    setWorkOrderBomParams({});
+    setWorkOrderBomMaterials([]);
+    setWorkOrderBomMaterialsLoading(false);
     setPushShipmentNoticeWarehouseOptions([]);
     setPushShipmentNoticeLineWh({});
     setPushReturnLineBatch({});
@@ -2048,6 +2064,18 @@ const SalesOrdersPage: React.FC = () => {
           if (res.target_type === 'work_order') {
             const defaultMode = res.push_mode_default === 'confirm' ? 'confirm' : 'draft';
             setWorkOrderPushMode(defaultMode);
+            if (res.bom_multi_version_allowed) {
+              setWorkOrderBomMaterialsLoading(true);
+              void loadDirectPushBomMaterials(rows as PushPreviewResponse['items'])
+                .then((loaded) => {
+                  setWorkOrderBomMaterials(loaded);
+                  const defaults = defaultMaterialBomVersionsFromRows(loaded);
+                  if (Object.keys(defaults).length > 0) {
+                    setWorkOrderBomParams({ material_bom_versions: defaults });
+                  }
+                })
+                .finally(() => setWorkOrderBomMaterialsLoading(false));
+            }
           }
           if (res.target_type === 'shipment_notice' || res.target_type === 'sales_delivery' || res.target_type === 'sales_return') {
             void masterWarehouseApi.list({ is_active: true, limit: 500 }).then((whRes) => {
@@ -2157,6 +2185,7 @@ const SalesOrdersPage: React.FC = () => {
           messageApi.warning(t('app.kuaizhizao.salesOrder.masterDataMissingForConfirmPush'));
           return;
         }
+        const bomPayload = buildDirectPushBomPayload(workOrderBomParams);
         await pushPreviewAction.doPush({
           push_mode: workOrderPushMode,
           work_order_granularity: workOrderGranularity,
@@ -2164,6 +2193,7 @@ const SalesOrdersPage: React.FC = () => {
           selected_quantities: selectedQuantities,
           selected_work_centers: selectedWorkCenters,
           selected_item_remarks: selectedItemRemarks,
+          ...bomPayload,
         });
       } else if (pushPreviewData.target_type === 'shipment_notice') {
         const rows = (pushPreviewData.items || []).filter((row: any) => Number(row?.item_id) > 0);
@@ -6560,6 +6590,20 @@ const SalesOrdersPage: React.FC = () => {
                 style={{ marginBottom: 8 }}
                 title={t('app.kuaizhizao.salesOrder.masterDataMissingAlert')}
               />
+            ) : null}
+            {pushPreviewData.target_type === 'work_order' && pushPreviewData.bom_multi_version_allowed ? (
+              workOrderBomMaterialsLoading ? (
+                <div style={{ marginBottom: 12 }}>
+                  <Spin size="small" /> {t('app.kuaizhizao.salesOrder.directPushBomLoading')}
+                </div>
+              ) : (
+                <DirectPushBomVersionFields
+                  enabled
+                  materials={workOrderBomMaterials}
+                  value={workOrderBomParams}
+                  onChange={setWorkOrderBomParams}
+                />
+              )
             ) : null}
             {pushPreviewData.target_type === 'work_order' && pushPreviewData.items?.length > 0 ? (
               <Table

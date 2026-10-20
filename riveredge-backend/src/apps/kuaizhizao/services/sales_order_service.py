@@ -4544,6 +4544,8 @@ class SalesOrderService:
         selected_item_remarks: Optional[Dict[int, str]] = None,
         work_order_granularity: Optional[str] = None,
         push_mode: Optional[str] = None,
+        bom_version: Optional[str] = None,
+        material_bom_versions: Optional[Dict[Any, Any]] = None,
     ) -> Dict[str, Any]:
         """
         直推销售订单到工单（跳过需求计算）。
@@ -4635,6 +4637,25 @@ class SalesOrderService:
         raw_granularity = (work_order_granularity or "").strip().lower()
         if raw_granularity not in ("grouped", "peer_group"):
             raw_granularity = "grouped"
+
+        bom_multi_allowed = await self.business_config_service.get_bom_multi_version_allowed(
+            tenant_id
+        )
+        bom_params: Dict[str, Any] = {}
+        if bom_multi_allowed:
+            from apps.kuaizhizao.utils.mrp_bom_snapshot import normalize_material_bom_versions
+
+            mbv = normalize_material_bom_versions(material_bom_versions)
+            if bom_version and str(bom_version).strip():
+                bom_params["bom_version"] = str(bom_version).strip()
+            if mbv:
+                bom_params["material_bom_versions"] = mbv
+
+        seed_material_ids = {
+            int(getattr(it, "material_id", 0) or 0)
+            for it in items
+            if getattr(it, "material_id", None)
+        }
 
         from datetime import datetime
         from apps.kuaizhizao.services.work_order_service import WorkOrderService
@@ -4732,11 +4753,19 @@ class SalesOrderService:
             else:
                 line_remarks = (getattr(it, "notes", None) or "").strip() or None
 
+            from apps.kuaizhizao.utils.mrp_bom_snapshot import resolve_mrp_version_for_material
+
+            root_version, root_use_default = resolve_mrp_version_for_material(
+                bom_params or None,
+                material_id,
+                seed_material_ids=seed_material_ids,
+            )
             bom = await get_bom_by_material_id(
                 tenant_id=tenant_id,
                 material_id=it.material_id,
                 only_approved=True,
-                use_default=True,
+                version=root_version,
+                use_default=root_use_default if not root_version else False,
             )
             material_row = await Material.get_or_none(
                 tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
@@ -4766,16 +4795,24 @@ class SalesOrderService:
                     cfg_selections = getattr(it, "configurable_selections", None)
                     if cfg_selections and isinstance(cfg_selections, dict):
                         cfg_selections = {k: int(v) if v is not None else v for k, v in cfg_selections.items()}
-                    requirements = await expand_bom_with_source_control(
+                    expand_kw: Dict[str, Any] = dict(
                         tenant_id=tenant_id,
                         material_id=it.material_id,
                         required_quantity=qty,
                         only_approved=True,
-                        use_default_bom=True,
                         variant_attributes=variant_attrs,
                         configurable_selections=cfg_selections,
                         flatten_intermediate_subassemblies=True,
                     )
+                    if bom_params:
+                        expand_kw["bom_version"] = bom_params.get("bom_version")
+                        expand_kw["use_default_bom"] = False
+                        expand_kw["material_bom_versions"] = bom_params.get(
+                            "material_bom_versions"
+                        )
+                    else:
+                        expand_kw["use_default_bom"] = True
+                    requirements = await expand_bom_with_source_control(**expand_kw)
                     for req in requirements:
                         st = req.get("source_type")
                         if st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
@@ -4824,6 +4861,14 @@ class SalesOrderService:
                 delivery_date=info.get("earliest_delivery"),
                 today=to_site_date(resolve_business_datetime()),
             )
+            from apps.kuaizhizao.utils.mrp_bom_snapshot import build_bom_snapshot_from_params
+
+            bom_snap = await build_bom_snapshot_from_params(
+                tenant_id,
+                bom_params or None,
+                int(info["material_id"]),
+                seed_material_ids=seed_material_ids,
+            )
             wo_data = WorkOrderCreate(
                 code_rule="WORK_ORDER_CODE",
                 product_id=info["material_id"],
@@ -4839,6 +4884,10 @@ class SalesOrderService:
                 planned_start_date=planned_start_date,
                 planned_end_date=planned_end_date,
                 remarks=custom_remarks or default_remarks,
+                bom_id=bom_snap.get("bom_id"),
+                bom_version=bom_snap.get("bom_version"),
+                material_bom_versions=bom_snap.get("material_bom_versions"),
+                product_bom_version=bom_snap.get("product_bom_version"),
             )
             wo = await work_order_service.create_work_order(
                 tenant_id=tenant_id,
@@ -5173,6 +5222,7 @@ class SalesOrderService:
             preview_items.append(
                 {
                     "item_id": item_id,
+                    "material_id": mid,
                     "material_code": material_code,
                     "material_name": material_name,
                     "quantity": float(qty),
@@ -5200,6 +5250,9 @@ class SalesOrderService:
             "items": preview_items,
             "has_blocking_issues": has_blocking_issues,
             "push_mode_default": await self.business_config_service.get_push_default_mode(tenant_id),
+            "bom_multi_version_allowed": await self.business_config_service.get_bom_multi_version_allowed(
+                tenant_id
+            ),
             "tip": (
                 "确认后将按所选数量下推工单；系统会按 BOM 展开成品/半成品工单。"
                 "仓库现存量供参考；「其他销售占用」为除本单外有效销售订单未交付量（锁单口径），"

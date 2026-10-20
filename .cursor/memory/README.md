@@ -32,6 +32,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 生产入库待入库筛出退料、待退料混入 | `features/inbound-hub-pending-excludes-returns.md` |
 | 返工单起始工序不显示、返工报工起始工序 | `features/rework-order-start-operation-display.md` |
 | 生产工单二次拆分、列表看不到子单、拆分子单进度串、拆分完工进度 0% | `features/work-order-nested-split-list-tree.md` |
+| 需求计算 BOM 版本、下推工单 BOM 不一致、MRP 齐套版本 | `features/mrp-work-order-bom-snapshot.md` |
 | 追溯报告导出、Maximum call stack、桑基图爆栈、快制造应用加载错误 | `features/traceability-sankey-stack-overflow.md` |
 | 工位字被裁、看不清、ellipsis、中区滚不动 | `features/station-hmi-info-visibility.md` |
 | 移动端 S2 门禁、代报 assign、仓储 confirm、tokenRefresh 误登出 | `features/mobile-v2-s2-contract-fixes.md` |
@@ -222,6 +223,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/inbound-hub-pending-excludes-returns.md` | 入库 Hub 待入库不含退料退货 | warehouse | 已交付 |
 | `features/rework-order-start-operation-display.md` | 返工起始工序列表/报工展示 | mes-production | 已交付 |
 | `features/work-order-nested-split-list-tree.md` | 生产工单多级拆分列表树 | mes-production | 已交付 |
+| `features/mrp-work-order-bom-snapshot.md` | MRP 下推工单 BOM 版本快照 | mes-plan | 已交付 |
 | `features/inventory-sync-empty-batch-no.md` | 即时库存同步空批号落空串 | sync-from-source | 已交付 |
 | `features/sync-push-hub-master-data.md` | 物料/BOM/工序 SyncPushHub + 外推 | sync-push | 已交付 |
 | `features/sync-from-source-multi-source-merge.md` | 入站多源：只补缺字段 + 匹配键合并 | sync-from-source | 已交付 |

@@ -503,6 +503,7 @@ export interface PushPreviewResponse {
   has_blocking_issues?: boolean;
   blocking_reason?: string | null;
   push_mode_default?: 'draft' | 'confirm';
+  bom_multi_version_allowed?: boolean;
   line_warehouse_required?: boolean;
   warehouse_required?: boolean;
   warehouse_id?: number;
@@ -856,6 +857,8 @@ export interface PushToWorkOrderRequest {
   selected_quantities?: Record<number, number>;
   selected_work_centers?: Record<number, number>;
   selected_item_remarks?: Record<number, string>;
+  bom_version?: string;
+  material_bom_versions?: Record<number, string>;
 }
 
 export async function pushSalesOrderToWorkOrder(

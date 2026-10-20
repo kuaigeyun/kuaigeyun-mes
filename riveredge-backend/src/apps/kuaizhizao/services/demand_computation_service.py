@@ -3356,6 +3356,13 @@ class DemandComputationService(AppBaseService):
             schedule_direction=schedule_direction,
         )
 
+        seed_material_ids = {
+            int(getattr(di, "material_id", 0) or 0)
+            for di in demand_items
+            if getattr(di, "material_id", None)
+        }
+        from apps.kuaizhizao.utils.mrp_bom_snapshot import resolve_mrp_item_bom_fields
+
         for material_id, pending in results_by_material.items():
             peg = pegging_rows.get(material_id) or {}
             production_start_date = peg.get("production_start_date", pending["production_start_date"])
@@ -3383,12 +3390,21 @@ class DemandComputationService(AppBaseService):
                 ),
             )
 
+            item_bom_id, item_bom_version = await resolve_mrp_item_bom_fields(
+                tenant_id,
+                computation,
+                int(material_id),
+                seed_material_ids=seed_material_ids,
+            )
+
             await DemandComputationItem.create(
                 tenant_id=tenant_id,
                 computation_id=computation.id,
                 material_id=material_id,
                 material_code=pending["material_code"],
                 material_name=pending["material_name"],
+                bom_id=item_bom_id,
+                bom_version=item_bom_version,
                 material_spec=pending["material_spec"],
                 material_unit=pending["material_unit"],
                 required_quantity=mrp_qty(pending["gross_requirement"]),
@@ -6678,6 +6694,11 @@ class DemandComputationService(AppBaseService):
                 if is_outsource:
                     remarks += "（委外工单）"
 
+            from apps.kuaizhizao.utils.mrp_bom_snapshot import build_mrp_bom_snapshot_for_material
+
+            bom_snap = await build_mrp_bom_snapshot_for_material(
+                tenant_id, computation, int(item.material_id)
+            )
             work_order_data = WorkOrderCreate(
                 code_rule="WORK_ORDER_CODE",
                 product_id=item.material_id,
@@ -6689,6 +6710,10 @@ class DemandComputationService(AppBaseService):
                 planned_start_date=planned_start_date,
                 planned_end_date=planned_end_date,
                 remarks=remarks,
+                bom_id=bom_snap.get("bom_id"),
+                bom_version=bom_snap.get("bom_version"),
+                material_bom_versions=bom_snap.get("material_bom_versions"),
+                product_bom_version=bom_snap.get("product_bom_version"),
             )
             
             work_order = await work_order_service.create_work_order(

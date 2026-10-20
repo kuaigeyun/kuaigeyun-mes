@@ -18,10 +18,10 @@ def _gm_branch_graph():
                 "type": "condition",
                 "data": {
                     "label": "是否总经理特批",
-                    # 模拟设计器 ProFormDigit：无布尔值、甚至空 field——仍须出选择
+                    "routeMode": "previous_approver",
                     "conditions": [
-                        {"label": "分支1", "operator": ">="},
-                        {"label": "分支2", "operator": ">="},
+                        {"label": "是（需总经理特批）"},
+                        {"label": "否（直接采购副总）"},
                     ],
                 },
             },
@@ -36,13 +36,51 @@ def _gm_branch_graph():
     }
 
 
+def _bridge_auto_pass_graph():
+    """直接上级 → 空审批人二级上级(auto_pass) → previous_approver 条件。"""
+    return {
+        "nodes": [
+            {"id": "n1", "type": "approval", "data": {"label": "直接上级"}},
+            {
+                "id": "n2",
+                "type": "approval",
+                "data": {
+                    "label": "二级上级",
+                    "approverType": "manager",
+                    "emptyApproverPolicy": "auto_pass",
+                },
+            },
+            {
+                "id": "cond",
+                "type": "condition",
+                "data": {
+                    "label": "是否总经理特批",
+                    "routeMode": "previous_approver",
+                    "conditions": [
+                        {"label": "是（需总经理特批）"},
+                        {"label": "否（直接采购副总）"},
+                    ],
+                },
+            },
+            {"id": "gm", "type": "approval", "data": {"label": "总经理(特殊情况)"}},
+            {"id": "vp", "type": "approval", "data": {"label": "采购副总"}},
+        ],
+        "edges": [
+            {"source": "n1", "target": "n2"},
+            {"source": "n2", "target": "cond"},
+            {"source": "cond", "target": "gm"},
+            {"source": "cond", "target": "vp"},
+        ],
+    }
+
+
 def test_infer_decision_for_two_edge_condition_even_without_boolean_rules():
     graph = _gm_branch_graph()
     spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, graph["nodes"][0])
     assert spec is not None
     assert spec["label"] == "是否总经理特批"
-    assert spec["trueBranchLabel"] == "总经理(特殊情况)"
-    assert spec["falseBranchLabel"] == "采购副总"
+    assert spec["trueBranchLabel"] == "是（需总经理特批）"
+    assert spec["falseBranchLabel"] == "否（直接采购副总）"
     assert spec["requireExplicit"] is True
     assert spec["conditionNodeId"] == "cond"
 
@@ -98,7 +136,7 @@ async def test_apply_decision_requires_explicit_patch():
     action = SimpleNamespace(instance_data_patch={})
     with pytest.raises(ValidationError, match="请选择"):
         await ApprovalInstanceService._apply_decision_on_approve(
-            instance, "n2", graph, action
+            1, instance, "n2", graph, action
         )
 
 
@@ -116,7 +154,7 @@ async def test_apply_decision_writes_route_key():
     spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, graph["nodes"][0])
     assert spec is not None
     action.instance_data_patch = {spec["field"]: True}
-    await ApprovalInstanceService._apply_decision_on_approve(instance, "n2", graph, action)
+    await ApprovalInstanceService._apply_decision_on_approve(1, instance, "n2", graph, action)
     assert instance.data.get("__branch_true_cond") is True
 
 
@@ -139,7 +177,11 @@ def test_explicit_decision_on_approve_wins_over_infer():
                 "type": "condition",
                 "data": {
                     "label": "是否总经理特批",
-                    "conditions": [{"field": "require_gm_special_approval", "operator": "==", "value": True}],
+                    "routeMode": "previous_approver",
+                    "conditions": [
+                        {"label": "是"},
+                        {"label": "否"},
+                    ],
                 },
             },
             {"id": "gm", "type": "approval", "data": {"label": "总经理"}},
@@ -152,7 +194,10 @@ def test_explicit_decision_on_approve_wins_over_infer():
         ],
     }
     spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, graph["nodes"][0])
-    assert spec["field"] == "custom_flag"
+    assert spec is not None
+    assert spec["field"] == "__branch_index_cond"
+    assert spec["label"] == "自定义"
+    assert spec["defaultValue"] == 0
 
 
 @pytest.mark.asyncio
@@ -198,9 +243,27 @@ async def test_apply_decision_persists_decided_by():
     spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, graph["nodes"][0])
     action = SimpleNamespace(instance_data_patch={spec["field"]: True})
     await ApprovalInstanceService._apply_decision_on_approve(
-        instance, "n2", graph, action, decided_by=22
+        1, instance, "n2", graph, action, decided_by=22
     )
     assert instance.data.get(ApprovalInstanceService.BRANCH_DECIDED_BY_KEY) == 22
+
+
+@pytest.mark.asyncio
+async def test_bridge_auto_pass_shows_branch_decision_on_prior_approver():
+    """空审批人中间节点自动跳过时，分支仍由上一有人的审批节点选择。"""
+    graph = _bridge_auto_pass_graph()
+    instance = SimpleNamespace(data={}, submitter_id=10)
+    with patch.object(
+        ApprovalInstanceService,
+        "_resolve_node_approvers",
+        new=AsyncMock(return_value=[]),
+    ):
+        spec = await ApprovalInstanceService._resolve_decision_on_approve_spec_for_instance(
+            1, graph, graph["nodes"][0], instance
+        )
+    assert spec is not None
+    assert spec["label"] == "是否总经理特批"
+    assert spec["conditionNodeId"] == "cond"
 
 
 def test_condition_route_history_belongs_to_condition_node_only():

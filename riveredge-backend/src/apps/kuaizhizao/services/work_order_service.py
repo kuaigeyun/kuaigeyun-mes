@@ -74,6 +74,7 @@ from apps.kuaizhizao.schemas.work_order import (
 )
 from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
+from apps.kuaizhizao.utils.mrp_bom_snapshot import bom_expand_kwargs_from_work_order
 from apps.kuaizhizao.services.work_order_tracking_service import (
     WorkOrderTrackingService,
     TRACKING_SERIAL,
@@ -918,6 +919,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 variant_attributes=variant_attrs,
                 configurable_selections=cfg_selections,
                 for_kitting_analysis=True,
+                **bom_expand_kwargs_from_work_order(work_order),
             )
         except Exception as exc:
             logger.warning(
@@ -1899,6 +1901,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 unqualified_quantity=work_order_data.unqualified_quantity,
                 variant_attributes=getattr(work_order_data, "variant_attributes", None),
                 configurable_selections=getattr(work_order_data, "configurable_selections", None),
+                bom_id=getattr(work_order_data, "bom_id", None),
+                bom_version=getattr(work_order_data, "bom_version", None),
+                material_bom_versions=getattr(work_order_data, "material_bom_versions", None),
+                product_bom_version=getattr(work_order_data, "product_bom_version", None),
                 remarks=work_order_data.remarks,
                 allow_operation_jump=wo_allow_jump,
                 process_route_id=stored_pr_id,
@@ -4371,6 +4377,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 variant_attributes=variant_attrs,
                 configurable_selections=cfg_selections,
                 for_kitting_analysis=True,
+                **bom_expand_kwargs_from_work_order(work_order),
             )
         except NotFoundError:
             # 如果没有BOM，返回无缺料
@@ -8022,6 +8029,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 variant_attributes=wo.variant_attributes,
                 configurable_selections=wo.configurable_selections,
                 for_kitting_analysis=True,
+                **bom_expand_kwargs_from_work_order(wo),
             )
         except Exception as e:
             logger.warning(f"BOM 展开失败: {e}")

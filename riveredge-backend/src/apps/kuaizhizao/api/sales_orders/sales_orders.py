@@ -1264,6 +1264,8 @@ async def push_sales_order_to_work_order(
             selected_item_remarks=selected_item_remarks,
             work_order_granularity=payload.get("work_order_granularity"),
             push_mode=payload.get("push_mode"),
+            bom_version=payload.get("bom_version"),
+            material_bom_versions=payload.get("material_bom_versions"),
         )
         return result
     except NotFoundError as e:

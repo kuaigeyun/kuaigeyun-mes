@@ -196,6 +196,18 @@ class WorkOrder(BaseModel):
         null=True, description="齐套 BOM 组件物料 ID 列表（库存变动定向刷新）"
     )
 
+    # MRP 下推时的 BOM 快照（齐套/领料/缺料与计算时一致；手工/销售直推为空则仍按默认或最新 BOM）
+    bom_id = fields.IntField(null=True, description="下推时锁定的成品 BOM 头 ID")
+    bom_version = fields.CharField(
+        max_length=20, null=True, description="需求计算全局 BOM 版本参数（computation_params.bom_version）"
+    )
+    material_bom_versions = fields.JSONField(
+        null=True, description="下推时复制的按物料 BOM 版本（computation_params.material_bom_versions）"
+    )
+    product_bom_version = fields.CharField(
+        max_length=20, null=True, description="本工单成品实际采用的 BOM 版本号（展示与审计）"
+    )
+
     # 配置件属性（Configure 产品时用于 BOM 匹配）
     variant_attributes = fields.JSONField(null=True, description="属性（配置件专用）")
     # 配置位选择（BOM 配置位，格式 {"parentMaterialId_configurableGroupId": componentId}）
