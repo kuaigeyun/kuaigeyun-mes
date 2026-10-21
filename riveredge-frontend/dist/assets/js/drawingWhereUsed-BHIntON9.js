@@ -1,1 +1,0 @@
-import{Q as i}from"./clientRelease-DauGGp4Q.js";import{n as a}from"./drawing-3T8jdZ1_.js";function s(e){return{...e,file:a(e.file)??e.file??null}}const o={query:async e=>{const r=await i.get("/apps/master-data/process/drawing-where-used",{params:e});return{direction:r.direction,drawings:(r.drawings??[]).map(s),usages:r.usages??[]}}};export{o as d};

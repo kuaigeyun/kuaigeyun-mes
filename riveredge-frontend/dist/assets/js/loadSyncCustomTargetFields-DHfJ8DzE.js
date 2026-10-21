@@ -1,0 +1,1 @@
+import{g as t}from"./customField-TpZSPT4m.js";import{s as o}from"./index-rNFEbHd2.js";async function u(s){return(await t(s,!0)).map(e=>({value:o(e.code),label:e.label||e.name,kind:"custom",required:e.is_required||void 0}))}export{u as l};
