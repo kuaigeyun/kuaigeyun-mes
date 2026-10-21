@@ -82,6 +82,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 图纸下发保存没反应、图档发放部门使用人、issueDepartmentId | `features/funide-oa-drawing-distribution-party.md` |
 | 产品固件软件12位编码、软件描述、software_description | `features/funide-oa-firmware-software-description.md` |
 | 研发电子/结构菜单、2D/3D/模具交付物、试验委托 general | `features/funide-oa-rd-electronics-structure-menu.md` |
+| 交付物类型字典、RD_DELIVERABLE_TYPE、快速新增类型 | `features/rd-deliverable-type-dictionary.md` |
 | 构建 dist、deploy、H5、launch.dev、fast-deploy、开机自启 install-service | `features/fast-deploy-scripts.md` |
 | APP 转 PRO、compose、财务管理托管、数据中心占位 | `features/app-pro-migration-compose.md` |
 | 应用中心开关慢、启用禁用卡顿、ensure_permissions force | `features/app-enable-disable-perf.md` |

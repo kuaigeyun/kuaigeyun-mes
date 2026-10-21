@@ -184,8 +184,11 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     style: fieldPropsStyle,
     getPopupContainer: fieldPropsGetPopupContainer,
     mode: fieldPropsMode,
+    quickCreate: _fieldQuickCreate,
+    advancedSearch: _fieldAdvancedSearch,
+    popupRender: _fieldPopupRender,
     ...restFieldProps
-  } = (fieldProps || {}) as Partial<SelectProps>;
+  } = (fieldProps || {}) as Partial<SelectProps & { quickCreate?: unknown; advancedSearch?: unknown }>;
   const form = Form.useFormInstance();
   const [materialModalVisible, setMaterialModalVisible] = useState(false);
 
@@ -621,6 +624,8 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
       optionRender={optionRender}
       listItemHeight={MATERIAL_SELECT_OPTION_ITEM_HEIGHT}
       popupMatchSelectWidth={480}
+      {...restFieldProps}
+      mode={isMultiple ? 'multiple' : undefined}
       quickCreate={effectiveQuickCreate}
       advancedSearch={
         showAdvancedSearch
@@ -689,8 +694,6 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
             }
           : undefined
       }
-      {...restFieldProps}
-      mode={isMultiple ? 'multiple' : undefined}
     />
   );
 

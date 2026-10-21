@@ -113,6 +113,7 @@ _SYSTEM_DICTIONARY_REQUIRES_APPS: Dict[str, FrozenSet[str]] = {
     "INBOUND_REASON_TYPE": frozenset({"kuaizhizao"}),
     "OUTBOUND_REASON_TYPE": frozenset({"kuaizhizao"}),
     "LAB_REQUEST_BUSINESS_TYPE": frozenset({"kuaiplm"}),
+    "RD_DELIVERABLE_TYPE": frozenset({"kuaiplm"}),
     "PROJECT_PROPOSAL_PRODUCT_LINE": frozenset({"kuaiplm"}),
     "PROJECT_PROPOSAL_CUSTOMER_MATERIAL": frozenset({"kuaiplm"}),
     "PROJECT_PROPOSAL_DEV_REQ_TYPE": frozenset({"kuaiplm"}),

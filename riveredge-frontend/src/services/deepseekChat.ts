@@ -4,8 +4,7 @@
  */
 
 import { DeepSeekChatProvider } from '@ant-design/x-sdk';
-import { apiRequest, API_BASE_URL } from './api';
-import { getToken } from '../utils/auth';
+import { apiRequest, API_BASE_URL, buildAuthTenantHeaders } from './api';
 import i18n from '../config/i18n';
 
 const DEEPSEEK_STATUS_URL = '/core/site-settings/integrations/deepseek/status';
@@ -90,13 +89,9 @@ export class KuaiDeepSeekChatProvider<
   }
 }
 
+/** 与 apiRequest 一致：含 X-Client-Channel，否则写门禁对 POST 对话返回 403 */
 export function buildKuaiChatAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const tenantId = localStorage.getItem('tenant_id');
-  if (tenantId?.trim()) headers['X-Tenant-ID'] = tenantId.trim();
-  return headers;
+  return buildAuthTenantHeaders();
 }
 
 export async function getChatIntegrationStatus(): Promise<ChatIntegrationStatus> {

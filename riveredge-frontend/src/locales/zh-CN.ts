@@ -31518,6 +31518,30 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.kuaiai-chat-403-client-channel-r01.title':
+    '修复 KU-AI 对话请求 403',
+  'pages.dashboard.updateLog.entries.kuaiai-chat-403-client-channel-r01.description':
+    '悬浮助手发消息走独立 fetch，未带 PC 客户端渠道头会被写门禁拒绝；已与 apiRequest 统一携带 X-Client-Channel。',
+  'pages.dashboard.updateLog.entries.kuaiai-settings-remove-ocr-workbuddy-pro-r03.title':
+    'KU-AI 模型设置页移除 OCR 与 WorkBuddy 表单',
+  'pages.dashboard.updateLog.entries.kuaiai-settings-remove-ocr-workbuddy-pro-r03.description':
+    'Pro 真源已去掉模型设置中的 OCR 与 WorkBuddy 配置块（改在应用连接器维护）；避免 workspace 组装后旧页面再次覆盖本地删除。',
+  'pages.dashboard.updateLog.entries.lab-request-material-quick-create-dist-r01.title':
+    '修复实验委托单物料下拉缺少快速新增',
+  'pages.dashboard.updateLog.entries.lab-request-material-quick-create-dist-r01.description':
+    '委托单物料选择恢复「快速新增物料」入口，并避免 fieldProps 覆盖下拉底栏；本地开发或重新构建前端后即可在下拉底部看到该按钮。',
+  'pages.dashboard.updateLog.entries.rd-deliverable-type-dictionary-r01.title':
+    '研发交付物类型改由数据字典维护',
+  'pages.dashboard.updateLog.entries.rd-deliverable-type-dictionary-r01.description':
+    '交付物类型迁入系统字典 RD_DELIVERABLE_TYPE；新建或编辑时可在下拉底部快速新增类型，列表与详情统一读字典标签，内置类型码与签核发放逻辑不变。',
+  'pages.dashboard.updateLog.entries.lab-request-material-quick-create-r01.title':
+    '实验委托单物料支持快速新增',
+  'pages.dashboard.updateLog.entries.lab-request-material-quick-create-r01.description':
+    '新建或编辑委托单时，物料下拉底部提供「快速新增物料」，与销售订单等单据一致，保存后可直接选中新建物料。',
+  'pages.dashboard.updateLog.entries.user-detail-roles-wrap-qr-r01.title':
+    '修复用户详情多角色被二维码遮挡',
+  'pages.dashboard.updateLog.entries.user-detail-roles-wrap-qr-r01.description':
+    '用户详情基本信息中角色徽章改为自动换行，并限制在字段列宽度内，避免多角色时横向溢出盖住右侧员工二维码。',
   'pages.dashboard.updateLog.entries.antd-charts-vite-prebundle-504-r01.title':
     '修复平台看板图表加载失败',
   'pages.dashboard.updateLog.entries.antd-charts-vite-prebundle-504-r01.description':

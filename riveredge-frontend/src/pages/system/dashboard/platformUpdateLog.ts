@@ -44,6 +44,53 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaiai-chat-403-client-channel-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-chat-403-client-channel-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiai-chat-403-client-channel-r01.description',
+  },
+  {
+    id: 'kuaiai-settings-remove-ocr-workbuddy-pro-r03',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-settings-remove-ocr-workbuddy-pro-r03.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiai-settings-remove-ocr-workbuddy-pro-r03.description',
+  },
+  {
+    id: 'lab-request-material-quick-create-dist-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.lab-request-material-quick-create-dist-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.lab-request-material-quick-create-dist-r01.description',
+  },
+  {
+    id: 'rd-deliverable-type-dictionary-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-deliverable-type-dictionary-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rd-deliverable-type-dictionary-r01.description',
+  },
+  {
+    id: 'lab-request-material-quick-create-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.lab-request-material-quick-create-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.lab-request-material-quick-create-r01.description',
+  },
+  {
+    id: 'user-detail-roles-wrap-qr-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.user-detail-roles-wrap-qr-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.user-detail-roles-wrap-qr-r01.description',
+  },
+  {
     id: 'approval-previous-approver-bridge-r01',
     date: '2026-10-20',
     type: 'fix',

@@ -781,7 +781,7 @@ const UserListPage: React.FC = () => {
       dataIndex: 'roles',
       span: 2,
       render: (_: unknown, record: User) => (
-        <Space>
+        <Space wrap size={[8, 4]} style={{ maxWidth: '100%' }}>
           {record?.roles?.map(role => (
             <Tag
               key={role.uuid}
